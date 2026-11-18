@@ -10,7 +10,8 @@
  *   GLO held   the metronome: while recording, always, or off
  *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
- *   SAVE       saves now; held, resets this instrument
+ *   SAVE       saves now; held, resets this instrument; held three seconds, every instrument and
+ *              the KEYS and GLOBAL pages (the sequencer and what it holds are left alone)
  *   PLAY REC   the sequencer. Loop: REC arms a take, or overdubs while it plays. Step: REC is
  *              step-write. REC held clears.
  *   OCT- OCT+  octave; both, back to the middle
@@ -373,6 +374,22 @@ static void holds(void)
         vis.algo = st.ip[st.inst].algo;
         vis.algo_t = 0.0f;
         toast("RESET", 0, 0, 0, -1);
+        mark_dirty();
+    }
+    if ((btn_held & (1u << H1_BTN_SAVE)) && btn_fired[H1_BTN_SAVE] == 1 && now - btn_ms[H1_BTN_SAVE] > 3000u) {
+        int i;                                   /* still held: everything, as it was the first time it was switched on */
+        btn_fired[H1_BTN_SAVE] = 2;
+        for (i = 0; i < NINST; i++)
+            st.ip[i] = insts[i]->def;
+        st.keys[0] = st.keys[1] = st.keys[2] = st.keys[3] = 0;
+        st.glo[0] = 112;
+        st.glo[1] = 0;
+        st.glo[2] = 50;
+        st.glo[3] = 100;
+        st.octave = 0;
+        st.hud = 0;
+        eng_post(EV_UNLATCH, 0);
+        toast("ALL RESET", 0, 0, 0, -1);
         mark_dirty();
     }
     if ((btn_held & (1u << H1_BTN_HOME)) && !btn_fired[H1_BTN_HOME] && now - btn_ms[H1_BTN_HOME] > 700u) {

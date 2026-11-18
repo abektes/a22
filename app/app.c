@@ -1,9 +1,5 @@
 /* h1 on the FM-1 (fm1-base). The whole firmware is the portable core in ../core; this file only
- * passes the panel in, and the sound, the lights and the changed parts of the picture out.
- *
- * NOT YET BUILT FOR THE DEVICE. It follows fm1-base's template (plat.h, lcd_blit, the store) and
- * has to be compiled with the JieLi toolchain, checked for RAM (see docs/ARCHITECTURE.md) and
- * tried on hardware before anyone flashes it. */
+ * passes the panel in, and the sound, the lights and the changed parts of the picture out. */
 #include "app.h"
 #include "../core/h1.h"
 
@@ -38,6 +34,17 @@ static void blit(int x, int y, int w, int h)
     band_i ^= 1u;
 }
 
+/* ---- how long things take ---------------------------------------------------------------------
+ * Measured all the time (three clock reads a frame, two a block of sound). MIDI CC 119 from the
+ * computer makes a listening screen reader say the numbers since the last time it was asked:
+ *   PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max
+ * DRAW and SEND are milliseconds a frame (the picture drawn, its changed parts sent to the panel);
+ * AUDIO is the share of each block's time the sound took, in percent. */
+#define US(t) ((t) / PLAT_TICKS_PER_US)
+static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms; } pf;
+static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
+static uint8_t pf_ask;
+
 /* ---- the panel ------------------------------------------------------------------------------ */
 static uint32_t keys_was, btn_was;
 
@@ -47,8 +54,12 @@ static void midi_in(void)
 {
     uint32_t pkt;
     int port;
-    while (plat_midi_in(&pkt, &port))
-        h1_midi((uint8_t)(pkt >> 8), (uint8_t)(pkt >> 16), (uint8_t)(pkt >> 24));
+    while (plat_midi_in(&pkt, &port)) {
+        if (((pkt >> 8) & 0xF0u) == 0xB0u && ((pkt >> 16) & 0xFFu) == 119u)
+            pf_ask = 1;                                     /* (see "how long things take") */
+        else
+            h1_midi((uint8_t)(pkt >> 8), (uint8_t)(pkt >> 16), (uint8_t)(pkt >> 24));
+    }
 }
 
 static void speak(void);
@@ -89,13 +100,19 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float gain_now;
     float gain = (float)master_q12 * (float)master_q12 * (1.0f / (4096.0f * 4096.0f));   /* MASTER, as a square */
-    uint32_t i;
+    uint32_t i, t0 = plat_ticks24(), us;
     h1_render(lr, n);                                       /* 24-bit, already limited */
     for (i = 0; i < n; i++) {
         gain_now += (gain - gain_now) * 0.004f;             /* ~5 ms: turning MASTER does not click */
         lr[2 * i] = (int32_t)((float)lr[2 * i] * gain_now);
         lr[2 * i + 1] = (int32_t)((float)lr[2 * i + 1] * gain_now);
     }
+    us = US(plat_ticks24() - t0);
+    pf_audio += us;
+    pf_blocks++;
+    if (us > pf_audio_max)
+        pf_audio_max = us;
+    pf_block_us = n * 1000000u / 44100u;
 }
 
 void app_panic(void) { h1_midi(0xB0, 123, 0); }
@@ -106,10 +123,19 @@ void app_ui_init(void) { lcd_fill(0, 0, 240, 240, 0); }
 
 void app_frame(void)
 {
+    uint32_t t0, t1, t2;
     input();
+    t0 = plat_ticks24();
     h1_frame(plat_ms());
+    t1 = plat_ticks24();
     palette_sync();
     h1_present(blit);
+    t2 = plat_ticks24();
+    pf.frames++;
+    pf.draw += US(t1 - t0);
+    pf.send += US(t2 - t1);
+    if (US(t1 - t0) > pf.draw_max) pf.draw_max = US(t1 - t0);
+    if (US(t2 - t1) > pf.send_max) pf.send_max = US(t2 - t1);
     plat_glow(1);
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
@@ -134,6 +160,46 @@ static char *say_cat(char *d, char *end, const char *s)
         *d++ = *s++;
     *d = 0;
     return d;
+}
+
+static char *say_num(char *d, char *end, uint32_t v)
+{
+    char b[10];
+    int n = 0;
+    do
+        b[n++] = (char)('0' + v % 10u);
+    while ((v /= 10u) != 0u && n < 10);
+    while (n && d < end)
+        *d++ = b[--n];
+    *d = 0;
+    return d;
+}
+
+static void say_perf(void)
+{
+    char t[96], *d, *end = t + sizeof t - 1;
+    uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am;
+    f = plat_lock();
+    nb = pf_blocks; au = pf_audio; am = pf_audio_max;
+    pf_blocks = pf_audio = pf_audio_max = 0;
+    plat_unlock(f);
+    d = say_cat(t, end, "PERF. FPS ");
+    d = say_num(d, end, ms ? (pf.frames * 1000u + ms / 2u) / ms : 0u);
+    d = say_cat(d, end, ". DRAW ");
+    d = say_num(d, end, (pf.draw / n + 500u) / 1000u);
+    d = say_cat(d, end, " MAX ");
+    d = say_num(d, end, (pf.draw_max + 500u) / 1000u);
+    d = say_cat(d, end, ". SEND ");
+    d = say_num(d, end, (pf.send / n + 500u) / 1000u);
+    d = say_cat(d, end, " MAX ");
+    d = say_num(d, end, (pf.send_max + 500u) / 1000u);
+    d = say_cat(d, end, ". AUDIO ");
+    d = say_num(d, end, nb ? (au / nb) * 100u / pf_block_us : 0u);
+    d = say_cat(d, end, " MAX ");
+    say_num(d, end, am * 100u / pf_block_us);
+    ann_say(t, 0, ANN_NOW);
+    pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = 0;
+    pf.since_ms = plat_ms();
 }
 
 static void speak(void)
@@ -177,6 +243,11 @@ static void speak(void)
     inst_was = inst;
     algo_was = algo;
     page_was = page;
+    if (pf_ask) {
+        pf_ask = 0;
+        if (ann_on())
+            say_perf();
+    }
     ann_tick(plat_ms());
 }
 

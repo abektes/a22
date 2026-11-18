@@ -146,10 +146,11 @@ static void haunt_render(Voice *v, const Blk *b, f32 *out, int n)
 /* ---- picture ---------------------------------------------------------------------------- */
 #define NTH 11
 #define NSEG 7
-typedef struct Ghost { f32 x, y, vy, grow, a, fray, toll; } Ghost;
+typedef struct Ghost { f32 x, y, home, grow, a, fray, toll; } Ghost;
 static Ghost gh[NVOICE];
 static uint32_t seen_g[NVOICE];
 static f32 lev_h, wisp_x = 60.0f, wisp_y = 150.0f, flick;
+static f32 thin;                                 /* 0 alone .. 1 a crowd: every other thread is let go */
 static uint32_t jitter_seed = 1;
 
 static f32 hsh(uint32_t i)
@@ -162,8 +163,10 @@ static f32 hsh(uint32_t i)
 static f32 key_x(f32 pitch) { return 22.0f + clampf((pitch - 41.0f) / 50.0f, 0.0f, 1.0f) * 196.0f; }
 
 /* One apparition: a hood of threads from (x, top), len long. dir +1 hangs down, -1 grows up from
- * below. style 0 threads, 1 scan-lines. bend pulls the hems toward (bx, by). */
-static void shroud(f32 x, f32 top, f32 len, f32 hw, f32 a, f32 t, f32 sway, f32 shiver, uint32_t id, int dir, int style, f32 bend, f32 bx, f32 by)
+ * below. style 0 threads, 1 scan-lines. bend pulls the hems toward (bx, by). fine is how much of
+ * the odd threads is drawn (1 all of them, 0 none): a crowd is drawn with fewer threads each, so
+ * that eight apparitions cost the frame about what three do. */
+static void shroud(f32 x, f32 top, f32 len, f32 hw, f32 a, f32 t, f32 sway, f32 shiver, uint32_t id, int dir, int style, f32 bend, f32 bx, f32 by, f32 fine)
 {
     int k, j;
     uint32_t js = jitter_seed + id * 7919u;
@@ -186,7 +189,9 @@ static void shroud(f32 x, f32 top, f32 len, f32 hw, f32 a, f32 t, f32 sway, f32 
         f32 u = (f32)k / (f32)(NTH - 1) * 2.0f - 1.0f, au = absf(u);
         f32 hx = x + u * hw, hy = top + (f32)dir * hw * 1.25f * (1.0f - sqrtfx(1.0f - u * u * 0.97f));
         f32 lk = len * (0.6f + 0.4f * hsh(id * 131u + (uint32_t)k)), px, py, ph = hsh(id * 17u + (uint32_t)k + 50u);
-        f32 jx = shiver * 3.0f * (hsh(js + (uint32_t)k) - 0.5f);
+        f32 jx = shiver * 3.0f * (hsh(js + (uint32_t)k) - 0.5f), ak = (k & 1) ? a * fine : a;
+        if (ak < 0.012f)
+            continue;
         if (au < 0.34f)                          /* the middle threads start lower: the hood has nothing in it */
             hy += (f32)dir * hw * 1.5f * (1.0f - au / 0.34f);
         px = hx;
@@ -199,8 +204,9 @@ static void shroud(f32 x, f32 top, f32 len, f32 hw, f32 a, f32 t, f32 sway, f32 
                 qx += (bx - qx) * bend * s * s;
                 qy += (by - qy) * bend * s * s;
             }
-            al = a * (1.0f - (s - 0.5f / (f32)NSEG)) * (0.5f + 0.5f * (1.0f - au));
-            g_line(px, py, qx, qy, 1.3f, al * sat(1.15f - s * s));
+            al = ak * (1.0f - (s - 0.5f / (f32)NSEG)) * (0.5f + 0.5f * (1.0f - au)) * sat(1.15f - s * s);
+            if (al >= 0.012f)                    /* (fainter than that is black on the panel) */
+                g_line(px, py, qx, qy, 1.3f, al);
             px = qx; py = qy;
         }
     }
@@ -209,18 +215,18 @@ static void shroud(f32 x, f32 top, f32 len, f32 hw, f32 a, f32 t, f32 sway, f32 
 static void haunt_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, fog = vis->k[0], dread = vis->k[1], shiver = vis->k[2], depth = vis->k[3], mt = smooth01(vis->algo_t);
-    f32 water = 232.0f - 46.0f * depth, dim = 0.15f + 0.85f * absf(2.0f * mt - 1.0f), tall = 84.0f + 80.0f * dread, vx = 120.0f, vy = 78.0f;
+    f32 fine, water = 232.0f - 46.0f * depth, dim = 0.15f + 0.85f * absf(2.0f * mt - 1.0f), tall = 84.0f + 80.0f * dread, vx = 120.0f, vy = 78.0f;
     int i, j, algo = mt < 0.5f ? vis->algo_prev : vis->algo, dir = 1, style = 0;
 
     if (vis->fresh) {
         for (i = 0; i < NVOICE; i++) {
             gh[i].a = gh[i].grow = gh[i].fray = gh[i].toll = 0.0f;
             gh[i].x = 120.0f;
-            gh[i].y = 60.0f;
-            gh[i].vy = 0.0f;
+            gh[i].y = gh[i].home = 60.0f;
             seen_g[i] = vis->v[i].serial;
         }
         lev_h = 0.0f;
+        thin = 0.0f;
     }
     lev_h += (minf(1.0f, vis->level * 4.0f) - lev_h) * minf(1.0f, dt * 5.0f);
     flick += dt;
@@ -285,10 +291,17 @@ static void haunt_draw(const Vis *vis)
     /* something small is always out there */
     {
         f32 gx = 120.0f + 86.0f * sin_turns(t * 0.013f), gy = water - 56.0f + 5.0f * sin_turns(t * 0.05f);
-        shroud(gx, dir > 0 ? gy : water - 4.0f, 34.0f, 6.5f, (0.28f + 0.1f * sin_turns(t * 0.09f)) * dim * (1.0f - 0.6f * sat(lev_h * 2.0f)), t, 1.0f, shiver, 77u, dir, style, 0.0f, 0.0f, 0.0f);
+        shroud(gx, dir > 0 ? gy : water - 4.0f, 34.0f, 6.5f, (0.28f + 0.1f * sin_turns(t * 0.09f)) * dim * (1.0f - 0.6f * sat(lev_h * 2.0f)), t, 1.0f, shiver, 77u, dir, style, 0.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    /* the apparitions */
+    /* the apparitions: alone, each has all its threads; from the third on they thin out */
+    {
+        f32 crowd = 0.0f;
+        for (i = 0; i < NVOICE; i++)
+            crowd += sat(gh[i].a * 5.0f);
+        thin += (sat((crowd - 2.0f) * 0.5f) - thin) * minf(1.0f, dt * 3.0f);
+        fine = 1.0f - thin;
+    }
     for (i = 0; i < NVOICE; i++) {
         const VVoice *v = &vis->v[i];
         Ghost *g = &gh[i];
@@ -296,10 +309,10 @@ static void haunt_draw(const Vis *vis)
         if (v->serial != seen_g[i]) {
             seen_g[i] = v->serial;
             g->toll = 1.0f;
+            g->home = 46.0f + 26.0f * hsh(v->serial * 31u + (uint32_t)i);
             if (g->a < 0.03f) {
                 g->grow = 0.0f;
-                g->y = 46.0f + 26.0f * hsh(v->serial * 31u + (uint32_t)i);
-                g->vy = 0.0f;
+                g->y = g->home;
                 g->x = key_x(v->pitch);
             }
         }
@@ -311,7 +324,9 @@ static void haunt_draw(const Vis *vis)
         g->grow += ((v->on && v->gate ? 1.0f : 0.55f) - g->grow) * minf(1.0f, dt * 1.8f);
         g->fray += ((v->on && v->gate ? 0.0f : 1.0f) - g->fray) * minf(1.0f, dt * 1.5f);
         g->toll = maxf(0.0f, g->toll - dt * 0.8f);
-        if (!(v->on && v->gate))
+        if (v->on && v->gate)
+            g->y += (g->home - g->y) * minf(1.0f, dt * 4.0f);   /* struck again, it comes back down */
+        else
             g->y -= dt * 9.0f;                   /* let go, it drifts up and away */
         if (g->a < 0.015f)
             continue;
@@ -331,11 +346,11 @@ static void haunt_draw(const Vis *vis)
             top = water - 6.0f;
         if (dread > 0.03f)                       /* DREAD: its second self, a step to one side */
             shroud(g->x + 9.0f + 14.0f * dread, top - (f32)dir * 7.0f * dread, len * 1.06f, hw, g->a * dread * 0.5f * dim, t + 1.7f, 1.0f + 2.0f * g->fray, shiver, (uint32_t)i + 40u, dir, style,
-                   algo == 7 ? 0.5f : 0.0f, vx, vy);
-        shroud(g->x, top, len, hw, g->a * dim, t, 1.0f + 2.0f * g->fray, shiver, (uint32_t)i, dir, style, algo == 7 ? 0.55f : 0.0f, vx, vy);
+                   algo == 7 ? 0.5f : 0.0f, vx, vy, 0.0f);
+        shroud(g->x, top, len, hw, g->a * dim, t, 1.0f + 2.0f * g->fray, shiver, (uint32_t)i, dir, style, algo == 7 ? 0.55f : 0.0f, vx, vy, fine);
         if (algo == 4)                           /* CHOIR: it does not come alone */
             for (j = -1; j <= 1; j += 2)
-                shroud(g->x + (f32)j * (hw * 2.0f + 6.0f), top + 16.0f, len * 0.7f, hw * 0.7f, g->a * 0.55f * dim, t + (f32)j, 1.0f + 2.0f * g->fray, shiver, (uint32_t)(i * 3 + j + 60), dir, style, 0.0f, 0.0f, 0.0f);
+                shroud(g->x + (f32)j * (hw * 2.0f + 6.0f), top + 16.0f, len * 0.7f, hw * 0.7f, g->a * 0.55f * dim, t + (f32)j, 1.0f + 2.0f * g->fray, shiver, (uint32_t)(i * 3 + j + 60), dir, style, 0.0f, 0.0f, 0.0f, 0.0f);
     }
 
     if (algo == 7) {                             /* VOID: everything hangs toward it */

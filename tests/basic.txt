@@ -40,6 +40,10 @@ said PAGE
 tap FX
 wait 100
 said HOME
+# CC 119 from the computer: the reader is told how long frames and sound take
+midi B0 77 01
+wait 100
+said PERF. FPS
 # SAVE writes the settings, and a restart keeps them
 tap SAVE
 wait 200

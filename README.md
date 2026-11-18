@@ -136,6 +136,7 @@ That is what the backup is for.
 | hold REC | Clear the loop or the pattern |
 | hold HOME | Silence everything |
 | hold SAVE | Reset this instrument (everything else saves by itself) |
+| hold SAVE for three seconds | Reset every instrument, and the KEYS and GLOBAL pages. The sequencer and what it holds are left alone |
 
 A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page.
 While the sequencer runs, the sixteen white keys light as the pattern, left to right: lit where

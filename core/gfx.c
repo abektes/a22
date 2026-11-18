@@ -240,6 +240,8 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
         return;
     }
     set_level(a);
+    if (!glevel && gm != G_PAINT)
+        return;                                  /* no ink: nothing to do */
     inv = rsqrtf(len2);
     len = len2 * inv;
     ux = dx * inv;
@@ -253,14 +255,14 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
             ux = -ux; uy = -uy;
         }
         slope = (y1 - y0) / (x1 - x0);
-        reach = R / absf(ux) + 1.0f;
-        ia = imax(0, ifloor(x0 - R));
-        ib = imin(FB_W - 1, ifloor(x1 + R) + 1);
+        reach = R / absf(ux) + 0.01f;            /* only the pixels the line can reach: the rest have no cover */
+        ia = imax(0, ifloor(x0 - R - 0.01f) + 1);
+        ib = imin(FB_W - 1, ifloor(x1 + R + 0.01f));
         for (i = ia; i <= ib; i++) {
             f32 xc = clampf((f32)i, x0, x1);
             f32 yc = y0 + (xc - x0) * slope;
-            ja = imax(0, ifloor(yc - reach));
-            jb = imin(FB_H - 1, ifloor(yc + reach) + 1);
+            ja = imax(0, ifloor(yc - reach) + 1);
+            jb = imin(FB_H - 1, ifloor(yc + reach));
             for (j = ja; j <= jb; j++) {
                 f32 px = (f32)i - x0, py = (f32)j - y0, t = px * ux + py * uy, d;
                 if (t < 0.0f)
@@ -281,14 +283,14 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
             ux = -ux; uy = -uy;
         }
         slope = (x1 - x0) / (y1 - y0);
-        reach = R / absf(uy) + 1.0f;
-        ja = imax(0, ifloor(y0 - R));
-        jb = imin(FB_H - 1, ifloor(y1 + R) + 1);
+        reach = R / absf(uy) + 0.01f;
+        ja = imax(0, ifloor(y0 - R - 0.01f) + 1);
+        jb = imin(FB_H - 1, ifloor(y1 + R + 0.01f));
         for (j = ja; j <= jb; j++) {
             f32 yc = clampf((f32)j, y0, y1);
             f32 xc = x0 + (yc - y0) * slope;
-            ia = imax(0, ifloor(xc - reach));
-            ib = imin(FB_W - 1, ifloor(xc + reach) + 1);
+            ia = imax(0, ifloor(xc - reach) + 1);
+            ib = imin(FB_W - 1, ifloor(xc + reach));
             for (i = ia; i <= ib; i++) {
                 f32 px = (f32)i - x0, py = (f32)j - y0, t = px * ux + py * uy, d;
                 if (t < 0.0f)

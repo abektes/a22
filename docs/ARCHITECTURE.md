@@ -90,8 +90,10 @@ What h1 puts in the pool, about 321 KB:
 | Two RGB565 bands for the panel | 19 |
 | LAVA's field and INK's scroll history | 7 |
 
-These are link-time numbers. Stack depth and CPU time per audio block have not been measured on
-hardware. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+These are link-time numbers. Stack depth has not been measured on hardware. Frame and audio time
+can be: send MIDI CC 119 to the FM-1 while a screen reader is listening (`base/tools/fm1_remote.py
+listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max`, the
+times in milliseconds a frame and the audio as a percentage of each block, since it was last asked. If RAM gets tight again, the first things to shrink are the string lines and the reverb
 (16-bit samples halve both).
 
 ## Building
