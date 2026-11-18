@@ -193,11 +193,17 @@ static void weather(int w, f32 a, const Vis *vis)
     default:
     case W_STORM:
     case W_RAIN: {
-        int n = w == W_STORM ? 38 : 22;
-        for (i = 0; i < n; i++) {
-            f32 sp = 0.9f + 0.8f * hsh((uint32_t)i + 3u), u = fractf(hsh((uint32_t)i + 50u) + t * sp * (w == W_STORM ? 1.5f : 1.0f));
-            f32 x = WX0 + 4.0f + fractf(hsh((uint32_t)i + 90u) + u * 0.12f) * (W - 14.0f), y = WY0 + 2.0f + u * (H - 14.0f), len = 5.0f + 5.0f * sp;
-            g_line(x, y, x - len * 0.28f, y + len, 1.0f, a * (0.35f + 0.3f * sp));
+        int storm = w == W_STORM, nf = storm ? 24 : 15, nn = storm ? 13 : 8;
+        f32 lean = storm ? 0.5f + 0.12f * sin_turns(t * 0.13f) : 0.24f + 0.06f * sin_turns(t * 0.07f), fast = storm ? 1.5f : 1.0f;
+        for (i = 0; i < nf; i++) {               /* far off, a thin grey rain */
+            f32 sp = 0.55f + 0.35f * hsh((uint32_t)i + 3u), u = fractf(hsh((uint32_t)i + 50u) + t * sp * fast);
+            f32 y = WY0 + 2.0f + u * (H - 16.0f), x = WX0 + 6.0f + fractf(hsh((uint32_t)i + 90u) - u * lean * 0.5f) * (W - 12.0f);
+            g_beam(x + lean * 9.0f, y - 9.0f, x, y, 1.0f, 1.1f, 0.0f, a * 0.38f * sat(u * 6.0f), 0.0f);
+        }
+        for (i = 0; i < nn; i++) {               /* nearer, drops you could count: a streak with a bright head */
+            f32 sp = 1.0f + 0.6f * hsh((uint32_t)i + 13u), u = fractf(hsh((uint32_t)i + 150u) + t * sp * fast), len = 13.0f + 9.0f * hsh((uint32_t)i + 170u);
+            f32 y = WY0 + 2.0f + u * (H - 6.0f), x = WX0 + 6.0f + fractf(hsh((uint32_t)i + 190u) - u * lean * 0.9f) * (W - 12.0f);
+            g_beam(x + lean * len, maxf(y - len, WY0 + 1.0f), x, y, 1.0f, 1.8f, 0.0f, a * 0.8f * sat(u * 8.0f), 0.0f);
         }
         if (w == W_STORM && bolt > 0.0f) {       /* a note in a storm is a stroke of lightning */
             f32 xy[2 * 8], x = bolt_x, y = WY0 + 2.0f;
@@ -218,11 +224,26 @@ static void weather(int w, f32 a, const Vis *vis)
             f32 an = 0.5f + ((f32)i + 0.5f) / 9.0f * 0.5f, r0 = 30.0f + 2.0f * sin_turns(t * 0.2f + (f32)i * 0.3f), r1 = r0 + ((i & 1) ? 9.0f : 16.0f);
             g_line(cx + cos_turns(an) * r0, cy + sin_turns(an) * r0, cx + cos_turns(an) * r1, cy + sin_turns(an) * r1, 1.4f, a * 0.8f);
         }
-        for (i = 0; i < 3; i++)                  /* birds going home */
+        for (i = 0; i < 6; i++) {                /* birds going home: a loose skein, each beating in its own time and gliding when it likes */
+            f32 h = hsh((uint32_t)i + 811u), h2 = hsh((uint32_t)i + 823u), row = (f32)((i + 1) / 2), side = (i & 1) ? 1.0f : -1.0f;
+            f32 lead = fractf(t * 0.03f + (i == 5 ? 0.45f : 0.0f)) * (W + 90.0f) - 20.0f;
+            f32 bx = WX0 + lead - row * (10.0f + 3.0f * h) + 2.5f * sin_turns(t * (0.11f + 0.07f * h) + h2);
+            f32 by = WY0 + 24.0f + 7.0f * sin_turns(t * 0.05f) + 4.0f * sin_turns(t * 0.13f + 0.3f) + side * row * (5.5f + 2.0f * h2) + 2.0f * sin_turns(t * (0.17f + 0.1f * h2) + h);
+            f32 beat = sat(0.6f + 1.6f * sin_turns(t * (0.09f + 0.05f * h) + h * 3.0f)), ph = t * (2.3f + 0.5f * h) + h2;
+            f32 sz = 0.62f + 0.25f * h2, in = 0.05f + beat * 0.15f * sin_turns(ph), out = -0.03f + beat * 0.2f * sin_turns(ph - 0.17f);
+            f32 ba = a * 0.9f * sat((bx - WX0 - 2.0f) * 0.25f) * sat((WX1 - 2.0f - bx) * 0.25f);
+            if (i == 5) by += 22.0f;             /* (and one that is late) */
+            if (ba < 0.03f)
+                continue;
+            by -= 1.4f * beat * sin_turns(ph + 0.2f) * sz;       /* the body rides the stroke */
             for (j = -1; j <= 1; j += 2) {
-                f32 bx = WX0 + 20.0f + fractf(t * 0.02f + (f32)i * 0.31f) * (W - 44.0f), by = WY0 + 16.0f + (f32)i * 9.0f, fl = 2.0f * sin_turns(t * 1.4f + (f32)i);
-                g_line(bx, by, bx + (f32)j * 4.0f, by - 2.0f - fl, 1.0f, a * 0.8f);
+                f32 ex = bx + (f32)j * 3.6f * sz * cos_turns(in) - 0.8f * sz, ey = by - 3.6f * sz * sin_turns(in);
+                f32 tx = ex + (f32)j * 4.2f * sz * cos_turns(out) - 1.2f * sz, ty = ey - 4.2f * sz * sin_turns(out);
+                g_line(bx, by, ex, ey, 1.3f, ba);
+                g_line(ex, ey, tx, ty, 1.0f, ba);
             }
+            g_disc(bx, by + 0.3f, 1.1f * sz, ba);
+        }
         break;
     }
     case W_SNOW:
@@ -285,6 +306,32 @@ static void weather(int w, f32 a, const Vis *vis)
         for (i = 0; i < 8; i++)
             g_disc(WX0 + 8.0f + hsh((uint32_t)i + 200u) * (W - 16.0f), WY0 + 6.0f + hsh((uint32_t)i + 240u) * 50.0f, 0.8f, a * 0.5f);
         break;
+    }
+}
+
+/* RAIN and STORM: drops on the glass itself. Each sits and swells, then lets go and runs down in fits,
+ * leaving a wet track that dries from the top. */
+static void glass(int w, f32 a, const Vis *vis)
+{
+    f32 t = vis->t, W = WX1 - WX0;
+    int i, n = w == W_STORM ? 9 : 6;
+    if (a < 0.02f || (w != W_RAIN && w != W_STORM))
+        return;
+    for (i = 0; i < n; i++) {
+        f32 per = (w == W_STORM ? 3.0f : 5.0f) + 4.0f * hsh((uint32_t)i + 31u), ph = t / per + hsh((uint32_t)i + 37u), q = fractf(ph);
+        uint32_t cyc = (uint32_t)ifloor(ph) * 16u + (uint32_t)i;
+        f32 x0 = WX0 + 14.0f + hsh(cyc + 41u) * (W - 28.0f), y0 = WY0 + 8.0f + hsh(cyc + 43u) * 56.0f, x = x0, y = y0, r = 0.9f + 1.1f * sat(q * 2.0f);
+        if (q > 0.5f) {
+            f32 g = (q - 0.5f) * 2.0f, run = g * g + 0.05f * sin_turns(g * 4.0f) * (1.0f - g);        /* it goes, catches, goes */
+            y = y0 + sat(run) * (WY1 - 6.0f - y0);
+            x = x0 + 2.5f * sin_turns(run * 1.7f + hsh(cyc + 47u)) * sat(run * 4.0f);
+            g_beam(x0, y0 + (y - y0) * sat(g * 1.6f - 0.4f), x, y, 1.0f, 1.6f, 0.0f, a * 0.5f, 0.0f);
+            r = 2.0f - 0.5f * g;
+        }
+        g_disc(x, y, r, a * (0.55f + 0.4f * sat(q * 2.0f)));
+        g_mode(G_PAINT);
+        g_disc(x + r * 0.3f, y + r * 0.3f, r * 0.45f, 0.0f);     /* (a drop is clear: only its edge shows) */
+        g_mode(G_MAX);
     }
 }
 
@@ -368,6 +415,9 @@ static void cozy_draw(const Vis *vis)
         }
         g_line(px, py, WX1, py, 1.0f, 0.7f);
     }
+    if (mt < 1.0f)
+        glass(vis->algo_prev, 1.0f - mt, vis);
+    glass(vis->algo, mt, vis);
     /* MUFFLE: the curtains */
     {
         f32 cw = 9.0f + cur_c * (W * 0.5f - 7.0f);
@@ -490,15 +540,13 @@ static void cozy_draw(const Vis *vis)
         q[0] = mx - 8.0f; q[1] = my - 12.0f; q[2] = mx + 8.0f; q[3] = my - 12.0f; q[4] = mx + 7.0f; q[5] = my + 9.0f; q[6] = mx - 7.0f; q[7] = my + 9.0f;
         g_fill(q, 4, 1.0f);
         g_arc(mx + 8.0f, my - 1.0f, 5.5f, 0.75f, 1.25f, 1.6f, 1.0f);
-        for (i = 0; i < 3; i++) {
-            f32 xy[2 * 7], ph = t * (0.22f + 0.05f * (f32)i) + (f32)i * 0.3f, hgt = 12.0f + 14.0f * steam + 3.0f * (f32)i;
-            for (j = 0; j < 7; j++) {
-                f32 u = (f32)j / 6.0f;
-                xy[2 * j] = mx - 4.0f + (f32)i * 4.0f + (2.0f + 3.0f * u) * sin_turns(ph + u * 0.9f);
-                xy[2 * j + 1] = my - 15.0f - hgt * u;
-            }
-            g_poly(xy, 7, 0, 1.2f, 0.3f + 0.5f * steam);
+        g_mode(G_ADD);                           /* steam: breaths of it leaving the mug, swelling, wandering off and thinning to nothing */
+        for (i = 0; i < 13; i++) {
+            f32 h = hsh((uint32_t)i + 950u), u = fractf(h + t * (0.085f + 0.03f * hsh((uint32_t)i + 960u)) * (1.0f + 0.5f * steam)), hgt = 26.0f + 14.0f * steam;
+            f32 x = mx + (h - 0.5f) * 5.0f + (1.0f + 8.0f * u) * sin_turns(t * 0.12f + u * 0.8f + (f32)(i & 1) * 0.5f) * (0.5f + 0.5f * u), y = my - 13.0f - hgt * u;
+            g_glow(x, y, 2.4f + 6.5f * u, (0.42f + 0.4f * steam) * sat(u * 7.0f) * (1.0f - u) * (1.0f - u));
         }
+        g_mode(G_MAX);
         for (i = 0; i < 4; i++) {                /* books, one of them not straight */
             f32 bx = 186.0f + (f32)i * 9.0f, lean = i == 3 ? 6.0f : 0.0f, hh = 24.0f + 6.0f * hsh((uint32_t)i + 900u);
             g_line(bx, 207.0f, bx + lean, 207.0f - hh, 1.2f, 0.9f); g_line(bx + 7.0f, 207.0f, bx + 7.0f + lean, 207.0f - hh, 1.2f, 0.9f);

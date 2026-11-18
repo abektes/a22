@@ -79,6 +79,13 @@ old way, a float distance at every pixel, is kept for a line too long, too far o
 wide for the integers. `tests/lines.c` holds `g_line` to within one ink level of 255 of a float
 distance at every pixel, over random lines, paths and arcs.
 
+Soft things (steam, candle glow, light shafts, rain, comet tails) are not lines. `g_glow` is a round
+falloff and `g_beam` a stroke whose width and ink both taper along it; both dither their faint ink on
+a 4x4 pattern so a gradient costs no float per pixel and no banding. In `G_PAINT` they darken what is
+under them. `g_fillv` fills a polygon with ink that changes down its rows (ghost cloth, candle wax),
+and `g_comet` builds a comet from beams, a glow and a few grains. A soft shape changes every pixel it
+covers, so it also costs bytes to the panel: keep the ones that move small.
+
 Motion uses springs integrated with the real frame time, so the art moves the same at any frame
 rate and never snaps.
 

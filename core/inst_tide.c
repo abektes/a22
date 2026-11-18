@@ -102,17 +102,60 @@ static void tide_render(Voice *v, const Blk *b, f32 *out, int n)
 #define NPT 44
 #define NBG 12
 static f32 swell[NVOICE], swx[NVOICE], lev, sea_ph[3], bolt_t, bolt_x, comet_u, comet_v, eye_x, eye_xv, eye_o, hz_y = 128.0f, hz_v;
+static f32 gyre, hole_ey, hole_tw;
 static uint32_t seen, bolt_seed;
 static f32 bg[NBG][2];
 static int bg_ready;
 
 static f32 key_x(f32 pitch) { return 16.0f + clampf((pitch - 41.0f) / 50.0f, 0.0f, 1.0f) * 208.0f; }
 
+/* ABYSS: the water near the hole is carried round it and drawn in. Works on a point of a wave. */
+static void whirl(f32 *x, f32 *y)
+{
+    f32 nx = (*x - 120.0f) * (1.0f / 112.0f), ny = (*y - hole_ey) * (1.0f / 60.0f), d2 = nx * nx + ny * ny, w, c, s, k;
+    if (d2 >= 1.0f)
+        return;
+    w = 1.0f - sqrtfx(d2);
+    w *= w;
+    c = cos_turns(hole_tw * w * 2.2f); s = sin_turns(hole_tw * w * 2.2f);
+    k = 1.0f - 1.6f * hole_tw * w;
+    *x = 120.0f + (nx * c - ny * s) * k * 112.0f;
+    *y = hole_ey + (ny * c + nx * s) * k * 60.0f;
+}
+
 static void star(f32 x, f32 y, f32 s, f32 a)
 {
     g_line(x - s, y, x + s, y, 1.6f, a);
     g_line(x, y - s, x, y + s, 1.6f, a);
     g_disc(x, y, s * 0.36f, a);
+}
+
+static f32 cloud_x(f32 mx, f32 t) { return (f32)ifloor(mx - 14.0f + 8.0f * sin_turns(t * 0.05f)); }
+
+/* STORM's near rain: where drop i is across the sky (before the wind leans it) and how far down, 0..1 */
+#define NFAR 18
+#define NNEAR 12
+static f32 rain_lean;
+static void rain_drop(int i, f32 t, f32 cx, f32 *x, f32 *u)
+{
+    f32 h = fractf((f32)i * 0.618f + 0.27f);
+    *u = fractf(h * 5.0f + t * (0.8f + 0.5f * h));
+    *x = cx - 60.0f + fractf((f32)i * 0.381f + 0.5f) * 128.0f;
+}
+
+/* part of an ellipse as a polyline: angles in turns */
+static void ell_arc(f32 cx, f32 cy, f32 rx, f32 ry, f32 t0, f32 t1, f32 w, f32 a)
+{
+    f32 xy[2 * 16];
+    int i, n = iclamp((int)((t1 - t0) * 40.0f) + 3, 3, 16);
+    if (a < 0.02f)
+        return;
+    for (i = 0; i < n; i++) {
+        f32 an = lerpf(t0, t1, (f32)i / (f32)(n - 1));
+        xy[2 * i] = cx + cos_turns(an) * rx;
+        xy[2 * i + 1] = cy + sin_turns(an) * ry;
+    }
+    g_poly(xy, n, 0, w, a);
 }
 
 static void sky(int algo, f32 a, const Vis *vis, f32 mx, f32 my, f32 H)
@@ -167,12 +210,12 @@ static void sky(int algo, f32 a, const Vis *vis, f32 mx, f32 my, f32 H)
         }
         break;
     case 4: {                                    /* STORM: a cloud, rain, and lightning where you play */
-        f32 cy = 44.0f - 14.0f * glow, drift = 8.0f * sin_turns(t * 0.05f);
-        static const f32 PUFF[6][3] = {{-52, 6, 20}, {-24, -8, 27}, {8, -12, 30}, {40, -4, 24}, {64, 8, 17}, {4, 10, 24}};
-        for (i = 0; i < 14; i++) {
-            f32 u = fractf((f32)i * 0.381f + t * (0.5f + 0.06f * (f32)(i % 5))), rx = 30.0f + fractf((f32)i * 0.618f) * 190.0f + drift;
-            f32 ry = cy + 20.0f + u * (H - cy - 22.0f);
-            g_line(rx - u * 14.0f, ry, rx - u * 14.0f - 3.0f, ry + 9.0f, 1.5f, 0.6f * a * sat(u * 6.0f) * sat((1.0f - u) * 4.0f));
+        f32 cy = (f32)ifloor(50.0f - 14.0f * glow), cx = cloud_x(mx, t), base = cy + 17.0f, flash = sat(bolt_t * 4.0f);     /* (on whole pixels: its shading holds still) */
+        static const f32 PUFF[8][3] = {{-60, 7, 15}, {-38, -5, 23}, {-10, -15, 28}, {22, -12, 26}, {48, -2, 21}, {68, 9, 13}, {-16, 6, 22}, {20, 6, 22}};
+        for (i = 0; i < NFAR; i++) {             /* the far rain: a grey veil under the cloud, leaning with the wind */
+            f32 h = fractf((f32)i * 0.381f + 0.13f), u = fractf(h * 7.0f + t * (0.55f + 0.25f * h)), x0 = cx - 66.0f + fractf((f32)i * 0.618f) * 136.0f;
+            f32 y = base + 2.0f + u * (H - base - 12.0f);
+            g_beam(x0 - rain_lean * (y - base), y, x0 - rain_lean * (y + 11.0f - base), y + 11.0f, 1.0f, 1.2f, 0.0f, 0.34f * a * sat(u * 5.0f), 0.0f);
         }
         if (bolt_t > 0.0f) {
             f32 xy[2 * 7], bx = bolt_x;
@@ -181,10 +224,25 @@ static void sky(int algo, f32 a, const Vis *vis, f32 mx, f32 my, f32 H)
                 xy[2 * i] = bx + (i == 0 || i == 6 ? 0.0f : rng_s(&s) * 15.0f);
                 xy[2 * i + 1] = cy + 16.0f + (H - cy - 16.0f) * (f32)i / 6.0f;
             }
+            g_glow(bx, H - 2.0f, 30.0f, flash * 0.5f * a);
             g_poly(xy, 7, 0, 2.6f, sat(bolt_t * 5.0f) * a);
         }
-        for (i = 0; i < 6; i++)
-            g_disc(mx - 14.0f + PUFF[i][0] + drift, cy + PUFF[i][1], PUFF[i][2], (0.55f + 0.45f * sat(glow + bolt_t * 2.0f)) * a);
+        for (i = 0; i < 8; i++)                  /* the cloud: its billows, */
+            g_disc(cx + PUFF[i][0], cy + PUFF[i][1], PUFF[i][2], (0.4f + 0.3f * glow + 0.3f * flash) * a);
+        g_mode(G_PAINT);                         /* its belly, heavy and dark, */
+        for (i = 0; i < 5; i++)
+            g_glow(cx - 62.0f + (f32)i * 33.0f, base + 9.0f, 34.0f, (0.93f - 0.5f * flash) * a);
+        g_mode(G_MAX);
+        for (i = 0; i < 6; i++)                  /* and the light along the top of each billow */
+            g_arc(cx + PUFF[i][0], cy + PUFF[i][1], PUFF[i][2] - 0.7f, 0.57f + 0.02f * (f32)i, 0.9f + 0.012f * (f32)i, 1.5f, (0.8f + 0.2f * flash) * a);
+        if (flash > 0.0f)                        /* (the stroke lights it from inside) */
+            g_glow(clampf(bolt_x, cx - 50.0f, cx + 56.0f), cy + 4.0f, 30.0f, flash * 0.8f * a);
+        for (i = 0; i < NNEAR; i++) {            /* the near rain: each drop a streak with a bright head */
+            f32 x, y, u, len = 13.0f + 9.0f * fractf((f32)i * 0.731f);
+            rain_drop(i, t, cx, &x, &u);
+            y = base + 4.0f + u * (H - base - 4.0f);
+            g_beam(x - rain_lean * (y - len - base), maxf(y - len, base), x - rain_lean * (y - base), y, 1.0f, 1.9f, 0.0f, 0.85f * a * sat(u * 6.0f), 0.0f);
+        }
         break;
     }
     case 5:                                      /* FOG: a moon behind slow bands */
@@ -201,13 +259,9 @@ static void sky(int algo, f32 a, const Vis *vis, f32 mx, f32 my, f32 H)
         }
         break;
     case 6: {                                    /* COMET: each note throws it further round */
-        f32 an = 0.5f + comet_u * 0.5f, cx = 120.0f + 150.0f * cos_turns(an), cy = H + 10.0f + (118.0f + 0.0f * glow) * sin_turns(an);
-        f32 tx = -sin_turns(an), ty = cos_turns(an), tl = 26.0f + 80.0f * glow + 60.0f * lev;
-        for (i = -2; i <= 2; i++) {
-            f32 sp = (f32)i * 0.11f, ex = cx - (tx + ty * sp) * tl * (1.0f - 0.16f * absf((f32)i)), ey = cy - (ty - tx * sp) * tl * (1.0f - 0.16f * absf((f32)i));
-            g_line(cx, cy, ex, ey, i == 0 ? 2.6f : 1.5f, (i == 0 ? 1.0f : 0.55f) * a);
-        }
-        g_disc(cx, cy, 6.5f + 2.5f * lev, a);
+        f32 an = 0.5f + comet_u * 0.5f, cx = 120.0f + 150.0f * cos_turns(an), cy = H + 10.0f + 118.0f * sin_turns(an);
+        f32 tx = sin_turns(an), ty = -cos_turns(an);
+        g_comet(cx, cy, 5.0f + 2.0f * lev, tx, ty, 46.0f + 90.0f * glow + 50.0f * lev, 10.0f + 16.0f * glow, a, t, 0.61f);
         break;
     }
     case 7:                                      /* ABYSS: a small moon far up; the rest is underwater */
@@ -219,7 +273,7 @@ static void sky(int algo, f32 a, const Vis *vis, f32 mx, f32 my, f32 H)
 static void tide_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, glow = vis->k[0], drift = vis->k[2], surge = vis->k[3], mt = smooth01(vis->algo_t);
-    f32 H, mx = 152.0f, my, big, want[NVOICE] = {0};
+    f32 H, mx = 152.0f, my, big, ab, want[NVOICE] = {0};
     int i, j, k;
 
     if (!bg_ready) {
@@ -260,6 +314,7 @@ static void tide_draw(const Vis *vis)
         }
         swell[i] += (want[i] - swell[i]) * minf(1.0f, dt * (want[i] > swell[i] ? 5.0f : 2.2f));
     }
+    rain_lean = 0.26f + 0.1f * sin_turns(t * 0.06f) + 0.25f * surge;
     for (i = 0; i < 3; i++)
         sea_ph[i] = fractf(sea_ph[i] + dt * (0.05f + 0.07f * (f32)i) * (1.0f + 1.5f * surge));
 
@@ -283,18 +338,13 @@ static void tide_draw(const Vis *vis)
     g_rect(-1.0f, H, 242.0f, 242.0f - H, 0.0f);
     g_mode(G_MAX);
 
-    if (vis->algo == 7 || (mt < 1.0f && vis->algo_prev == 7)) {      /* ABYSS: something down there opens an eye when you play */
-        f32 a = vis->algo == 7 ? mt : 1.0f - mt, ex = 120.0f, ey = H + 104.0f, lid;
-        spring(&eye_x, &eye_xv, (key_x(vis->last_pitch) - 120.0f) * 0.32f, 6.0f, dt);
-        eye_o += ((0.1f + 0.9f * sat(lev * 1.6f)) - eye_o) * minf(1.0f, dt * 5.0f);
-        lid = 34.0f * eye_o;
-        g_ellipse(ex, ey, 66.0f, maxf(lid, 2.0f), 2.6f, (0.5f + 0.5f * glow) * a);
-        if (lid > 9.0f) {
-            g_disc(ex + eye_x, ey, minf(lid - 5.0f, 17.0f), (0.5f + 0.5f * glow) * a);
-            g_mode(G_PAINT);
-            g_disc(ex + eye_x, ey, minf(lid - 5.0f, 17.0f) * 0.45f, 0.0f);
-            g_mode(G_MAX);
-        }
+    ab = vis->algo == 7 ? mt : (vis->algo_prev == 7 ? 1.0f - mt : 0.0f);
+    if (ab > 0.0f) {                             /* ABYSS: the sea turns round a hole, and what lives in it looks up when you play */
+        spring(&eye_x, &eye_xv, (key_x(vis->last_pitch) - 120.0f) * 0.2f, 6.0f, dt);
+        eye_o += ((0.06f + 0.94f * sat(lev * 1.6f)) - eye_o) * minf(1.0f, dt * 5.0f);
+        gyre = fractf(gyre + dt * (0.05f + 0.12f * surge + 0.2f * lev));
+        hole_ey = H + 104.0f;
+        hole_tw = ab * (0.2f + 0.16f * sat(lev * 1.5f) + 0.14f * surge + 0.03f * sin_turns(t * 0.11f));
     }
 
     /* the sea: lines that come nearer and bigger, bleeding off both sides */
@@ -318,7 +368,25 @@ static void tide_draw(const Vis *vis)
             xy[2 * j] = x;
             xy[2 * j + 1] = y0 + y + heave;
         }
-        g_poly(xy, NPT, 0, 1.3f + 2.0f * u, 0.3f + 0.7f * u);
+        if (ab > 0.0f && y0 > hole_ey - 70.0f) { /* ABYSS: the line is bent round the hole, with a point more between two where the bend is tight */
+            static f32 wxy[2 * (2 * NPT - 1)];
+            int n = 0;
+            for (j = 0; j < NPT; j++) {
+                f32 nx = (xy[2 * j] - 120.0f) * (1.0f / 112.0f), ny = (xy[2 * j + 1] - hole_ey) * (1.0f / 60.0f);
+                if (j && nx * nx + ny * ny < 0.5f) {
+                    wxy[2 * n] = 0.5f * (xy[2 * j] + xy[2 * j - 2]);
+                    wxy[2 * n + 1] = 0.5f * (xy[2 * j + 1] + xy[2 * j - 1]);
+                    whirl(&wxy[2 * n], &wxy[2 * n + 1]);
+                    n++;
+                }
+                wxy[2 * n] = xy[2 * j];
+                wxy[2 * n + 1] = xy[2 * j + 1];
+                whirl(&wxy[2 * n], &wxy[2 * n + 1]);
+                n++;
+            }
+            g_poly(wxy, n, 0, 1.3f + 2.0f * u, 0.3f + 0.7f * u);
+        } else
+            g_poly(xy, NPT, 0, 1.3f + 2.0f * u, 0.3f + 0.7f * u);
         /* the light on the water: under the moon the swell itself lights up. The lit stretch of
          * each wave is broken into glints by two slow ripples crossing, so the path shivers
          * instead of blinking, and it widens towards you. */
@@ -339,6 +407,81 @@ static void tide_draw(const Vis *vis)
             }
             if (k == 0)                          /* where the path meets the horizon it is one bright seam */
                 g_line(mx - 3.0f - 5.0f * glow, H + 2.0f, mx + 3.0f + 5.0f * glow, H + 2.0f, 1.4f, gl * 0.9f);
+        }
+    }
+
+    if (vis->algo == 4 || (mt < 1.0f && vis->algo_prev == 4)) {      /* STORM: where the near rain lands, a ring on the water */
+        f32 a = vis->algo == 4 ? mt : 1.0f - mt, cx = cloud_x(mx, t), base = 67.0f - 14.0f * glow;
+        for (i = 0; i < NNEAR; i++) {
+            f32 x, u, d = fractf((f32)i * 0.447f + 0.2f);
+            rain_drop(i, t, cx, &x, &u);
+            if (u < 0.3f) {
+                f32 g = u * (1.0f / 0.3f), sx = x - rain_lean * (H - base), sy = H + 5.0f + 44.0f * d * d;
+                g_ellipse(sx, sy, (2.0f + 9.0f * g) * (0.6f + d), (0.7f + 2.2f * g) * (0.6f + d), 1.0f, a * (1.0f - g) * (0.5f + 0.4f * d));
+                if (g < 0.4f)
+                    g_line(sx, sy, sx, sy - 4.0f * (1.0f - g * 2.5f) * (0.6f + d), 1.2f, a * 0.8f);
+            }
+        }
+    }
+
+    if (ab > 0.0f) {                             /* ABYSS: the hole itself, over the sea that pours into it */
+        f32 ex = 120.0f, ey = hole_ey, rx = (54.0f + 6.0f * lev) * ab, ry = rx * 0.47f, lid, xy[2 * 13], ga = (0.55f + 0.45f * glow) * ab;
+        for (k = 0; k < 3; k++)                  /* foam drawn out along the turning water */
+            for (j = 0; j < 1; j++) {
+                f32 a0 = gyre + (f32)k / 3.0f + (f32)j * 0.13f, r0 = 1.12f + 0.2f * (f32)j;
+                for (i = 0; i < 9; i++) {
+                    f32 q = (f32)i / 8.0f, an = a0 - q * 0.3f, rr = r0 + q * (0.55f + 0.2f * (f32)j);
+                    xy[2 * i] = ex + cos_turns(an) * rx * rr;
+                    xy[2 * i + 1] = ey + sin_turns(an) * ry * rr;
+                }
+                g_poly(xy, 5, 0, 2.0f - 0.6f * (f32)j, ga * (0.8f - 0.3f * (f32)j));
+                g_poly(xy + 8, 5, 0, 1.2f, ga * (0.4f - 0.15f * (f32)j));
+            }
+        g_mode(G_PAINT);
+        g_ellipse(ex, ey, rx, ry, 0.0f, 0.0f);
+        g_mode(G_MAX);
+        for (k = 0; k < 3; k++) {                /* the walls of it going down: rings, each lower, smaller and turning faster */
+            f32 q = (f32)k / 4.0f, kx = rx * (1.0f - 0.2f * q * (2.0f - q) * 2.0f), ky = ry * (1.0f - 0.2f * q * (2.0f - q) * 2.0f), cy = ey + ry * 0.42f * q;
+            if (k == 0) {
+                g_ellipse(ex, cy, kx, ky, 2.4f + 1.6f * lev, ab);
+                continue;
+            }
+            for (j = 0; j < 2; j++) {
+                f32 a0 = gyre * (1.0f + (f32)k) + (f32)j / 2.0f + (f32)k * 0.17f;
+                ell_arc(ex, cy, kx, ky, a0, a0 + 0.3f - 0.04f * (f32)k, 1.5f - 0.2f * (f32)k, ga * (0.75f - 0.17f * (f32)k));
+            }
+        }
+        for (i = 0; i < 6; i++) {                /* whatever was floating goes round, and in */
+            f32 h = fractf((f32)i * 0.618f), q = fractf(h + t * (0.05f + 0.03f * h)), rr = 2.1f - 1.5f * q, an = h + gyre * 0.5f + q * q * 1.6f;
+            f32 px = ex + cos_turns(an) * rx * rr, py = ey + sin_turns(an) * ry * rr;
+            if (rr > 1.02f)
+                g_line(px, py, px + sin_turns(an) * 4.0f * q, py - cos_turns(an) * 2.0f * q, 1.4f, ga * sat(q * 4.0f));
+        }
+        /* the eye, at the bottom */
+        lid = ry * 0.56f * eye_o;
+        {
+            f32 cy = ey + ry * 0.28f, lw = rx * 0.6f, ir = minf(lid * 0.92f, rx * 0.2f), px = ex + eye_x * ab;
+            g_glow(ex, cy, rx * 0.5f, 0.25f * ga * eye_o);
+            for (j = -1; j <= 1; j += 2) {       /* two lids */
+                for (i = 0; i < 13; i++) {
+                    f32 q = (f32)i / 12.0f * 2.0f - 1.0f;
+                    xy[2 * i] = ex + q * lw;
+                    xy[2 * i + 1] = cy + (f32)j * maxf(lid, 1.0f) * (1.0f - q * q);
+                }
+                g_poly(xy, 13, 0, 1.8f, ga);
+            }
+            if (ir > 2.5f) {
+                g_disc(px, cy, ir, ga);
+                g_mode(G_PAINT);
+                for (i = 0; i < 10; i++) {       /* the iris has a grain */
+                    f32 an = (f32)i / 10.0f + 0.03f * sin_turns(t * 0.2f + (f32)i);
+                    g_line(px + cos_turns(an) * ir * 0.45f, cy + sin_turns(an) * ir * 0.45f, px + cos_turns(an) * ir * 0.86f, cy + sin_turns(an) * ir * 0.86f, 1.0f, 0.0f);
+                }
+                g_ellipse(px, cy, ir * (0.2f + 0.3f * (1.0f - sat(lev * 1.5f))), ir * 0.62f, 0.0f, 0.0f);       /* a slit that narrows at the sound */
+                g_mode(G_MAX);
+                g_ring(px, cy, ir + 2.2f, 1.0f, ga * 0.6f);
+                g_disc(px - ir * 0.38f, cy - ir * 0.4f, 1.3f, ga);
+            }
         }
     }
 }
