@@ -12,9 +12,8 @@ words = "words.tsv"
 ram_layout = "packed"
 ble = false
 # what a crash leaves behind is kept in flash (read with base/tools/fm1_remote.py crashes), with each stack's
-# room at the crash; and the build fails if the deepest call path could outgrow a stack
+# room at the crash; the stacks are painted at every start, so their unused bytes can be read (app.c's PERF)
 crash_history = true
-stack_check = true
 usb_audio_in = false
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
 tagline = "Fourteen animated instruments for the FM-1"

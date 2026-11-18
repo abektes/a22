@@ -113,8 +113,8 @@ that came out of it:
   start cannot become two.
 - `tests/fuzz.c` holds all of this to account: any saved state from an odd address, any panel input
   on every instrument, and the sound on a second thread, under `-fsanitize=address,undefined`.
-- `app/fm1.toml` keeps the crash history in flash (`base/tools/fm1_remote.py crashes`) and has the
-  build check the deepest call path against each stack.
+- `app/fm1.toml` keeps the crash history in flash (`base/tools/fm1_remote.py crashes`), and the stacks
+  are painted at every start so the PERF readout can say how much of each was never used.
 
 ## Building
 
