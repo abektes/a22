@@ -61,9 +61,24 @@ screen reader a control's name and value. The simulator uses both to
 show each control as a labelled slider, while its nudge buttons, the mouse wheel and the number
 keys still send real encoder detents.
 
-## RAM on the device
+## RAM and flash on the device
 
-The pool holds 336 KB. h1 asks for about 320 KB of it:
+Measured by the first device build (CI, JieLi toolchain 20260730.1, fm1-base c8e0599):
+
+| | Bytes | Of |
+|---|---|---|
+| App image | 304,848 | the 581,564-byte app slot |
+| RAM code | 5,100 | |
+| `.data` + `.bss` | 45,556 | |
+| Pool | 347,492 | |
+| SRAM in all | 398,152 | 475,136, with 76,984 free (the build keeps 8,192 spare) |
+
+`app/fm1.toml` sets `ram_layout = "packed"`: RAM code, `.data`/`.bss` and the pool share one
+budget. fm1-base's default map gives the pool a fixed 336 KB, which h1 overflows. `app/app.h`
+also cuts fm1-base's own canvas to a 48-row strip (23 KB, down from 69 KB), since h1 draws with
+its own framebuffer and the platform only needs the strip for its update and safe-mode text.
+
+What h1 puts in the pool, about 321 KB:
 
 | Buffer | KB |
 |---|---|
@@ -74,9 +89,9 @@ The pool holds 336 KB. h1 asks for about 320 KB of it:
 | Two RGB565 bands for the panel | 19 |
 | LAVA's field and INK's scroll history | 7 |
 
-fm1-base keeps buffers of its own in the same pool, so this needs measuring on the first device
-build. The first things to shrink are the string lines and the reverb (16-bit samples halve
-both).
+These are link-time numbers. Stack depth and CPU time per audio block have not been measured on
+hardware. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+(16-bit samples halve both).
 
 ## Building
 
