@@ -4,7 +4,12 @@ What has to be true before a `vX.Y.Z` tag is pushed and h1 is submitted to
 [The Firmware Hub](https://thefirmwarehub.com/submit/). The Hub lists a firmware only when it has
 been installed on a real FM-1 from V15 and from another firmware, and left again.
 
-Nothing below has been done yet for v0.1.0. Tick a box only after doing it on hardware.
+Tick a box only after doing it on hardware.
+
+Done so far (2026-11-18, one unit bought November 2026): section 1, with the development build of
+commit `037ed8a` installed from official V15 by `fm1_install.py`. The FM-1 answered `FM-1_015`
+before and `FM-1_48100` after, restarted by itself, the port is named `h1 FM-1`, and the
+screen reader's channel reported COZY and ORBIT. No crash was recorded.
 
 ## 0. Before touching an FM-1
 
@@ -26,11 +31,11 @@ Nothing below has been done yet for v0.1.0. Tick a box only after doing it on ha
 
 ## 1. Install from stock V15
 
-- [ ] Start from official V15 (the Hub's **Back to official V15** puts it there).
-- [ ] Install `h1.fwsc`: `python3 base/tools/fm1_install.py h1.fwsc`. It finishes without an error
+- [x] Start from official V15 (the Hub's **Back to official V15** puts it there).
+- [x] Install `h1.fwsc`: `python3 base/tools/fm1_install.py h1.fwsc`. It finishes without an error
       and the FM-1 restarts into h1 (COZY comes up).
-- [ ] `python3 base/tools/fm1_install.py --info` answers `FM-1_48100`.
-- [ ] The computer shows the USB device as `h1 FM-1`.
+- [x] `python3 base/tools/fm1_install.py --info` answers `FM-1_48100`.
+- [x] The computer shows the USB device as `h1 FM-1`.
 
 ## 2. It works
 
@@ -67,7 +72,8 @@ Nothing below has been done yet for v0.1.0. Tick a box only after doing it on ha
 The FM-1s sold since autumn 2026 carry a UC25HQ80 flash (JEDEC `0xB36014`) in place of the Puya
 P25Q80 (`0x856014`). A firmware that only knows the Puya can't save or update on them.
 
-- [ ] Do sections 1, 3 and 4 on a newer unit. With h1 running, `--info` prints the unit's flash ID.
+- [ ] Do sections 1, 3 and 4 on a newer unit. h1 doesn't report the flash ID over USB, so the test
+      is the next line: on a chip a firmware doesn't know, settings are gone after a power cycle.
 - [ ] On that unit, settings survive a power cycle (this is the part that fails on a firmware that
       doesn't know the chip).
 - [ ] If only one kind of unit is at hand, find a tester with the other kind before submitting,
