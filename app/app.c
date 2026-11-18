@@ -30,12 +30,16 @@ static int sq[4];                        /* the rectangle in the filled band: x,
 static uint8_t sq_full;
 static struct { uint32_t bytes, rects; } sent;
 
+#ifndef PLAT_HOST
+#include "hw/panel.h"
+#endif
+
 static int panel_idle(void)
 {
 #ifdef PLAT_HOST
     return 1;
 #else
-    return !lcd_busy || (FM1_LCD_SPI_CON & 0x8000u) != 0u;   /* (fm1-base's device/lcd.c: no transfer, or it is done) */
+    return !lcd_busy || hw_panel_done();     /* (fm1-base's device/lcd.c: no transfer running, or it is done) */
 #endif
 }
 

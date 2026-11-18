@@ -10,6 +10,9 @@ words = "words.tsv"
 # one SRAM budget for RAM code, .data/.bss and the pool (base/device/app_packed.ld): h1's pool is big (the
 # framebuffer and its copy, the echo, the reverb, the string lines) and its .data/.bss small
 ram_layout = "packed"
+# app/hw/panel.h asks the panel's SPI whether a transfer is done (the BSP can only wait for it): the one
+# place h1 reads a register, kept apart so the build's register check holds for the rest of the app
+vendored = ["hw/"]
 ble = false
 # what a crash leaves behind is kept in flash (read with base/tools/fm1_remote.py crashes), with each stack's
 # room at the crash; the stacks are painted at every start, so their unused bytes can be read (app.c's PERF)
