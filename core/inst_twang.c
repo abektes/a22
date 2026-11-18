@@ -9,167 +9,194 @@
  */
 #include "internal.h"
 #include "dsp.h"
+#include "smp.h"
+#include "str.h"
 
-#define KS_MASK (KS_LEN - 1)
-
-/* ---- sound ------------------------------------------------------------------------------ */
+/* ---- sound ------------------------------------------------------------------------------
+ * Seven of the eight are the string of str.h, fed with the first moments of a recorded pluck (smp.h): the
+ * finger or the plectrum, and the instrument's body answering it. The string's decay starts from what was
+ * measured on the recording, and DAMP moves it from there. BOW is a recorded cello, held. */
 typedef struct TAlgo {
-    f32 ring;                    /* decay time, relative */
-    f32 bright;                  /* loop filter, relative */
+    uint8_t bank;
+    f32 ring;                    /* decay time, against the recording's */
+    f32 bright;                  /* loop filter, against the recording's */
     f32 transpose;
-    f32 body[2];                 /* two body resonances, Hz */
-    f32 bodymix;
-    uint8_t second;              /* 0 none, 1 octave string, 2 sympathetic drone */
+    f32 level;
+    uint8_t second;              /* 0 none, 1 an octave string beside it, 2 a sympathetic drone */
 } TAlgo;
 
 static const TAlgo TA[NALGO] = {
-    /* HARP   */ {1.3f, 1.0f, 0.0f, {180.0f, 420.0f}, 0.25f, 0},
-    /* NYLON  */ {0.6f, 0.72f, 0.0f, {110.0f, 230.0f}, 0.55f, 0},
-    /* TWELVE */ {1.0f, 1.0f, 0.0f, {140.0f, 300.0f}, 0.3f, 1},
-    /* SITAR  */ {1.1f, 1.0f, 0.0f, {200.0f, 620.0f}, 0.4f, 2},
-    /* BANJO  */ {0.28f, 1.0f, 0.0f, {380.0f, 900.0f}, 0.7f, 0},
-    /* KOTO   */ {0.8f, 0.9f, 0.0f, {240.0f, 560.0f}, 0.35f, 0},
-    /* BASS   */ {1.2f, 0.6f, -12.0f, {70.0f, 150.0f}, 0.45f, 0},
-    /* BOW    */ {1.0f, 0.8f, 0.0f, {280.0f, 480.0f}, 0.5f, 0},
+    /* HARP   */ {SMP_CONCERTHARP, 1.0f, 1.0f, 0.0f, 1.0f, 0},
+    /* NYLON  */ {SMP_GUITAR_SOFT, 0.6f, 0.9f, 0.0f, 1.15f, 0},
+    /* TWELVE */ {SMP_GUITAR_HARD, 1.0f, 1.0f, 0.0f, 0.8f, 1},
+    /* SITAR  */ {SMP_SITAR, 1.0f, 1.0f, 0.0f, 0.9f, 2},
+    /* BANJO  */ {SMP_BANJO, 1.0f, 1.0f, 0.0f, 1.0f, 0},
+    /* KOTO   */ {SMP_KOTO, 1.0f, 1.0f, 0.0f, 1.0f, 0},
+    /* BASS   */ {SMP_BASS, 1.0f, 1.0f, -12.0f, 1.3f, 0},
+    /* BOW    */ {SMP_CELLO, 1.0f, 1.0f, 0.0f, 1.0f, 0},
 };
+
+#define T_LEVEL 3.4f             /* a string's level against the other instruments (inside, it stays small: the
+                                  * bridge only rattles when BUZZ says so) */
+#define T_BOW 3.0f
+#define T_FADE 48                /* samples in which a string that is plucked again lets go of what it held */
 
 static struct {
     int algo;
-    f32 t60, g, pick, tone, buzz, thr, drone;
+    f32 ts, gs, pick, comb, tone, buzz, thr, drone, drive, idrive, mute;
 } T;
-static Svf body_f[2];
-static f32 body_s[2][2], dc_y;
+static f32 dc_y;
 
 static void twang_block(const Blk *b)
 {
     const TAlgo *a = &TA[b->algo];
-    f32 d = b->k[0];
+    f32 d = b->k[0], p = b->k[1], t = b->k[2];
     T.algo = b->algo;
-    T.t60 = 7.0f * exp2fx(-d * 5.5f) * a->ring;
-    T.g = clampf(lerpf(0.97f, 0.3f, d * sqrtfx(d)) * a->bright, 0.08f, 0.98f);
-    T.pick = b->algo == 4 ? lerpf(0.25f, 0.03f, b->k[1]) : lerpf(0.5f, 0.04f, b->k[1]);
-    T.tone = b->k[2];
+    /* DAMP: at its default the string is the recording's; either way from there it rings on or is muted */
+    T.ts = exp2fx((0.25f - d) * 5.5f) * a->ring;
+    T.gs = lerpf(1.1f, 0.3f, d * sqrtfx(d)) * a->bright;
+    T.mute = d;
+    /* PICK: where along the string, as a comb on what it gives. Its default is the player's own. */
+    T.pick = b->algo == 4 ? lerpf(0.25f, 0.03f, p) : lerpf(0.5f, 0.04f, p);
+    T.comb = 0.75f * sat(absf(p - 0.35f) * 4.0f);
+    T.tone = t;
     T.buzz = b->algo == 3 ? 0.5f + 0.5f * b->k[3] : b->k[3];
-    T.thr = lerpf(1.3f, 0.04f, sqrtfx(T.buzz));
+    T.thr = T.buzz < 0.01f ? 100.0f : lerpf(0.75f, 0.012f, sqrtfx(T.buzz));
+    T.drive = 1.0f + T.buzz * 2.5f;
+    T.idrive = 1.0f / (1.0f + T.buzz * 0.8f);
     T.drone = mtof(48.0f + (f32)st.keys[0] + b->bend);
-    svf_set(&body_f[0], a->body[0], 3.0f, b->isr);
-    svf_set(&body_f[1], a->body[1], 4.0f, b->isr);
-}
-
-/* leave in the line the shape a pluck at `pick` gives one period of the string */
-static void load(f32 *line, uint32_t w, f32 L, f32 amp, uint32_t *rng)
-{
-    int n = (int)L + 1, i;
-    f32 p = T.pick, t1 = sat(T.tone * 2.0f), t2 = sat(T.tone * 2.0f - 1.0f) * 0.6f, iL = 1.0f / L;
-    for (i = 0; i < n; i++) {
-        f32 u = (f32)i * iL, tri, pul, x;
-        if (u > 1.0f) u = 1.0f;
-        tri = (u < p ? u / p : (1.0f - u) / (1.0f - p)) * 2.0f - 1.0f;
-        pul = u < p ? 1.0f - p : -p;
-        x = lerpf(tri, pul * 1.3f, t1) + rng_s(rng) * t2;
-        line[(w - (uint32_t)n + (uint32_t)i) & KS_MASK] = x * amp;
-    }
-}
-
-static f32 string_len(f32 pitch, const Blk *b)
-{
-    f32 L = b->sr / mtof(pitch) - (1.0f - T.g) / T.g;
-    L = minf(L, 1.0e6f);                         /* (the loop below ends, whatever the pitch was) */
-    while (L > (f32)(KS_LEN - 4))
-        L *= 0.5f;
-    return maxf(L, 2.0f);
 }
 
 static void twang_note(Voice *v, const Blk *b)
 {
     const TAlgo *a = &TA[T.algo];
-    f32 L = string_len(v->target + b->bend + a->transpose, b);
+    f32 pitch = v->target + b->bend + a->transpose;
+    Str s;
     if (!v->u[2]) v->u[2] = 0x9E3779B9u + v->idx * 7919u;
-    v->s[0] = 0.0f;
-    v->s[1] = L;
-    load(ks_line[v->idx][0], v->u[0], L, T.algo == 7 ? 0.3f : 0.85f, &v->u[2]);
-    if (a->second == 1) {
-        f32 keep = T.pick;
-        T.pick = keep * 0.7f;
-        v->s[2] = 0.0f;
-        load(ks_line[v->idx][1], v->u[1], L * 0.5f * 0.998f, 0.5f, &v->u[2]);
-        T.pick = keep;
+    v->q[1] = (uint32_t)smp_pick(a->bank, pitch);
+    if (T.algo == 7) {                           /* BOW: from the note's start, or straight on if it is still sounding */
+        if (v->env < 0.001f) {
+            smp_start(&v->r[0]);
+            v->s[6] = v->s[7] = 0.0f;
+        }
+        v->s[10] = 0.0f;
+        return;
     }
+    smp_fit(smp_zone(a->bank, v->q[1], pitch), pitch, &v->s[8], &v->s[9]);
+    str_set(&s, mtof(pitch), 0.5f, 1.0f, b->sr);
+    smp_start(&v->r[0]);                         /* the pluck starts */
+    v->q[3] = smp_inc(smp_zone(a->bank, v->q[1], pitch), pitch, b->isr);
+    v->q[2] = (uint32_t)s.len + 4u;              /* and for one trip round, what the string held is let go */
+    v->s[13] = (f32)v->q[2];
+    v->s[12] = 0.0f;
+}
+
+/* BOW: a cello, as long as the key is down. */
+static void bow_render(Voice *v, const Blk *b, f32 *out, int n, f32 pitch)
+{
+    const SmpZone *z = smp_zone(SMP_CELLO, v->q[1], pitch);
+    f32 lp = v->s[6], hp = v->s[7], fade = v->s[10];
+    f32 kl = onepole_k(1.0f / (H1_TAU * (350.0f + 9000.0f * (1.0f - T.mute) * (1.0f - T.mute))), b->sr);
+    f32 kh = onepole_k(1.0f / (H1_TAU * 900.0f), b->sr), edge = (T.pick < 0.2f ? (0.2f - T.pick) * 9.0f : 0.0f) + T.tone * 1.2f - 0.5f;
+    int i;
+    v->ph[2] = fractf(v->ph[2] + 5.3f * (f32)n * b->isr);
+    pitch += 0.14f * tsin(v->ph[2]) * sat(v->age * 2.0f - 0.7f);
+    smp_read(z, &v->r[0], smp_inc(z, pitch, b->isr), z->gain * T_BOW, out, n, 0);
+    for (i = 0; i < n; i++) {
+        f32 x = out[i];
+        hp += kh * (x - hp);
+        x += edge * (x - hp);                    /* TONE and a bow near the bridge: more of the top */
+        lp += kl * (x - lp);                     /* DAMP: a mute on the bridge */
+        fade += (1.0f - fade) * 0.01f;
+        out[i] = softclip(lp * T.drive) * T.idrive * fade;
+    }
+    v->s[6] = lp;
+    v->s[7] = hp;
+    v->s[10] = fade;
 }
 
 static void twang_render(Voice *v, const Blk *b, f32 *out, int n)
 {
     const TAlgo *a = &TA[T.algo];
+    const SmpZone *z;
     f32 *line = ks_line[v->idx][0], *line2 = ks_line[v->idx][1];
-    f32 pitch = v->pitch + b->bend + a->transpose, L, L2 = 4.0f, rho, rho2 = 0.0f, lp = v->s[0], lp2 = v->s[2];
-    f32 g = T.g, thr = T.thr, bow = 0.0f, drive = 1.0f + T.buzz * 2.5f, idrive = 1.0f / (1.0f + T.buzz * 0.8f);
-    uint32_t w = v->u[0] & KS_MASK, w2 = v->u[1] & KS_MASK;
-    int i, second = a->second;
+    f32 e[CTRL], pitch = v->pitch + b->bend + a->transpose, thr = T.thr, tl = v->s[12], amp, lev = a->level * T_LEVEL;
+    f32 ta = T.tone < 0.45f ? lerpf(0.12f, 1.0f, T.tone * (1.0f / 0.45f)) : 1.0f + (T.tone - 0.45f) * 3.0f;
+    Str s1, s2;
+    uint32_t w = v->u[0] & STR_MASK, w2 = v->u[1] & STR_MASK, kill = v->q[2], pk;
+    int i, second = a->second, fed;
 
-    if (T.algo == 5)                             /* KOTO: the note is pressed sharp and settles */
-        pitch += 0.7f * exp2fx(-v->age * 14.0f) + 0.12f * tsin(v->age * 5.5f) * sat(v->age * 2.0f - 0.6f);
-    L = string_len(pitch, b);
-    rho = exp2fx(-9.966f * L * b->isr / T.t60);
-    if (T.algo == 7 && v->gate) {                /* BOW: the loop feeds itself while the key is down */
-        rho = 1.06f;
-        bow = 0.02f + 0.1f * T.tone;
+    if (n > CTRL) n = CTRL;
+    if (T.algo == 7) {
+        bow_render(v, b, out, n, pitch);
+        return;
     }
-    if (second == 1) {
-        L2 = maxf(L * 0.5f * 0.998f, 2.0f);
-        rho2 = exp2fx(-9.966f * L2 * b->isr / (T.t60 * 0.8f));
-    } else if (second == 2) {
-        L2 = clampf(b->sr / T.drone - 0.4f, 2.0f, (f32)(KS_LEN - 4));
-        rho2 = 0.9985f;
-    }
+    z = smp_zone(a->bank, v->q[1], pitch);
+    if (T.algo == 5)                             /* KOTO: the hand behind the bridge, once the note has settled */
+        pitch += 0.12f * tsin(v->age * 5.5f) * sat(v->age * 2.0f - 0.6f);
+    str_set(&s1, mtof(pitch), clampf(v->s[8] * T.gs, 0.05f, 0.985f), maxf(v->s[9], 0.05f) * T.ts, b->sr);
+    s2 = s1;
+    if (second == 1)
+        str_set(&s2, mtof(pitch + 12.0f) * 1.002f, clampf(v->s[8] * T.gs, 0.05f, 0.985f), maxf(v->s[9], 0.05f) * T.ts * 0.7f, b->sr);
+    else if (second == 2)
+        str_set(&s2, T.drone, 0.9f, 5.0f, b->sr);
+
+    /* what the string is fed: the recorded pluck at the note's speed, rounded off or sharpened (what with) */
+    amp = z->gain;
+    fed = !smp_done(z, &v->r[0]);
+    if (fed) {
+        smp_read(z, &v->r[0], v->q[3], amp, e, n, 0);
+        for (i = 0; i < n; i++) {
+            tl += 0.16f * (e[i] - tl);
+            e[i] = tl + ta * (e[i] - tl);
+        }
+    } else
+        for (i = 0; i < n; i++)
+            e[i] = 0.0f;
+    pk = (uint32_t)clampf(T.pick * s1.len, 1.0f, (f32)(KS_LEN - 8));
 
     for (i = 0; i < n; i++) {
-        f32 pos = (f32)(w + KS_LEN) - L, fr, y, o;
-        int ip = (int)pos;
-        fr = pos - (f32)ip;
-        y = line[ip & KS_MASK];
-        y += (line[(ip + 1) & KS_MASK] - y) * fr;
-        lp += g * (y - lp);
-        o = lp * rho;
-        if (o > thr) o = thr + (o - thr) * 0.2f;                 /* the bridge: one-sided, so it rattles */
-        if (bow > 0.0f) o = softclip(o) + noise_s(&v->u[2]) * bow;
-        line[w] = o;
-        w = (w + 1u) & KS_MASK;
-        if (second) {
-            f32 y2;
-            pos = (f32)(w2 + KS_LEN) - L2;
-            ip = (int)pos;
-            fr = pos - (f32)ip;
-            y2 = line2[ip & KS_MASK];
-            y2 += (line2[(ip + 1) & KS_MASK] - y2) * fr;
-            lp2 += 0.8f * (y2 - lp2);
-            line2[w2] = lp2 * rho2 + (second == 2 ? y * 0.035f : 0.0f);
-            w2 = (w2 + 1u) & KS_MASK;
-            y += y2 * (second == 2 ? 1.1f : 0.8f);
+        f32 fb = str_back(line, w, &s1, &v->s[0]), o, y;
+        int old = kill != 0;
+        if (kill) {                              /* (the first trip round still carries the last note) */
+            fb *= maxf(0.0f, 1.0f - (v->s[13] - (f32)kill) * (1.0f / (f32)T_FADE));
+            kill--;
         }
-        out[i] = softclip(y * drive) * idrive;
+        o = e[i] + fb;
+        if (o > thr) o = thr + (o - thr) * 0.2f;                 /* the bridge: one-sided, so it rattles */
+        line[w] = o;
+        y = o - T.comb * line[(w - pk) & STR_MASK];              /* PICK: where along the string */
+        w = (w + 1u) & STR_MASK;
+        if (second) {
+            f32 o2 = str_back(line2, w2, &s2, &v->s[2]);
+            if (second == 1) {
+                if (old)
+                    o2 = 0.0f;
+                o2 += e[i] * 0.8f;
+            } else
+                o2 += o * 0.012f;
+            line2[w2] = o2;
+            w2 = (w2 + 1u) & STR_MASK;
+            y += o2 * (second == 2 ? 0.8f : 0.75f);
+        }
+        out[i] = softclip(y * T.drive) * T.idrive * lev;
     }
     v->u[0] = w;
     v->u[1] = w2;
-    v->s[0] = lp;
-    v->s[2] = lp2;
+    v->q[2] = kill;
+    v->s[12] = tl;
 }
 
 static void twang_post(const Blk *b, f32 *l, f32 *r, int n)
 {
-    f32 mix = TA[T.algo].bodymix * 1.6f;
     int i;
     (void)b;
     for (i = 0; i < n; i++) {
-        f32 m = (l[i] + r[i]) * 0.5f, lo, b0, b1, hp;
-        SVF_TICK(body_f[0], body_s[0], m, lo, b0);
-        SVF_TICK(body_f[1], body_s[1], m, lo, b1);
-        (void)lo;
-        m = (b0 * body_f[0].k + b1 * body_f[1].k * 0.7f) * mix;
         /* the one-sided bridge leaves an offset behind: take it out */
-        hp = (l[i] + r[i]) * 0.5f;
-        dc_y += 0.0025f * (hp - dc_y);
-        l[i] += m - dc_y;
-        r[i] += m - dc_y;
+        f32 m = (l[i] + r[i]) * 0.5f;
+        dc_y += 0.0025f * (m - dc_y);
+        l[i] -= dc_y;
+        r[i] -= dc_y;
     }
 }
 
