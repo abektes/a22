@@ -586,14 +586,17 @@ void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a)
                  joined && stroke_real(xy + (n - 2) * 2, xy + (n - 1) * 2));
 }
 
-void g_fill(const f32 *xy, int n, f32 a)
+/* a filled convex polygon whose ink runs from a at the row ya to b at the row yb (and holds outside them) */
+static void fill_poly(const f32 *xy, int n, f32 a, f32 ya, f32 b, f32 yb)
 {
     f32 ex[8], ey[8], ec[8], ea[8], ei[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
-    int i, x, y, x0, x1, y0, y1;
+    f32 grad = yb != ya ? 1.0f / (yb - ya) : 0.0f;
+    int i, x, y, x0, x1, y0, y1, shade = a != b && grad != 0.0f;
     G_POLL();
     if (n < 3 || n > 8)
         return;
     set_level(a);
+    ya += goy;
     for (i = 0; i < n; i++) {
         f32 ax = xy[2 * i] + gox, ay = xy[2 * i + 1] + goy;
         int j = i + 1 < n ? i + 1 : 0;
@@ -621,20 +624,22 @@ void g_fill(const f32 *xy, int n, f32 a)
         f32 xa = (f32)x0, xb = (f32)x1, ia = (f32)x0, ib = (f32)x1;
         int a0, a1, i0, i1, none = 0;
         for (i = 0; i < n; i++) {
-            f32 b = sgn * (ey[i] * (f32)y + ec[i]);
+            f32 c = sgn * (ey[i] * (f32)y + ec[i]);
             if (ei[i] == 0.0f) {
-                if (b <= -0.5f) none = 1;
-                if (b < 0.51f) ib = ia - 1.0f;
+                if (c <= -0.5f) none = 1;
+                if (c < 0.51f) ib = ia - 1.0f;
             } else if (ea[i] > 0.0f) {
-                xa = maxf(xa, (-0.51f - b) * ei[i]);
-                ia = maxf(ia, (0.51f - b) * ei[i]);
+                xa = maxf(xa, (-0.51f - c) * ei[i]);
+                ia = maxf(ia, (0.51f - c) * ei[i]);
             } else {
-                xb = minf(xb, (-0.51f - b) * ei[i]);
-                ib = minf(ib, (0.51f - b) * ei[i]);
+                xb = minf(xb, (-0.51f - c) * ei[i]);
+                ib = minf(ib, (0.51f - c) * ei[i]);
             }
         }
         if (none || xb < xa)
             continue;
+        if (shade)
+            set_level(lerpf(a, b, sat(((f32)y - ya) * grad)));
         a0 = imax(x0, ifloor(xa));
         a1 = imin(x1, ifloor(xb) + 1);
         i0 = ifloor(ia) + 1;
@@ -643,8 +648,21 @@ void g_fill(const f32 *xy, int n, f32 a)
             i0 = a1 + 1, i1 = a1;                /* no inside on this row */
         for (x = a0; x <= a1; x++) {
             f32 d = 1e9f;
-            if (x >= i0 && x <= i1) {
-                put(x, y, 256);
+            if (x >= i0 && x <= i1) {            /* the inside of the row in one run */
+                uint8_t *p = &g_fb[y * FB_W + x], *e = p + (i1 - x);
+                if (gm == G_MAX) {
+                    for (; p <= e; p++)
+                        if (glevel > *p) *p = (uint8_t)glevel;
+                } else if (gm == G_ADD) {
+                    for (; p <= e; p++) {
+                        int v = *p + glevel;
+                        *p = (uint8_t)(v > 255 ? 255 : v);
+                    }
+                } else {
+                    for (; p <= e; p++)
+                        *p = (uint8_t)glevel;
+                }
+                x = i1;
                 continue;
             }
             for (i = 0; i < n && d > -0.5f; i++) {
@@ -656,6 +674,135 @@ void g_fill(const f32 *xy, int n, f32 a)
                 put(x, y, cov_of(d + 0.5f));
         }
     }
+}
+
+void g_fill(const f32 *xy, int n, f32 a) { fill_poly(xy, n, a, 0.0f, a, 0.0f); }
+void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b) { fill_poly(xy, n, a, ya, b, yb); }
+
+/* ---- soft things: light, not line --------------------------------------------------------
+ * Their ink changes from pixel to pixel, so it is worked out to 16 bits and brought down to the
+ * framebuffer's 8 through a 4 x 4 ordered dither: a slow gradient on a 16-bit panel would band. */
+static const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+
+/* one pixel of soft ink, v = 0..65535. MAX and ADD as for lines; PAINT darkens what is there. */
+static inline void put_soft(int x, int y, int v)
+{
+    uint8_t *p = &g_fb[y * FB_W + x];
+    int q;
+    if (v <= 0)
+        return;
+    if (gm == G_PAINT) {
+        *p = (uint8_t)((*p * (65536 - v)) >> 16);
+        return;
+    }
+    q = ((v + (BAYER[(y & 3) * 4 + (x & 3)] << 5)) >> 9) << 1;        /* to every other level: about what the panel can show */
+    if (q > 255) q = 255;
+    if (!q)
+        return;
+    if (gm == G_MAX) {
+        if (q > *p) *p = (uint8_t)q;
+    } else {
+        q += *p;
+        *p = (uint8_t)(q > 255 ? 255 : q);
+    }
+}
+
+void g_glow(f32 cx, f32 cy, f32 r, f32 a)
+{
+    int x, y, x0, x1, y0, y1;
+    f32 ir2, peak;
+    G_POLL();
+    a = sat(a * gdim);
+    if (r < 1.0f || a < 0.004f)
+        return;
+    cx += gox; cy += goy;
+    ir2 = 1.0f / (r * r);
+    peak = a * 65535.0f;
+    y0 = imax(0, ifloor(cy - r) + 1);
+    y1 = imin(FB_H - 1, ifloor(cy + r));
+    for (y = y0; y <= y1; y++) {
+        f32 dy = (f32)y - cy, hw2 = r * r - dy * dy, hw;
+        if (hw2 <= 0.0f)
+            continue;
+        hw = sqrtfx(hw2);
+        x0 = imax(0, ifloor(cx - hw) + 1);
+        x1 = imin(FB_W - 1, ifloor(cx + hw));
+        for (x = x0; x <= x1; x++) {
+            f32 dx = (f32)x - cx, f = 1.0f - (dx * dx + dy * dy) * ir2;
+            if (f > 0.0f)
+                put_soft(x, y, (int)(f * f * peak));
+        }
+    }
+}
+
+void g_beam(f32 x0, f32 y0, f32 x1, f32 y1, f32 w0, f32 w1, f32 a0, f32 a1, f32 soft)
+{
+    f32 dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy, len, il, ux, uy, h0 = w0 * 0.5f, h1 = w1 * 0.5f, hm = maxf(h0, h1) + 1.0f, bias;
+    int x, y, ya, yb, bx0, bx1;
+    G_POLL();
+    a0 = sat(a0 * gdim); a1 = sat(a1 * gdim);
+    if (l2 < 0.25f || (a0 < 0.004f && a1 < 0.004f))
+        return;
+    x0 += gox; y0 += goy; x1 += gox; y1 += goy;
+    il = rsqrtf(l2);
+    len = l2 * il;
+    ux = dx * il; uy = dy * il;
+    soft = sat(soft);
+    bias = 0.5f * (1.0f - soft);
+    ya = imax(0, ifloor(minf(y0, y1) - hm));
+    yb = imin(FB_H - 1, ifloor(maxf(y0, y1) + hm) + 1);
+    bx0 = imax(0, ifloor(minf(x0, x1) - hm));
+    bx1 = imin(FB_W - 1, ifloor(maxf(x0, x1) + hm) + 1);
+    for (y = ya; y <= yb; y++) {
+        int xa = bx0, xb = bx1;
+        f32 ry = (f32)y - y0, al, pe;
+        if (uy > 0.05f || uy < -0.05f) {         /* the row's stretch of the beam: where the axis crosses, and its width along x */
+            f32 xc = x0 + ry * ux / uy, hx = hm / absf(uy);
+            xa = imax(xa, ifloor(xc - hx));
+            xb = imin(xb, ifloor(xc + hx) + 1);
+        }
+        al = ((f32)xa - x0) * ux + ry * uy;      /* along the axis, and across it */
+        pe = ((f32)xa - x0) * uy - ry * ux;
+        for (x = xa; x <= xb; x++, al += ux, pe += uy) {
+            f32 t, hw, e, c, d = pe < 0.0f ? -pe : pe;
+            if (al <= -0.5f || al >= len + 0.5f)
+                continue;
+            t = sat(al * il);
+            hw = h0 + (h1 - h0) * t;
+            e = 1.0f + soft * (hw - 1.0f);
+            if (e < 1.0f) e = 1.0f;
+            c = (hw - d) / e + bias;
+            if (c <= 0.0f)
+                continue;
+            if (c > 1.0f) c = 1.0f;
+            if (al < 0.5f) c *= al + 0.5f;
+            else if (al > len - 0.5f) c *= len + 0.5f - al;
+            put_soft(x, y, (int)(c * (a0 + (a1 - a0) * t) * 65535.0f));
+        }
+    }
+}
+
+/* A comet with its head at (x, y), r across, its tails streaming along (dx, dy) (a unit vector), len long:
+ * a coma, a broad dust tail that lags to one side (curl, in pixels at its end), a thin straight
+ * gas tail, and a few grains coming off it. t moves the grains; seed tells one comet from another. */
+void g_comet(f32 x, f32 y, f32 r, f32 dx, f32 dy, f32 len, f32 curl, f32 a, f32 t, f32 seed)
+{
+    f32 px = -dy, py = dx, qx = x, qy = y;
+    int i;
+    if (a < 0.02f || r < 0.6f)
+        return;
+    for (i = 1; i <= 5; i++) {                   /* the dust: five soft lengths, widening and thinning out */
+        f32 u = (f32)i * 0.2f, v = u - 0.2f, nx = x + dx * len * u + px * curl * u * u, ny = y + dy * len * u + py * curl * u * u;
+        g_beam(qx, qy, nx, ny, r * (1.7f + 2.4f * v), r * (1.7f + 2.4f * u), a * 0.85f * (1.0f - v) * (1.0f - 0.5f * v), a * 0.85f * (1.0f - u) * (1.0f - 0.5f * u), 1.0f);
+        qx = nx - dx * 1.5f; qy = ny - dy * 1.5f;        /* (the next length starts inside this one: no seam) */
+    }
+    g_beam(x, y, x + dx * len * 1.2f - px * curl * 0.3f, y + dy * len * 1.2f - py * curl * 0.3f, maxf(1.3f, r * 0.42f), 0.8f, a * 0.8f, 0.0f, 0.0f);
+    for (i = 0; i < 5; i++) {                    /* grains */
+        f32 h = fractf(seed * 7.31f + (f32)i * 0.618f), u = fractf(h + t * (0.35f + 0.2f * h)), sp = (fractf(h * 13.7f) - 0.5f) * r * 3.2f * u;
+        g_disc(x + dx * len * u + px * (curl * u * u + sp), y + dy * len * u + py * (curl * u * u + sp), 0.6f + 0.5f * (1.0f - u), a * (1.0f - u) * 0.9f);
+    }
+    g_glow(x, y, r * 2.6f, a * 0.7f);
+    g_disc(x, y, r * 0.62f, a);
 }
 
 void g_vspan(int x, f32 y0, f32 y1, f32 a)
