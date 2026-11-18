@@ -317,7 +317,7 @@ void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a)
 
 void g_fill(const f32 *xy, int n, f32 a)
 {
-    f32 ex[8], ey[8], ec[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
+    f32 ex[8], ey[8], ec[8], ea[8], ei[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
     int i, x, y, x0, x1, y0, y1;
     if (n < 3 || n > 8)
         return;
@@ -339,9 +339,42 @@ void g_fill(const f32 *xy, int n, f32 a)
     x1 = imin(FB_W - 1, ifloor(maxx + 2.0f));
     y0 = imax(0, ifloor(miny - 1.0f));
     y1 = imin(FB_H - 1, ifloor(maxy + 2.0f));
-    for (y = y0; y <= y1; y++)
-        for (x = x0; x <= x1; x++) {
+    for (i = 0; i < n; i++) {                    /* e = ea * x + (eb * y + ec), and 1 / ea for the row's ends */
+        ea[i] = sgn * ex[i];
+        ei[i] = ea[i] > 1e-6f || ea[i] < -1e-6f ? 1.0f / ea[i] : 0.0f;
+    }
+    for (y = y0; y <= y1; y++) {
+        /* where this row can have any cover (xa..xb), and where it is all inside (ia..ib): only the
+         * pixels between the two are worked out edge by edge */
+        f32 xa = (f32)x0, xb = (f32)x1, ia = (f32)x0, ib = (f32)x1;
+        int a0, a1, i0, i1, none = 0;
+        for (i = 0; i < n; i++) {
+            f32 b = sgn * (ey[i] * (f32)y + ec[i]);
+            if (ei[i] == 0.0f) {
+                if (b <= -0.5f) none = 1;
+                if (b < 0.51f) ib = ia - 1.0f;
+            } else if (ea[i] > 0.0f) {
+                xa = maxf(xa, (-0.51f - b) * ei[i]);
+                ia = maxf(ia, (0.51f - b) * ei[i]);
+            } else {
+                xb = minf(xb, (-0.51f - b) * ei[i]);
+                ib = minf(ib, (0.51f - b) * ei[i]);
+            }
+        }
+        if (none || xb < xa)
+            continue;
+        a0 = imax(x0, ifloor(xa));
+        a1 = imin(x1, ifloor(xb) + 1);
+        i0 = ifloor(ia) + 1;
+        i1 = ifloor(ib);
+        if (i1 < i0)
+            i0 = a1 + 1, i1 = a1;                /* no inside on this row */
+        for (x = a0; x <= a1; x++) {
             f32 d = 1e9f;
+            if (x >= i0 && x <= i1) {
+                put(x, y, 256);
+                continue;
+            }
             for (i = 0; i < n && d > -0.5f; i++) {
                 f32 e = sgn * (ex[i] * (f32)x + ey[i] * (f32)y + ec[i]);
                 if (e < d)
@@ -350,6 +383,7 @@ void g_fill(const f32 *xy, int n, f32 a)
             if (d > -0.5f)
                 put(x, y, cov_of(d + 0.5f));
         }
+    }
 }
 
 void g_vspan(int x, f32 y0, f32 y1, f32 a)
