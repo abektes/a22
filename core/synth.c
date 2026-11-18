@@ -18,6 +18,25 @@ const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_h
                                      &inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
                                      &inst_knot, &inst_ink, &inst_bard, &inst_turbo};
 
+/* Each algorithm against the rest, so that turning the encoder through the instruments is not a ride on
+ * the volume: measured on the same phrase played on every one of them (the order is insts[]'s). */
+static const f32 algo_gain[NINST][NALGO] = {
+    /* COZY   */ {1.334f, 1.413f, 1.000f, 0.794f, 1.334f, 1.189f, 1.334f, 1.334f},
+    /* ORBIT  */ {1.122f, 0.794f, 0.794f, 0.794f, 0.794f, 0.668f, 0.668f, 0.750f},
+    /* KOI    */ {1.000f, 1.000f, 1.189f, 1.189f, 1.122f, 1.000f, 0.750f, 1.259f},
+    /* HAUNT  */ {0.794f, 0.841f, 0.750f, 1.679f, 0.668f, 1.413f, 1.000f, 1.000f},
+    /* TIDE   */ {1.000f, 1.000f, 1.334f, 1.259f, 0.891f, 1.334f, 1.259f, 0.841f},
+    /* PIP    */ {0.841f, 1.000f, 1.000f, 1.000f, 0.841f, 1.585f, 1.000f, 1.000f},
+    /* BONK   */ {0.794f, 1.000f, 1.000f, 1.000f, 0.668f, 0.794f, 0.708f, 1.000f},
+    /* URCHIN */ {1.000f, 1.122f, 0.891f, 1.122f, 1.413f, 1.189f, 1.189f, 1.000f},
+    /* TWANG  */ {1.000f, 1.189f, 0.841f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f},
+    /* LAVA   */ {0.841f, 0.794f, 1.000f, 0.891f, 1.000f, 0.891f, 1.496f, 1.000f},
+    /* KNOT   */ {1.000f, 0.891f, 1.000f, 0.668f, 0.841f, 1.259f, 0.841f, 0.841f},
+    /* INK    */ {1.122f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 1.000f, 0.841f},
+    /* BARD   */ {1.000f, 1.000f, 1.000f, 1.000f, 1.189f, 1.122f, 1.334f, 1.189f},
+    /* TURBO  */ {1.189f, 1.000f, 1.000f, 1.189f, 1.585f, 1.000f, 1.259f, 1.000f},
+};
+
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
 static const InstDef *cur;
 static int cur_i;
@@ -381,6 +400,8 @@ static volatile int loop_state = LOOP_EMPTY;
 static volatile f32 loop_pos, loop_len = 768.0f;
 static uint32_t loop_held[4];
 static f32 click_env, click_ph, click_ph2, click_f, click_pe, click_lp, click_amp;
+static f32 sub_l, sub_r;                         /* what is below hearing in the mix, to take off it */
+#define SUB_K (H1_TAU * 18.0f * ISR)             /* 18 Hz */
 static uint32_t click_rng = 0x7407C0DEu;
 static int click_at = -1;
 static f32 free_pos;                             /* the metronome's own bar, when nothing is running under it */
@@ -1257,7 +1278,7 @@ static void block(f32 *L, f32 *R)
                     continue;
                 e0 = v->env_prev;
                 e1 = v->env;
-                g = def->gain * r->vol;
+                g = def->gain * r->vol * algo_gain[inst][PART_ALGO(parts[p])];
                 pan = clampf(v->pan + r->panmod, -1.0f, 1.0f);
                 gl = g * (1.0f - maxf(0.0f, pan) * 0.8f);
                 gr = g * (1.0f + minf(0.0f, pan) * 0.8f);
@@ -1286,6 +1307,18 @@ static void block(f32 *L, f32 *R)
                 L[n] += bl[n];
                 R[n] += br[n];
             }
+    }
+
+    /* Nothing below hearing goes on from here: an offset or a rumble is not a sound, but it is level, and it
+     * would lean on the limiter at the end. */
+    for (n = 0; n < CTRL; n++) {
+        f32 x = L[n], y = R[n];
+        sub_l += SUB_K * (x - sub_l);
+        sub_r += SUB_K * (y - sub_r);
+        if (absf(sub_l) < 1.0e-12f) sub_l = 0.0f;
+        if (absf(sub_r) < 1.0e-12f) sub_r = 0.0f;
+        L[n] = x - sub_l;
+        R[n] = y - sub_r;
     }
 
     {
@@ -1328,6 +1361,18 @@ static void block(f32 *L, f32 *R)
 uint32_t h1_fuzz_nan;
 #endif
 
+/* The last thing before the converter. Up to half of full scale it does nothing at all, so a note or a
+ * chord at an ordinary level goes out as it was made; above that it bends over into full scale and never
+ * passes it. */
+static inline f32 limit(f32 x)
+{
+    f32 a = absf(x);
+    if (!(a > 0.5f))                             /* (and what is not a number is not above it: softclip makes it 0) */
+        return a <= 0.5f ? x : 0.0f;
+    a = 0.5f + 0.5f * softclip((a - 0.5f) * 2.0f);
+    return x < 0.0f ? -a : a;
+}
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
@@ -1345,8 +1390,8 @@ void eng_render(int32_t *lr, uint32_t n)
             if (L[pos + i] != L[pos + i] || R[pos + i] != R[pos + i])
                 h1_fuzz_nan++;                   /* (tests/fuzz.c: a sound that stopped being numbers) */
 #endif
-            lr[0] = (int32_t)(softclip(L[pos + i]) * 7549747.0f);     /* 0.9 of 24-bit full scale */
-            lr[1] = (int32_t)(softclip(R[pos + i]) * 7549747.0f);
+            lr[0] = (int32_t)(limit(L[pos + i]) * 7549747.0f);        /* 0.9 of 24-bit full scale */
+            lr[1] = (int32_t)(limit(R[pos + i]) * 7549747.0f);
             lr += 2;
         }
         pos += take;

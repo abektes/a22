@@ -85,7 +85,7 @@ static void haunt_render(Voice *v, const Blk *b, f32 *out, int n)
     d0 = minf(f * b->isr, 0.4f);
     d1 = d0 * exp2fx(det * (1.0f / 12.0f));
     d2 = minf(d0 * (algo == 5 ? 2.76f : (up > 0.0f ? 2.0f : 1.0595f)), 0.45f);             /* the shadow: a semitone up */
-    d3 = d0 * 0.5f;
+    d3 = algo == 6 ? d0 : d0 * 0.5f;             /* (DEEP is two octaves down already: an octave under that is not a sound) */
     wf = algo == 1 ? f * 1.5f : (algo == 3 ? f * 4.0f : f * (2.5f + 1.5f * swell));
     svf_set(&fw, minf(wf, 9000.0f), wq, b->isr);
     lpk = onepole_k(1.0f / (H1_TAU * (7000.0f * exp2fx(-H.depth * 3.8f))), b->sr);

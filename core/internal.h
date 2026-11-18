@@ -22,6 +22,12 @@
 #endif
 
 /* ---- voices --------------------------------------------------------------------------- */
+typedef struct SmpR {            /* where a voice is in a recording (smp.h) */
+    uint32_t frac;               /* how far between two stored samples, in 1/65536 */
+    uint32_t idx;                /* the next stored sample to take up */
+    f32 w[4];                    /* the last four taken up */
+} SmpR;
+
 typedef struct Voice {
     uint8_t stage;               /* 0 off, 1 attack, 2 decay, 3 sustain, 4 release */
     uint8_t gate;
@@ -40,6 +46,8 @@ typedef struct Voice {
     f32 ph[6];                   /* oscillator phases, in turns */
     f32 s[14];                   /* the instrument's own state */
     uint32_t u[3];
+    uint32_t q[4];
+    SmpR r[2];
 } Voice;
 
 /* ---- saved parameters ----------------------------------------------------------------- */

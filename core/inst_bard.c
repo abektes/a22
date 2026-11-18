@@ -1,8 +1,9 @@
-/* h1 - BARD: the medieval one. Eight old instruments (three plucked on real delay-line strings,
- * two bowed, two reeds and a little pipe organ) over a drone, and a page from a manuscript that
- * writes itself: every note is penned as a square neume on a four-line staff, under a great
- * illuminated initial, with a vine up each margin that flowers on the notes you hold and
- * something small and odd going along the bottom, as there always was.
+/* h1 - BARD: the medieval one. Eight old instruments, all of them recordings of real ones (smp.h): three
+ * plucked, on the strings of str.h; two bowed, two reeds and a little pipe organ, held for as long as the
+ * key is. Over a drone that is recorded too. And a page from a manuscript that writes itself: every note
+ * is penned as a square neume on a four-line staff, under a great illuminated initial, with a vine up
+ * each margin that flowers on the notes you hold and something small and odd going along the bottom, as
+ * there always was.
  *
  *   K1 DRONE   the bourdon under everything             the ground line thickens and hums
  *   K2 COURSE  a second string, pipe or reed beside it   everything written gets a twin
@@ -11,35 +12,47 @@
  */
 #include "internal.h"
 #include "dsp.h"
+#include "smp.h"
+#include "str.h"
 
-#define KS_MASK (KS_LEN - 1)
-
-/* ---- sound ------------------------------------------------------------------------------ */
-enum { PLUCK, BOW, REED, PIPE };
+/* ---- sound ------------------------------------------------------------------------------
+ * What stands in for what: the lute is a gut-strung lyre (COURSE strings it in pairs, as a lute is), the
+ * gurdy a cello under a turning wheel, the rebec an erhu (both are small fiddles of two or three gut
+ * strings), the shawm a shehnai, its sister. The harp, psaltery, bagpipe and organ are themselves. */
+enum { PLUCK, HELD };
 typedef struct BAlgo {
-    uint8_t kind;
-    f32 ring, bright, pick;                      /* plucked: decay, loop filter, where it is plucked */
-    f32 f1, f2, q;                               /* the body, or the reed's two formants */
-    f32 duty, att;
+    uint8_t kind, bank;
+    f32 level;
+    f32 ring;                                    /* plucked: decay, against the recording's */
+    uint8_t dbank[3];                            /* the drone: three recordings, */
+    f32 doff[3];                                 /* how far above the key's root two octaves down, */
+    f32 dlev[3];                                 /* and how loud */
 } BAlgo;
 
+#define D_STRINGS {SMP_BASSBOW, SMP_CELLO, SMP_CELLO}, {0.0f, 7.02f, 12.07f}, {1.0f, 0.6f, 0.4f}
 static const BAlgo BA[NALGO] = {
-    /* LUTE     */ {PLUCK, 0.55f, 0.8f, 0.24f, 190.0f, 430.0f, 3.0f, 0.0f, 0.0f},
-    /* HARP     */ {PLUCK, 1.5f, 0.93f, 0.46f, 240.0f, 560.0f, 2.5f, 0.0f, 0.0f},
-    /* PSALTERY */ {PLUCK, 2.2f, 0.99f, 0.09f, 520.0f, 1400.0f, 2.0f, 0.0f, 0.0f},
-    /* GURDY    */ {BOW, 0, 0, 0, 620.0f, 1500.0f, 3.5f, 0.0f, 0.05f},
-    /* REBEC    */ {BOW, 0, 0, 0, 430.0f, 1180.0f, 4.0f, 0.0f, 0.08f},
-    /* SHAWM    */ {REED, 0, 0, 0, 1250.0f, 2700.0f, 4.5f, 0.13f, 0.02f},
-    /* BAGPIPE  */ {REED, 0, 0, 0, 860.0f, 2300.0f, 5.0f, 0.22f, 0.012f},
-    /* ORGAN    */ {PIPE, 0, 0, 0, 0.0f, 0.0f, 1.0f, 0.0f, 0.035f},
+    /* LUTE     */ {PLUCK, SMP_LUTE, 1.0f, 0.6f, D_STRINGS},
+    /* HARP     */ {PLUCK, SMP_FOLKHARP, 1.0f, 1.0f, D_STRINGS},
+    /* PSALTERY */ {PLUCK, SMP_PSALTERY, 0.9f, 1.0f, D_STRINGS},
+    /* GURDY    */ {HELD, SMP_CELLO, 1.0f, 0.0f, D_STRINGS},
+    /* REBEC    */ {HELD, SMP_FIDDLE, 1.0f, 0.0f, D_STRINGS},
+    /* SHAWM    */ {HELD, SMP_SHAWM, 0.9f, 0.0f, {SMP_SHAWM, SMP_SHAWM, SMP_SHAWM}, {12.0f, 19.02f, 24.05f}, {1.0f, 0.35f, 0.3f}},
+    /* BAGPIPE  */ {HELD, SMP_PIPES, 0.9f, 0.0f, {SMP_PIPES, SMP_PIPES, SMP_PIPES}, {12.0f, 24.03f, 23.97f}, {1.0f, 0.6f, 0.4f}},
+    /* ORGAN    */ {HELD, SMP_ORGAN, 1.0f, 0.0f, {SMP_ORGAN, SMP_ORGAN, SMP_ORGAN}, {0.0f, 12.02f, 19.0f}, {1.0f, 0.7f, 0.3f}},
 };
+
+#define B_PLUCK 3.4f             /* a string's level against the other instruments */
+#define B_HELD 2.0f
+#define B_DRONE 1.1f
+#define B_FADE 48                /* samples in which a string that is plucked again lets go of what it held */
 
 static struct {
     int algo;
-    f32 drone, course, bite, age, g, t60;
+    f32 drone, course, bite, age, gs, ts, tilt, edge, kl, air;
 } B;
-static Svf body_f[2], drone_f;
-static f32 body_s[2][2], drone_s[2], drone_ph[3], drone_lv, wheel_ph, dc_y;
+static Svf drone_f, nose_f;
+static SmpR drone_r[3];
+static f32 drone_s[2], drone_lv, wheel_ph;
 static volatile int sounding;
 
 static void bard_block(const Blk *b)
@@ -50,191 +63,197 @@ static void bard_block(const Blk *b)
     B.course = b->k[1];
     B.bite = b->k[2];
     B.age = b->k[3];
-    B.g = clampf((0.35f + 0.6f * B.bite) * a->bright * (1.0f - 0.35f * B.age), 0.08f, 0.98f);
-    B.t60 = 4.5f * a->ring * (1.0f - 0.4f * B.age);
+    /* plucked: at BITE's middle and no AGE the string is the recording's */
+    B.gs = (1.0f - 0.45f * B.age) * (0.75f + 0.5f * B.bite);
+    B.ts = a->ring * (1.0f - 0.5f * B.age);
+    B.tilt = B.bite < 0.5f ? lerpf(0.15f, 1.0f, B.bite * 2.0f) : 1.0f + (B.bite - 0.5f) * 3.0f;
+    /* held: BITE lifts the top or takes it off, AGE dulls it and lets the air through */
+    B.edge = (B.bite - 0.5f) * (B.bite > 0.5f ? 3.0f : 1.6f);
+    B.kl = onepole_k(1.0f / (H1_TAU * (1200.0f + 9000.0f * (1.0f - B.age) * (1.0f - B.age))), b->sr);
+    B.air = 0.004f + 0.05f * B.age * B.age;
     wheel_ph = fractf(wheel_ph + 3.1f * b->step);
-    if (a->kind == PLUCK) {
-        svf_set(&body_f[0], a->f1, a->q, b->isr);
-        svf_set(&body_f[1], a->f2, a->q + 1.0f, b->isr);
-    }
-    svf_set(&drone_f, 500.0f + 1500.0f * B.bite, 1.2f, b->isr);
+    svf_set(&drone_f, 500.0f + 2500.0f * B.bite, 1.0f, b->isr);
+    svf_set(&nose_f, 1250.0f, 2.2f, b->isr);
 }
 
-static void pluck(f32 *line, uint32_t w, f32 L, f32 p, f32 amp, uint32_t *rng)
+/* where a second string, pipe or reed sits against the first */
+static f32 beside(f32 pitch)
 {
-    int n = (int)L + 1, i;
-    f32 iL = 1.0f / L, hard = sat(B.bite * 1.6f - 0.2f), fuzz = 0.08f + 0.5f * B.bite * B.bite;
-    for (i = 0; i < n; i++) {
-        f32 u = minf((f32)i * iL, 1.0f), tri, pul;
-        tri = (u < p ? u / p : (1.0f - u) / (1.0f - p)) * 2.0f - 1.0f;
-        pul = u < p ? 1.0f - p : -p;
-        line[(w - (uint32_t)n + (uint32_t)i) & KS_MASK] = (lerpf(tri, pul * 1.3f, hard) + rng_s(rng) * fuzz) * amp;
-    }
-}
-
-static f32 string_len(f32 pitch, const Blk *b)
-{
-    f32 L = b->sr / mtof(pitch) - (1.0f - B.g) / B.g;
-    L = minf(L, 1.0e6f);                         /* (the loop below ends, whatever the pitch was) */
-    while (L > (f32)(KS_LEN - 4))
-        L *= 0.5f;
-    return maxf(L, 2.0f);
+    if (B.algo == 7 || (B.algo == 0 && pitch < 57.0f))           /* the organ's 4-foot rank; a lute's low courses */
+        return 12.0f + 0.04f;
+    return 0.07f + 0.1f * B.age;
 }
 
 static void bard_note(Voice *v, const Blk *b)
 {
     const BAlgo *a = &BA[B.algo];
-    int i;
+    f32 pitch = v->target + b->bend;
     if (!v->u[2]) v->u[2] = 0xBA4D0001u + v->idx * 7919u;
+    v->q[1] = (uint32_t)smp_pick(a->bank, pitch);
+    v->s[8] = 1.0f;                              /* the attack: the dog barks, the piper flicks a grace note */
     if (a->kind == PLUCK) {
-        f32 L = string_len(v->target + b->bend, b);
-        v->s[0] = v->s[2] = 0.0f;
-        pluck(ks_line[v->idx][0], v->u[0], L, a->pick, 0.85f, &v->u[2]);
-        pluck(ks_line[v->idx][1], v->u[1], L * (B.algo == 0 ? 0.5f : 1.0f) * 1.0035f, a->pick * 0.8f, 0.8f, &v->u[2]);
-    } else if (v->env < 0.001f) {
-        for (i = 0; i < 8; i++)
-            v->s[i] = 0.0f;
-        v->ph[0] = v->ph[1] = v->ph[3] = 0.0f;
+        const SmpZone *z = &smp_zones[v->q[1]];
+        Str s;
+        smp_fit(z, pitch, &v->ph[4], &v->ph[5]);
+        str_set(&s, mtof(pitch), 0.5f, 1.0f, b->sr);
+        smp_start(&v->r[0]);                     /* the pluck starts */
+        v->q[0] = smp_inc(z, pitch, b->isr);
+        v->q[2] = (uint32_t)s.len + 4u;          /* and for one trip round, what the string held is let go */
+        v->s[13] = (f32)v->q[2];
+        v->s[12] = 0.0f;
+        return;
     }
-    v->s[8] = 1.0f;                              /* the attack: chiff, buzz, grace note */
+    v->q[3] = (uint32_t)smp_pick(a->bank, pitch + beside(pitch));
+    if (B.algo == 6 && v->env >= 0.001f)         /* BAGPIPE: it cannot stop between notes */
+        return;
+    smp_start(&v->r[0]);
+    smp_start(&v->r[1]);
+    v->r[1].idx = 37;                            /* (the second player is never quite with the first) */
+    v->ph[3] = 0.0f;
+    if (v->env < 0.001f)
+        v->s[0] = v->s[1] = v->s[4] = v->s[5] = 0.0f;
+}
+
+static void pluck_render(Voice *v, const Blk *b, f32 *out, int n, f32 pitch)
+{
+    const BAlgo *a = &BA[B.algo];
+    const SmpZone *z = smp_zone(a->bank, v->q[1], pitch);
+    f32 *line = ks_line[v->idx][0], *line2 = ks_line[v->idx][1];
+    f32 e[CTRL], tl = v->s[12], c = B.course * 0.9f, hiss = B.age * B.age * 0.004f, lev = a->level * B_PLUCK;
+    f32 g = clampf(v->ph[4] * B.gs, 0.05f, 0.985f), t60 = clampf(v->ph[5], 0.05f, 20.0f) * B.ts;
+    Str s1, s2;
+    uint32_t w = v->u[0] & STR_MASK, w2 = v->u[1] & STR_MASK, kill = v->q[2];
+    int i, two = c > 0.01f;
+
+    str_set(&s1, mtof(pitch), g, t60, b->sr);
+    str_set(&s2, mtof(pitch + beside(pitch)), g, t60 * 0.85f, b->sr);
+    if (!smp_done(z, &v->r[0])) {                /* the recorded pluck at the note's speed, and BITE: what with */
+        smp_read(z, &v->r[0], v->q[0], z->gain, e, n, 0);
+        for (i = 0; i < n; i++) {
+            tl += 0.16f * (e[i] - tl);
+            e[i] = tl + B.tilt * (e[i] - tl);
+        }
+    } else
+        for (i = 0; i < n; i++)
+            e[i] = 0.0f;
+    for (i = 0; i < n; i++) {
+        f32 fb = str_back(line, w, &s1, &v->s[0]), o, o2 = 0.0f;
+        int old = kill != 0;
+        if (kill) {                              /* (the first trip round still carries the last note) */
+            fb *= maxf(0.0f, 1.0f - (v->s[13] - (f32)kill) * (1.0f / (f32)B_FADE));
+            kill--;
+        }
+        o = e[i] + fb;
+        line[w] = o;
+        w = (w + 1u) & STR_MASK;
+        if (two) {                               /* COURSE: the string beside it, plucked with it */
+            o2 = e[i] * 0.85f + (old ? 0.0f : str_back(line2, w2, &s2, &v->s[2]));
+            line2[w2] = o2;
+            w2 = (w2 + 1u) & STR_MASK;
+        }
+        out[i] = (o + c * o2 + hiss * noise_s(&v->u[2])) * lev;
+    }
+    v->u[0] = w;
+    v->u[1] = w2;
+    v->q[2] = kill;
+    v->s[12] = tl;
+}
+
+static void held_render(Voice *v, const Blk *b, f32 *out, int n, f32 pitch)
+{
+    const BAlgo *a = &BA[B.algo];
+    const SmpZone *z = smp_zone(a->bank, v->q[1], pitch), *z2;
+    f32 dt = (f32)n * b->isr, atk = v->s[8], lp = v->s[4], hp = v->s[5], fade = v->ph[3], lev = a->level * B_HELD, p2;
+    f32 kh = onepole_k(1.0f / (H1_TAU * 900.0f), b->sr), amp = 1.0f, buzz = 0.0f, nose = 0.0f, lo, bp;
+    int i;
+
+    if (B.algo == 4) {                           /* REBEC: the bow's vibrato comes in late */
+        v->ph[2] = fractf(v->ph[2] + 5.6f * dt);
+        pitch += 0.16f * tsin(v->ph[2]) * sat(v->age * 2.5f - 0.5f);
+    }
+    if (B.algo == 6)                             /* BAGPIPE: between two notes it flicks a grace note */
+        pitch += v->age < 0.03f ? 5.0f : (v->age < 0.058f ? -2.0f : 0.0f);
+    if (B.algo == 3) {                           /* GURDY: the wheel turns, and the dog barks at the start of a note */
+        amp = 1.0f - 0.14f * (0.5f + 0.5f * tsin(wheel_ph));
+        buzz = atk * (0.5f + 2.5f * B.bite);
+        nose = 0.5f;
+    }
+    if (B.algo == 5 || B.algo == 6)              /* the reeds: blown harder, they rasp */
+        buzz = maxf(0.0f, B.bite - 0.5f) * 1.2f;
+    smp_read(z, &v->r[0], smp_inc(z, pitch, b->isr), z->gain, out, n, 0);
+    if (B.course > 0.01f) {
+        p2 = pitch + beside(pitch);
+        z2 = smp_zone(a->bank, v->q[3], p2);
+        smp_read(z2, &v->r[1], smp_inc(z2, p2, b->isr), z2->gain * B.course * (B.algo == 7 ? 0.6f : 0.8f), out, n, 1);
+    }
+    for (i = 0; i < n; i++) {
+        f32 x = out[i] * amp;
+        if (nose > 0.0f) {                       /* the gurdy's small box */
+            SVF_TICK(nose_f, &v->s[0], x, lo, bp);
+            (void)lo;
+            x = x * 0.85f + bp * nose_f.k * nose;
+        }
+        if (buzz > 0.01f)
+            x = softclip(x * (1.0f + 6.0f * buzz)) / (1.0f + 1.5f * buzz);
+        hp += kh * (x - hp);
+        x += B.edge * (x - hp);                  /* BITE */
+        lp += B.kl * (x - lp);                   /* AGE */
+        fade += (1.0f - fade) * 0.008f;
+        out[i] = (lp + B.air * noise_s(&v->u[2])) * fade * lev;
+    }
+    v->s[4] = lp;
+    v->s[5] = hp;
+    v->ph[3] = fade;
+    v->s[8] = atk * (1.0f - onepole_k(0.09f, b->sr / (f32)n));
 }
 
 static void bard_render(Voice *v, const Blk *b, f32 *out, int n)
 {
-    const BAlgo *a = &BA[B.algo];
-    f32 dt = (f32)n * b->isr, pitch = v->pitch + b->bend, atk = v->s[8];
-    int i;
-
+    f32 pitch = v->pitch + b->bend;
+    if (n > CTRL) n = CTRL;
     sounding = 1;
     /* AGE: every string and pipe wanders by itself */
     v->s[10] += (rng_s(&v->u[2]) - v->s[10]) * 0.02f;
     v->s[9] += (v->s[10] - v->s[9]) * 0.05f;
     pitch += B.age * (v->s[9] * 0.9f + (v->r1 - 0.5f) * 0.35f);
-
-    if (a->kind == PLUCK) {
-        f32 *line = ks_line[v->idx][0], *line2 = ks_line[v->idx][1];
-        f32 L = string_len(pitch, b), L2 = maxf(L * (B.algo == 0 ? 0.5f : 1.0f) * 1.0035f, 2.0f);
-        f32 rho = exp2fx(-9.966f * L * b->isr / B.t60), rho2 = exp2fx(-9.966f * L2 * b->isr / (B.t60 * 0.85f));
-        f32 lp = v->s[0], lp2 = v->s[2], g = B.g, c = B.course * 0.9f, hiss = B.age * B.age * 0.012f;
-        uint32_t w = v->u[0] & KS_MASK, w2 = v->u[1] & KS_MASK;
-        for (i = 0; i < n; i++) {
-            f32 pos = (f32)(w + KS_LEN) - L, fr, y, y2;
-            int ip = (int)pos;
-            fr = pos - (f32)ip;
-            y = line[ip & KS_MASK];
-            y += (line[(ip + 1) & KS_MASK] - y) * fr;
-            lp += g * (y - lp);
-            line[w] = lp * rho;
-            w = (w + 1u) & KS_MASK;
-            pos = (f32)(w2 + KS_LEN) - L2;
-            ip = (int)pos;
-            fr = pos - (f32)ip;
-            y2 = line2[ip & KS_MASK];
-            y2 += (line2[(ip + 1) & KS_MASK] - y2) * fr;
-            lp2 += g * (y2 - lp2);
-            line2[w2] = lp2 * rho2;
-            w2 = (w2 + 1u) & KS_MASK;
-            out[i] = y + c * y2 + hiss * noise_s(&v->u[2]);
-        }
-        v->u[0] = w; v->u[1] = w2;
-        v->s[0] = lp; v->s[2] = lp2;
-        return;
-    }
-
-    {
-        Svf f1, f2;
-        f32 ph = v->ph[0], ph1 = v->ph[1], d, d1, amp = sat(v->age / a->att), c = B.course, lo, b1, b2;
-        f32 cut = (500.0f + 5500.0f * B.bite * B.bite) * exp2fx(-1.4f * B.age), kl = onepole_k(1.0f / (H1_TAU * cut), b->sr), lp = v->s[4], dc = v->s[12];
-        f32 air = (0.01f + 0.07f * B.age * B.age) * (a->kind == PIPE ? 1.6f : 1.0f), buzz = 0.0f, drive = 1.0f;
-
-        if (B.algo == 4) {                       /* REBEC: the bow's vibrato comes in late */
-            v->ph[2] = fractf(v->ph[2] + 5.6f * dt);
-            pitch += 0.16f * tsin(v->ph[2]) * sat(v->age * 2.5f - 0.5f);
-        }
-        if (B.algo == 6)                         /* BAGPIPE: it cannot stop between notes, so it flicks a grace note */
-            pitch += v->age < 0.03f ? 5.0f : (v->age < 0.058f ? -2.0f : 0.0f);
-        if (B.algo == 3) {                       /* GURDY: the wheel turns, and the dog barks at the start of a note */
-            amp *= 1.0f - 0.14f * (0.5f + 0.5f * tsin(wheel_ph));
-            buzz = atk * (0.5f + 2.5f * B.bite);
-        }
-        if (a->kind == REED)
-            drive = 1.0f + 2.0f * B.bite;
-        d = minf(mtof(pitch) * b->isr, 0.45f);
-        d1 = minf(d * (a->kind == PIPE ? 2.0f : 1.0f) * exp2fx((0.09f + 0.1f * B.age) * (1.0f / 12.0f)), 0.45f);
-        svf_set(&f1, a->f1 > 0.0f ? a->f1 : 800.0f, a->q, b->isr);
-        svf_set(&f2, a->f2 > 0.0f ? a->f2 : 2000.0f, a->q + 1.0f, b->isr);
-
-        for (i = 0; i < n; i++) {
-            f32 x, nz = noise_s(&v->u[2]);
-            switch (a->kind) {
-            default:
-            case BOW:
-                x = saw_bl(ph, d) + c * 0.8f * saw_bl(ph1, d1) + nz * (0.04f + air);
-                if (buzz > 0.01f)
-                    x = clampf(x * (1.0f + 5.0f * buzz), -1.0f, 1.0f);
-                break;
-            case REED:
-                x = pulse_bl(ph, d, a->duty) + c * 0.8f * pulse_bl(ph1, d1, a->duty * 1.3f) + nz * air;
-                x = softclip(x * drive);
-                break;
-            case PIPE:
-                x = tsin(ph) + 0.45f * tsin(2.0f * ph) + (0.1f + 0.35f * B.bite) * tsin(3.0f * ph) + 0.18f * B.bite * tsin(4.0f * ph)
-                    + c * (0.6f * tsin(ph1) + 0.25f * tsin(ph1 * 1.5f)) + nz * (air + atk * 0.8f);
-                break;
-            }
-            if (a->kind == PIPE) {
-                lp += (x - lp) * 0.6f;
-                out[i] = lp * 0.42f * amp;
-            } else {
-                SVF_TICK(f1, &v->s[0], x, lo, b1);
-                SVF_TICK(f2, &v->s[2], x, lo, b2);
-                (void)lo;
-                lp += (x - lp) * kl;
-                dc += (lp - dc) * 0.002f;        /* a driven reed leans to one side: take the lean out */
-                out[i] = ((lp - dc) * 0.5f + b1 * f1.k * 0.9f + b2 * f2.k * (0.35f + 0.6f * B.bite)) * amp * 0.62f;
-            }
-            ph += d; if (ph >= 1.0f) ph -= 1.0f;
-            ph1 += d1; if (ph1 >= 1.0f) ph1 -= 1.0f;
-        }
-        v->ph[0] = ph; v->ph[1] = ph1;
-        v->s[4] = lp;
-        v->s[12] = dc;
-        v->s[8] = atk * (1.0f - onepole_k(B.algo == 3 ? 0.09f : 0.03f, b->sr / (f32)n));
-    }
+    if (BA[B.algo].kind == PLUCK)
+        pluck_render(v, b, out, n, pitch);
+    else
+        held_render(v, b, out, n, pitch);
 }
 
+/* The drone: recordings too, two octaves under the key's root and above it. It comes in under the first
+ * note and goes when the playing stops. */
 static void bard_post(const Blk *b, f32 *l, f32 *r, int n)
 {
     const BAlgo *a = &BA[B.algo];
-    f32 root = 36.0f + (f32)st.keys[0] + b->bend, d0 = mtof(root) * b->isr, d1 = mtof(root + (B.algo == 6 ? 12.0f : 7.02f)) * b->isr;
-    f32 d2 = mtof(root + 12.07f) * b->isr, lv = B.drone * B.drone * (B.algo == 6 ? 0.34f : 0.24f), mix = a->kind == PLUCK ? 1.4f : 0.0f;
-    f32 want = sounding ? 1.0f : 0.0f, k = sounding ? 0.004f : 0.0006f, duty = a->kind == REED ? 0.2f : 0.5f;
-    int i;
+    f32 root = 36.0f + (f32)st.keys[0] + b->bend, lv = B.drone * B.drone * B_DRONE, d[CTRL];
+    f32 want = sounding ? 1.0f : 0.0f, k = sounding ? 0.004f : 0.0006f, lo, bp;
+    int i, j;
     sounding = 0;
+    if (n > CTRL) n = CTRL;
+    if (lv * drone_lv <= 0.0005f) {
+        drone_lv += (want - drone_lv) * minf(1.0f, k * (f32)n);
+        return;
+    }
+    if (a->kind == PLUCK || B.algo == 3 || B.algo == 4)          /* strings: the wheel that bows them */
+        lv *= 1.0f - 0.12f * (0.5f + 0.5f * tsin(wheel_ph));
+    for (j = 0; j < 3; j++) {
+        f32 p = root + a->doff[j];
+        const SmpZone *z = &smp_zones[smp_pick(a->dbank[j], p)];
+        smp_read(z, &drone_r[j], smp_inc(z, p, b->isr), z->gain * a->dlev[j], d, n, j > 0);
+    }
     for (i = 0; i < n; i++) {
-        f32 m = (l[i] + r[i]) * 0.5f, lo, b0, b1, x = 0.0f;
-        if (mix > 0.0f) {
-            SVF_TICK(body_f[0], body_s[0], m, lo, b0);
-            SVF_TICK(body_f[1], body_s[1], m, lo, b1);
-            x = (b0 * body_f[0].k + b1 * body_f[1].k * 0.7f) * mix;
-        }
+        f32 x;
+        SVF_TICK(drone_f, drone_s, d[i], lo, bp);
+        (void)bp;
         drone_lv += (want - drone_lv) * k;
-        if (lv * drone_lv > 0.0005f) {
-            f32 dr = a->kind == PLUCK || a->kind == BOW
-                         ? saw_bl(drone_ph[0], d0) + 0.7f * saw_bl(drone_ph[1], d1) + 0.4f * saw_bl(drone_ph[2], d2)
-                         : pulse_bl(drone_ph[0], d0, duty) + 0.7f * pulse_bl(drone_ph[1], d1, duty) + 0.4f * pulse_bl(drone_ph[2], d2, duty);
-            SVF_TICK(drone_f, drone_s, dr, lo, b0);
-            (void)b0;
-            x += lo * lv * drone_lv;
-            drone_ph[0] += d0; if (drone_ph[0] >= 1.0f) drone_ph[0] -= 1.0f;
-            drone_ph[1] += d1; if (drone_ph[1] >= 1.0f) drone_ph[1] -= 1.0f;
-            drone_ph[2] += d2; if (drone_ph[2] >= 1.0f) drone_ph[2] -= 1.0f;
-        }
-        dc_y += 0.002f * (x - dc_y);
-        l[i] += x - dc_y;
-        r[i] += x - dc_y;
+        x = lo * lv * drone_lv;
+        l[i] += x;
+        r[i] += x;
     }
 }
+
 
 /* ---- picture ---------------------------------------------------------------------------- */
 #define NNM 54

@@ -72,6 +72,10 @@ static void ink_render(Voice *v, const Blk *b, f32 *out, int n)
 
     for (i = 0; i < n; i++) {
         f32 x, lo, bp, nz = noise_s(&v->u[0]);
+        if (algo == 2 || algo == 4) {            /* breath is not hiss: its top comes off */
+            v->s[3] += 0.28f * (nz - v->s[3]);
+            nz = v->s[3] * 2.2f;
+        }
         switch (algo) {
         default: x = saw_bl(pa, d); break;                                           /* BRUSH */
         case 1: x = pulse_bl(pa, d, 0.5f); break;                                    /* REED */
