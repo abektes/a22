@@ -1,13 +1,13 @@
 # h1
 
-Custom firmware for the M-VAVE FM-1. You get nine instruments, and each one is a full-screen animated
+Custom firmware for the M-VAVE FM-1. You get fourteen instruments, and each one is a full-screen animated
 picture you play. Everything is drawn in one ink colour on the bezel's black, so the screen reads
 bigger than it is.
 
 <p>
-<img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN">
-<img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA"> <img src="docs/img/knot.webp" width="104" alt="KNOT">
-<img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/tide.webp" width="104" alt="TIDE"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT">
+<img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
+<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/tide.webp" width="104" alt="TIDE"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/bard.webp" width="104" alt="BARD">
+<img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/koi.webp" width="104" alt="KOI">
 </p>
 
 **The full guide is at [jakehandy.com/h1](https://jakehandy.com/h1).** It covers every instrument's
@@ -24,6 +24,11 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **INK** | gliding lead | SLIDE, SHAKE, PRESS, DRY |
 | **TIDE** | analog pad | GLOW, HALO, DRIFT, SURGE |
 | **HAUNT** | spooky ambient | FOG, DREAD, SHIVER, DEPTH |
+| **BARD** | medieval: lute, harp, gurdy, bagpipe, organ over a drone | DRONE, COURSE, BITE, AGE |
+| **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
+| **ORBIT** | space synths | SWEEP, SPIN, SHIMMER, GRAVITY |
+| **COZY** | lo-fi keys | DUST, WOW, MUFFLE, SWAY |
+| **KOI** | struck metal and wood: handpan, kalimba, marimba | MALLET, RIPPLE, LINGER, SINK |
 
 <p>
 <img src="docs/img/page.png" width="200" alt="A settings page: four columns, one per knob"> <img src="docs/img/step.png" width="200" alt="A step pattern, the notches along the bottom"> <img src="docs/img/hud.png" width="200" alt="TIDE with the knob strip pinned">
