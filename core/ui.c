@@ -109,8 +109,13 @@ static uint8_t btn_fired[H1_NBTN];
 
 static uint16_t pal[256];
 static uint8_t pal_key[5];
-static uint8_t prev_fb[FB_W * FB_H] H1_POOL;
+static uint32_t prev_w[FB_W * FB_H / 4] H1_POOL;   /* what the panel shows now; words, as the framebuffer is */
+#define prev_fb ((uint8_t *)prev_w)
 static int force_full = 1;
+#define RQ_MAX 512
+static uint8_t rq[RQ_MAX][4];                    /* what is queued for the panel: x, y, w, h (h1_present_begin) */
+static int rq_n, rq_i;
+static uint32_t rq_bytes;
 static int dirty;
 static uint32_t dirty_ms;
 
@@ -889,63 +894,135 @@ void ui_init(void)
     vis.algo_t = 1.0f;
     name_t = 0.0f;
     force_full = 1;
+    rq_n = rq_i = 0;                             /* (nothing queued for the panel) */
     pal_key[4] = 0;
     dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
 }
 
-/* ---- presenting ------------------------------------------------------------------------- */
-static int row_range(int y, int *x0, int *x1)
+/* ---- presenting: only what changed goes to the panel -----------------------------------------
+ * A row is 30 tiles of 8 pixels. A tile is dirty when a pixel in it would show another colour than
+ * the panel has now (two ink levels that come out as the same colour are the same). Dirty rows are
+ * taken up to 20 at a time, and inside such a band every run of dirty tiles goes out as its own
+ * rectangle, cut down to the rows that touch it: a ring, or two things far apart, do not drag the
+ * unchanged pixels between them along. */
+#define TILES (FB_W / 8)
+#define PRESENT_RECT 200                 /* what a rectangle costs besides its pixels, in bytes' worth of time */
+#define PRESENT_GAP 256                  /* clean pixels' bytes it is cheaper to send than to start another rectangle */
+static uint32_t row_tiles(int y)
 {
-    const uint8_t *a = &g_fb[y * FB_W], *b = &prev_fb[y * FB_W];
-    int l = 0, r = FB_W - 1;
-    if (force_full) {
-        *x0 = 0;
-        *x1 = FB_W - 1;
-        return 1;
+    const uint32_t *wa = &g_fb_w[y * (FB_W / 4)], *wb = &prev_w[y * (FB_W / 4)];
+    uint32_t m = 0;
+    int t, i;
+    if (force_full)
+        return (1u << TILES) - 1u;
+    for (t = 0; t < TILES; t++, wa += 2, wb += 2) {
+        const uint8_t *a, *b;
+        if (wa[0] == wb[0] && wa[1] == wb[1])
+            continue;
+        a = (const uint8_t *)wa;
+        b = (const uint8_t *)wb;
+        for (i = 0; i < 8; i++)
+            if (a[i] != b[i] && pal[a[i]] != pal[b[i]]) {
+                m |= 1u << t;
+                break;
+            }
     }
-    while (l < FB_W && a[l] == b[l])
-        l++;
-    if (l == FB_W)
-        return 0;
-    while (a[r] == b[r])
-        r--;
-    *x0 = l;
-    *x1 = r;
-    return 1;
+    return m;
 }
 
-uint32_t h1_present(h1_blit_fn blit)
+/* What changed is found in one pass and queued as rectangles, and the changed pixels are copied to
+ * the panel's copy as they are found. From then on a rectangle is read from that copy, not from the
+ * framebuffer: the queue can go out to the panel while the next frame is being drawn. */
+
+void h1_present_begin(void)
 {
-    uint32_t bytes = 0;
     int y = 0;
+    rq_n = rq_i = 0;
+    rq_bytes = 0;
     while (y < FB_H) {
-        int x0, x1, bx0, bx1, y0, yy, xx;
-        if (!row_range(y, &x0, &x1)) {
+        uint32_t rm[20], all = row_tiles(y);
+        int n = 0, y0 = y, t = 0;
+        if (!all) {
             y++;
             continue;
         }
-        y0 = y;
-        bx0 = x0;
-        bx1 = x1;
-        y++;
-        while (y < FB_H && y - y0 < 20 && row_range(y, &x0, &x1)) {
-            /* stop the band where it would start to carry a lot of unchanged pixels */
-            int nb0 = x0 < bx0 ? x0 : bx0, nb1 = x1 > bx1 ? x1 : bx1;
-            if ((nb1 - nb0) > (bx1 - bx0) + 48 && (nb1 - nb0) > 2 * (x1 - x0 + 1))
+        rm[n++] = all;
+        for (y++; y < FB_H && n < 20; y++) {
+            uint32_t m = row_tiles(y);
+            if (!m)
                 break;
-            bx0 = nb0;
-            bx1 = nb1;
-            y++;
+            rm[n++] = m;
+            all |= m;
         }
-        for (yy = y0; yy < y; yy++)
-            for (xx = bx0; xx <= bx1; xx++)
-                prev_fb[yy * FB_W + xx] = g_fb[yy * FB_W + xx];
-        if (blit)
-            blit(bx0, y0, bx1 - bx0 + 1, y - y0);
-        bytes += (uint32_t)((bx1 - bx0 + 1) * (y - y0) * 2 + 16);
+        while (t < TILES) {
+            uint32_t run;
+            int t0, t1, r0 = 0, r1 = n - 1, yy, x0, x1;
+            if (!(all >> t & 1u)) {
+                t++;
+                continue;
+            }
+            t0 = t1 = t;
+            for (;;) {                           /* on through the dirty tiles, and over a gap too small to be worth a rectangle of its own */
+                int u = t1 + 1;
+                while (u < TILES && !(all >> u & 1u))
+                    u++;
+                if (u >= TILES)
+                    break;
+                if ((u - t1 - 1) * 8 * n * 2 > PRESENT_GAP && rq_n < RQ_MAX - FB_H)
+                    break;                       /* (a queue that is nearly full takes whole bands: it cannot overflow) */
+                t1 = u;
+            }
+            run = ((t1 - t0 + 1 >= 32 ? 0u : 1u << (t1 - t0 + 1)) - 1u) << t0;
+            while (!(rm[r0] & run)) r0++;
+            while (!(rm[r1] & run)) r1--;
+            x0 = t0 * 8;
+            x1 = t1 * 8 + 7;
+            for (yy = y0 + r0; yy <= y0 + r1; yy++) {
+                const uint32_t *src = &g_fb_w[(yy * FB_W + x0) / 4];
+                uint32_t *dst = &prev_w[(yy * FB_W + x0) / 4];
+                int k, nw = (x1 - x0 + 1) / 4;
+                for (k = 0; k < nw; k++)
+                    dst[k] = src[k];
+            }
+            rq[rq_n][0] = (uint8_t)x0;
+            rq[rq_n][1] = (uint8_t)(y0 + r0);
+            rq[rq_n][2] = (uint8_t)(x1 - x0 + 1);
+            rq[rq_n][3] = (uint8_t)(r1 - r0 + 1);
+            rq_n++;
+            rq_bytes += (uint32_t)((x1 - x0 + 1) * (r1 - r0 + 1) * 2 + PRESENT_RECT);
+            t = t1 + 1;
+        }
     }
     force_full = 0;
-    return bytes;
+}
+
+int h1_present_next(int *x, int *y, int *w, int *h)
+{
+    if (rq_i >= rq_n)
+        return 0;
+    *x = rq[rq_i][0];
+    *y = rq[rq_i][1];
+    *w = rq[rq_i][2];
+    *h = rq[rq_i][3];
+    rq_i++;
+    return 1;
+}
+
+int h1_present_left(void) { return rq_n - rq_i; }
+uint32_t h1_present_bytes(void) { return rq_bytes; }
+int h1_present_rects(void) { return rq_n; }
+const uint8_t *h1_panel(void) { return prev_fb; }
+void h1_while_drawing(void (*fn)(void)) { g_poll_fn = fn; }
+
+/* all of it at once, for a port that has nothing better to do while it waits */
+uint32_t h1_present(h1_blit_fn blit)
+{
+    int x, y, w, h;
+    h1_present_begin();
+    while (h1_present_next(&x, &y, &w, &h))
+        if (blit)
+            blit(x, y, w, h);
+    return rq_bytes;
 }
 
 const uint8_t *h1_framebuffer(void) { return g_fb; }

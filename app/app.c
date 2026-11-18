@@ -22,23 +22,69 @@ static void palette_sync(void)
         pal_be[i] = (uint16_t)((pal[i] >> 8) | (pal[i] << 8));
 }
 
-static void blit(int x, int y, int w, int h)
+/* The panel takes a full screen in 21 ms, as long as a frame takes to draw. So a frame goes out while
+ * the next one is drawn: the core queues what changed (h1_present_begin) and calls send_some from inside
+ * its drawing, many times a frame. Each call does one small thing: fills the free band from the next
+ * queued rectangle, or hands a filled band to the panel if the panel has finished with the last one. */
+static int sq[4];                        /* the rectangle in the filled band: x, y, w, h */
+static uint8_t sq_full;
+static struct { uint32_t bytes, rects; } sent;
+
+static int panel_idle(void)
 {
-    const uint8_t *src = h1_framebuffer() + y * H1_W + x;
+#ifdef PLAT_HOST
+    return 1;
+#else
+    return !lcd_busy || (FM1_LCD_SPI_CON & 0x8000u) != 0u;   /* (fm1-base's device/lcd.c: no transfer, or it is done) */
+#endif
+}
+
+static void band_fill(void)
+{
+    const uint8_t *src;
     uint16_t *dst = band[band_i];
     int i, j;
-    for (j = 0; j < h; j++, src += H1_W)
-        for (i = 0; i < w; i++)
+    if (!h1_present_next(&sq[0], &sq[1], &sq[2], &sq[3]))
+        return;
+    src = h1_panel() + sq[1] * H1_W + sq[0];
+    for (j = 0; j < sq[3]; j++, src += H1_W)
+        for (i = 0; i < sq[2]; i++)
             *dst++ = pal_be[src[i]];
-    lcd_blit((uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, band[band_i]);
-    band_i ^= 1u;
+    sq_full = 1;
+}
+
+static void band_send(void)              /* (waits for the panel if it is still busy) */
+{
+    lcd_blit((uint32_t)sq[0], (uint32_t)sq[1], (uint32_t)sq[2], (uint32_t)sq[3], band[band_i]);
+    band_i ^= 1u;                        /* the other band is free: the transfer before this one is over */
+    sq_full = 0;
+}
+
+static void send_some(void)
+{
+    if (!sq_full)
+        band_fill();
+    else if (panel_idle())
+        band_send();
+}
+
+static void send_rest(void)
+{
+    for (;;) {
+        if (!sq_full)
+            band_fill();
+        if (!sq_full)
+            return;
+        band_send();
+    }
 }
 
 /* ---- how long things take ---------------------------------------------------------------------
  * Measured all the time (three clock reads a frame, two a block of sound). MIDI CC 119 from the
  * computer makes a listening screen reader say the numbers since the last time it was asked:
- *   PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. STACK main interrupt
- * DRAW and SEND are milliseconds a frame (the picture drawn, its changed parts sent to the panel);
+ *   PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. KB n RECTS n. STACK main interrupt
+ * DRAW and SEND are milliseconds a frame (the picture drawn, with most of the frame before it sent meanwhile;
+ * then the rest of that frame sent and this one's changes found); KB and RECTS are what a frame sends;
  * AUDIO is the share of each block's time the sound took, in percent; STACK is the bytes of the main
  * loop's and the interrupts' stacks that have never been used since the start. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
@@ -114,6 +160,7 @@ void app_init(void)
     uint32_t size;
     int n;
     h1_init(44100);
+    h1_while_drawing(send_some);
     if (last_start_failed())
         return;
     h1_state(&size);
@@ -153,11 +200,14 @@ void app_frame(void)
     input();
     h1_master((int)(plat_master() * 1000u / 4096u));        /* shown while it turns; the gain is app_render's */
     t0 = plat_ticks24();
-    h1_frame(plat_ms());
+    h1_frame(plat_ms());                                    /* (and most of the last frame goes out meanwhile) */
     t1 = plat_ticks24();
+    send_rest();                                            /* what is left of the last frame */
     palette_sync();
-    h1_present(blit);
+    h1_present_begin();                                     /* this frame, queued: it goes out during the next */
     t2 = plat_ticks24();
+    sent.bytes += h1_present_bytes();
+    sent.rects += (uint32_t)h1_present_rects();
     pf.frames++;
     pf.draw += US(t1 - t0);
     pf.send += US(t2 - t1);
@@ -204,7 +254,7 @@ static char *say_num(char *d, char *end, uint32_t v)
 
 static void say_perf(void)
 {
-    char t[120], *d, *end = t + sizeof t - 1;
+    char t[150], *d, *end = t + sizeof t - 1;
     uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am;
     f = plat_lock();
     nb = pf_blocks; au = pf_audio; am = pf_audio_max;
@@ -224,6 +274,11 @@ static void say_perf(void)
     d = say_num(d, end, nb ? (au / nb) * 100u / pf_block_us : 0u);
     d = say_cat(d, end, " MAX ");
     d = say_num(d, end, am * 100u / pf_block_us);
+    d = say_cat(d, end, ". KB ");                           /* sent to the panel a frame, and in how many rectangles */
+    d = say_num(d, end, (sent.bytes / n + 512u) / 1024u);
+    d = say_cat(d, end, " RECTS ");
+    d = say_num(d, end, (sent.rects + n / 2u) / n);
+    sent.bytes = sent.rects = 0;
     if (plat_stack_left(PLAT_STK_MAIN) >= 0 && plat_stack_left(PLAT_STK_IRQ) >= 0) {
         d = say_cat(d, end, ". STACK ");                    /* bytes never used since the start */
         d = say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_MAIN));

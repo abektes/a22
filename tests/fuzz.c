@@ -17,8 +17,9 @@
  *      as the audio interrupt does on the device.
  *
  * It checks what the checkers cannot see: every rectangle sent to the panel is inside the screen
- * and no taller than a band (20 rows), and after any state the values a picture and a sound index
- * with are in range. */
+ * and no taller than a band (20 rows), after any state the values a picture and a sound index
+ * with are in range, and a frame sent the way the device sends it (in pieces, while the next one is
+ * drawn) leaves the panel showing exactly that frame. */
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,13 +67,54 @@ static void sound(uint32_t n)
             die("a sample outside 24 bits", (int)i, (int)lr[i], 0, 0);
 }
 
+/* The device sends a frame while the next one is drawn (h1_present_begin, _next, h1_while_drawing).
+ * Here the same, with a panel of our own: rectangles leave the queue at any moment of the next frame's
+ * drawing, and when the queue is empty the panel has to show exactly the frame that was queued. */
+static uint16_t shown[H1_W * H1_H], want[H1_W * H1_H], pal_then[256];
+static int piped, have_want;
+
+static void pipe_one(void)
+{
+    const uint8_t *px = h1_panel();
+    int x, y, w, h, i, j;
+    if (!h1_present_next(&x, &y, &w, &h))
+        return;
+    blit(x, y, w, h);
+    for (j = y; j < y + h; j++)
+        for (i = x; i < x + w; i++)
+            shown[j * H1_W + i] = pal_then[px[j * H1_W + i]];
+}
+
+static void pipe_poll(void)
+{
+    if (piped && below(4) == 0)
+        pipe_one();
+}
+
 static void frame(uint32_t ms, int with_sound)
 {
     now_ms += ms;
     if (with_sound)
         sound(ms > 16 ? 256u * 3u : 256u * (uint32_t)(1 + below(3)));
     h1_frame(now_ms);
-    h1_present(blit);
+    if (piped) {
+        const uint8_t *fb = h1_framebuffer();
+        int i;
+        while (h1_present_left())
+            pipe_one();
+        if (have_want && memcmp(shown, want, sizeof shown))
+            die("the panel does not show the frame that was sent", 0, 0, 0, 0);
+        memcpy(pal_then, h1_palette(), sizeof pal_then);
+        h1_present_begin();
+        if (h1_present_rects() > 512 || (h1_panel() == fb))
+            die("the queue", h1_present_rects(), 0, 0, 0);
+        for (i = 0; i < H1_W * H1_H; i++)
+            want[i] = pal_then[fb[i]];
+        have_want = 1;
+    } else {
+        h1_present(blit);
+        have_want = 0;
+    }
     if (h1_instrument() < 0 || h1_instrument() >= h1_instrument_count() || h1_algorithm() < 0 || h1_algorithm() > 7 ||
         h1_page() < 0 || h1_page() > 7)
         die("out of range", h1_instrument(), h1_algorithm(), h1_page(), 0);
@@ -131,6 +173,9 @@ static void poke(int with_sound)
 static void fresh(uint32_t t0)
 {
     h1_init(44100);
+    h1_while_drawing(pipe_poll);
+    have_want = 0;
+    piped = (int)(rnd() & 1u);                   /* half the time as the device sends, half all at once */
     now_ms = t0;
     keys_down = btns_down = 0;
 }

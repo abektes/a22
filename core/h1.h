@@ -39,6 +39,19 @@ const uint16_t *h1_palette(void);
  * 16-bit panel would be sent, the number that decides the frame rate on the device */
 typedef void (*h1_blit_fn)(int x, int y, int w, int h);
 uint32_t h1_present(h1_blit_fn blit);
+/* The same in pieces, for a panel that is slow to take its pixels (the FM-1's: a full screen is 21 ms):
+ * begin() finds what changed and queues it, next() hands out one rectangle at a time, and the pixels
+ * of a queued rectangle are read from h1_panel(), which the next h1_frame does not touch. So the queue
+ * can go out while the next frame is drawn: h1_while_drawing(fn) has fn called many times a frame from
+ * inside the drawing, and fn sends a rectangle when the panel is ready for one. Empty the queue before
+ * the next begin(). */
+void h1_present_begin(void);
+int h1_present_next(int *x, int *y, int *w, int *h);   /* 0: the queue is empty */
+int h1_present_left(void);                       /* rectangles still queued */
+int h1_present_rects(void);                      /* rectangles the last begin() queued */
+uint32_t h1_present_bytes(void);                 /* what the last begin() queued costs to send, in bytes */
+const uint8_t *h1_panel(void);                   /* the picture as the panel has it once the queue is out */
+void h1_while_drawing(void (*fn)(void));
 
 /* lights */
 uint32_t h1_key_leds(void);                      /* bit k = key k */

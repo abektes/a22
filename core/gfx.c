@@ -11,6 +11,7 @@ static int gm = G_MAX;
 static int glevel = 255;      /* the ink level of the primitive being drawn, 0..255 */
 static f32 gdim = 1.0f;
 static f32 gox, goy;
+void (*g_poll_fn)(void);
 
 void g_mode(int mode) { gm = mode; }
 void g_dim(f32 k) { gdim = sat(k); }
@@ -88,6 +89,7 @@ void g_rect(f32 x, f32 y, f32 w, f32 h, f32 a)
 {
     f32 ya, yb;
     int y0, y1, yy;
+    G_POLL();
     if (w <= 0.0f || h <= 0.0f)
         return;
     set_level(a);
@@ -114,6 +116,7 @@ void g_disc(f32 cx, f32 cy, f32 r, f32 a)
 {
     int y0, y1, y, x, xa, xb;
     f32 ro, ri2, ro2;
+    G_POLL();
     if (r <= 0.0f)
         return;
     set_level(a);
@@ -144,6 +147,7 @@ void g_ring(f32 cx, f32 cy, f32 r, f32 w, f32 a)
 {
     int y0, y1, y, x;
     f32 h = w * 0.5f + 0.5f, ro, ri, ro2, ri2;
+    G_POLL();
     if (r <= 0.0f || w <= 0.0f)
         return;
     if (r <= w * 0.5f) {
@@ -188,6 +192,7 @@ void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
 {
     int y0, y1, x0, x1, x, y;
     f32 pad, irx2, iry2, h;
+    G_POLL();
     if (rx <= 0.05f || ry <= 0.05f) {
         if (rx > 0.05f)
             g_line(cx - rx, cy, cx + rx, cy, w > 0.0f ? w : 1.5f, a);
@@ -231,6 +236,7 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
 {
     f32 dx, dy, len2, inv, len, ux, uy, R, reach;
     int i, ia, ib, j, ja, jb;
+    G_POLL();
     x0 += gox; x1 += gox; y0 += goy; y1 += goy;
     dx = x1 - x0;
     dy = y1 - y0;
@@ -427,6 +433,7 @@ void g_fill(const f32 *xy, int n, f32 a)
 {
     f32 ex[8], ey[8], ec[8], ea[8], ei[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
     int i, x, y, x0, x1, y0, y1;
+    G_POLL();
     if (n < 3 || n > 8)
         return;
     set_level(a);
@@ -497,6 +504,8 @@ void g_fill(const f32 *xy, int n, f32 a)
 void g_vspan(int x, f32 y0, f32 y1, f32 a)
 {
     int ya, yb, y;
+    if (!(x & 15))
+        G_POLL();                                /* (a picture made of columns: now and then) */
     x += (int)gox;
     y0 += goy; y1 += goy;
     if ((unsigned)x >= FB_W || y1 <= y0)

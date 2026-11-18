@@ -17,6 +17,11 @@ enum { G_MAX, G_ADD, G_PAINT };   /* MAX: line art (crossings don't blow out); P
 extern uint32_t g_fb_w[FB_W * FB_H / 4];
 #define g_fb ((uint8_t *)g_fb_w)
 
+/* Called at the start of every primitive when set: the port's chance to do a little of something else
+ * (send the last frame's pixels) while a frame is drawn. A long loop that draws nothing can call G_POLL() too. */
+extern void (*g_poll_fn)(void);
+#define G_POLL() do { if (g_poll_fn) g_poll_fn(); } while (0)
+
 void g_clear(void);
 void g_fade(int mul256);                                   /* every pixel * mul/256: trails */
 void g_mode(int mode);
