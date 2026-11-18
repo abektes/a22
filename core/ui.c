@@ -348,6 +348,20 @@ void h1_button(int btn, int down)
     btn_held |= 1u << btn;
     btn_ms[btn] = now;
     btn_fired[btn] = 0;
+    /* SEQ and REC together: LAYERS. Whichever lands second makes the pair, and neither then does what
+     * it does alone (a pair made after one of them has already done its hold does nothing). */
+    if (btn == H1_BTN_SEQ || btn == H1_BTN_REC) {
+        int other = btn == H1_BTN_SEQ ? H1_BTN_REC : H1_BTN_SEQ;
+        if (btn_held & (1u << other)) {
+            if (!btn_fired[other]) {
+                st.seq[6] ^= 1;
+                toast(st.seq[6] ? "LAYERS ON" : "LAYERS OFF", 0, 0, 0, -1);
+                mark_dirty();
+            }
+            btn_fired[btn] = btn_fired[other] = 3;
+            return;
+        }
+    }
     switch (btn) {
     case H1_BTN_FX: open_page(PG_FX); break;
     case H1_BTN_SEL: open_page(PG_KEYS); break;
@@ -375,10 +389,26 @@ void h1_button(int btn, int down)
 
 static void holds(void)
 {
+    /* hold REC: clear. With LAYERS on, first what was recorded on the instrument in hand, and held on to
+     * three seconds, the lot (as SAVE resets the instrument, then everything). */
     if ((btn_held & (1u << H1_BTN_REC)) && !btn_fired[H1_BTN_REC] && now - btn_ms[H1_BTN_REC] > 700u) {
         btn_fired[H1_BTN_REC] = 1;
+        if (st.seq[6] && eng_seq_has(st.inst)) {
+            eng_post(EV_CLEAR, 1 + st.inst);
+            toast(insts[st.inst]->name, 0, 0, " CLEARED", -1);
+            btn_fired[H1_BTN_REC] = 2;           /* (and the lot, if it stays down) */
+        } else if (st.seq[6]) {
+            toast(insts[st.inst]->name, 0, 0, " EMPTY", -1);   /* nothing of this instrument's to clear */
+            btn_fired[H1_BTN_REC] = 2;
+        } else {
+            eng_post(EV_CLEAR, 0);
+            toast(st.seq[0] == SEQ_STEP ? "STEPS CLEARED" : "LOOP CLEARED", 0, 0, 0, -1);
+        }
+    }
+    if ((btn_held & (1u << H1_BTN_REC)) && btn_fired[H1_BTN_REC] == 2 && now - btn_ms[H1_BTN_REC] > 3000u) {
+        btn_fired[H1_BTN_REC] = 1;
         eng_post(EV_CLEAR, 0);
-        toast(st.seq[0] == SEQ_STEP ? "STEPS CLEARED" : "LOOP CLEARED", 0, 0, 0, -1);
+        toast("ALL CLEARED", 0, 0, 0, -1);
     }
     if ((btn_held & (1u << H1_BTN_SEQ)) && !btn_fired[H1_BTN_SEQ] && now - btn_ms[H1_BTN_SEQ] > 550u) {
         btn_fired[H1_BTN_SEQ] = 1;
@@ -776,12 +806,37 @@ static void draw_page(void)
     int i, j;
     f32 intro = ease_out(page_t / 0.22f);
     g_text(12.0f, 14.0f, pd->title, 22.0f, 3.0f, 1.0f, 0);
-    if (page == PG_SEQ || page == PG_GLO) {      /* what holding this page's button does */
-        if (page == PG_SEQ)
-            put_s(buf, "HOLD SEQ: LOOP / STEP");
-        else
-            put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
+    if (page == PG_GLO) {                        /* what holding this page's button does */
+        put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
         g_text(13.0f, 43.0f, buf, 8.0f, 1.0f, 0.5f * intro, 0);
+    }
+    if (page == PG_SEQ) {
+        /* The sequencer's buttons do three things held or paired, more than the line holds: they go by
+         * as a marquee, still for a moment when the page opens, then round and round. */
+        const char *hint[3];
+        f32 wd[3], total = 0.0f, off, x;
+        hint[0] = "HOLD SEQ: LOOP / STEP";
+        hint[1] = st.seq[6] ? "SEQ + REC: LAYERS ON" : "SEQ + REC: LAYERS OFF";
+        hint[2] = st.seq[6] ? "HOLD REC: CLEAR PART, THEN ALL" : "HOLD REC: CLEAR";
+        for (i = 0; i < 3; i++) {
+            wd[i] = g_text_w(hint[i], 8.0f) + 22.0f;
+            total += wd[i];
+        }
+        off = maxf(0.0f, page_t - 1.4f) * 26.0f;
+        off -= total * (f32)ifloor(off / total);
+        x = 13.0f - off;
+        for (j = 0; j < 6; j++) {                /* twice round: the line never shows its end */
+            i = j % 3;
+            if (x + wd[i] > 0.0f && x < 240.0f) {
+                g_text(x, 43.0f, hint[i], 8.0f, 1.0f, 0.5f * intro, 0);
+                g_disc(x + wd[i] - 11.0f, 47.0f, 1.2f, 0.35f * intro);
+            }
+            x += wd[i];
+        }
+        g_mode(G_PAINT);                         /* a margin each side, as the page's other text keeps */
+        g_rect(0.0f, 40.0f, 11.0f, 14.0f, 0.0f);
+        g_rect(229.0f, 40.0f, 11.0f, 14.0f, 0.0f);
+        g_mode(G_MAX);
     }
     for (i = 1; i < NPAGE; i++)                  /* the panel's two rows of six: a square where a button has a page */
         rsquare(165.0f + (f32)PAGE_AT[i][0] * 11.0f, 12.0f + (f32)PAGE_AT[i][1] * 11.0f, 8.0f, i == page ? 1.0f : 0.3f);
@@ -897,6 +952,7 @@ void ui_init(void)
     rq_n = rq_i = 0;                             /* (nothing queued for the panel) */
     pal_key[4] = 0;
     dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
+    btn_held = 0;                                /* (and no button is down) */
 }
 
 /* ---- presenting: only what changed goes to the panel -----------------------------------------

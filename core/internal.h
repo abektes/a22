@@ -25,6 +25,8 @@ typedef struct Voice {
     uint8_t gate;
     uint8_t note;
     uint8_t idx;
+    uint8_t part;                /* the instrument and algorithm it sounds with (PART), 0 = never used */
+    uint8_t seq;                 /* 1: the sequencer started it (LAYERS), and the sequencer lets it go */
     uint32_t serial;             /* counts note-ons: the picture sees a new note when it changes */
     uint32_t stamp;              /* allocation order */
     f32 pitch;                   /* MIDI note, gliding, before bends */
@@ -50,7 +52,8 @@ typedef struct InstParams {
 } InstParams;
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 4u
+#define H1_VERSION 5u
+#define H1_VERSION_4_SIZE (sizeof(H1State) - NSTEP * 4u)   /* version 4 ended before step_part */
 
 typedef struct H1State {
     uint32_t magic;
@@ -60,12 +63,19 @@ typedef struct H1State {
     uint8_t hud;                 /* the knob strip pinned on the home screen */
     uint8_t keys[4];             /* root, scale, glide, hold */
     uint8_t glo[4];              /* tempo, swing, tune, bright */
-    uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid, click */
+    uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid, click, layers */
     InstParams ip[NINST];
     uint8_t ink[NINST][3];
     uint8_t rsv[5];
     uint8_t steps[NSTEP][4];     /* the step pattern: up to four notes a step, note + 1, 0 = none */
+    uint8_t step_part[NSTEP][4]; /* the part each of those notes was played on (PART), 0 = none kept */
 } H1State;
+
+/* A part: an instrument and one of its algorithms, in a byte. What a recorded note remembers, so that
+ * with LAYERS on it goes on sounding as it was played when another instrument is in hand. */
+#define PART(inst, algo) ((uint8_t)(0x80u | ((uint32_t)(inst) << 3) | ((uint32_t)(algo) & 7u)))
+#define PART_INST(p) ((((p) >> 3) & 15) < NINST ? (((p) >> 3) & 15) : 0)
+#define PART_ALGO(p) ((p) & 7)
 
 extern H1State st;
 
@@ -78,6 +88,8 @@ typedef struct Blk {
     f32 bend;                    /* semitones added to every voice (tune, LFO on pitch) */
     f32 time;                    /* seconds since boot */
     f32 bpm;
+    f32 step;                    /* seconds the instrument's own clocks move on in this call: a control block's, or
+                                  * 0 when its block() is called again in the same block for another part */
 } Blk;
 
 /* ---- what an instrument's picture gets every frame ------------------------------------ */
@@ -146,7 +158,8 @@ const ParamDef *page_param(int page, int i);     /* (the SEQ page's last column 
 uint8_t *page_value(int page, int i);
 
 /* ---- engine (synth.c): everything below runs in the audio interrupt, except where noted - */
-enum { EV_NOTE_ON = 1, EV_NOTE_OFF, EV_PANIC, EV_INST, EV_UNLATCH, EV_REC, EV_PLAY, EV_CLEAR,
+enum { EV_NOTE_ON = 1, EV_NOTE_OFF, EV_PANIC, EV_INST, EV_UNLATCH, EV_REC, EV_PLAY,
+       EV_CLEAR,                 /* a = 0: everything recorded; a = 1 + an instrument: only what was played on it */
        EV_STEP_MOVE,             /* the step cursor: a = detents + 128 */
        EV_STEP_REST,             /* empty the step under the cursor and move on */
        EV_SEQ_MODE };            /* loop <-> step: stop whichever was running */
@@ -175,6 +188,7 @@ void eng_snapshot(Vis *vis);                     /* main loop: copy what the pic
 uint32_t eng_sounding_lo(void);                  /* notes sounding, as key bits for the LEDs */
 int eng_seq_leds(uint32_t *out, int page_open, int blink);   /* the pattern on the white keys; 0: not showing */
 uint32_t eng_voices(void);
+int eng_seq_has(int inst);                       /* main loop: something recorded was played on this instrument */
 extern Voice voices[NVOICE];
 extern f32 ks_line[NVOICE][2][KS_LEN];
 extern uint32_t eng_rng;

@@ -42,7 +42,7 @@ static void pip_block(const Blk *b)
     if (absf(B.zap) < 0.06f) B.zap = 0.0f;
     B.crunch = b->k[3];
     B.chord = iclamp((int)(b->k[0] * 4.99f), 0, 4);
-    pwm_ph = fractf(pwm_ph + (0.12f + 5.0f * b->k[0] * b->k[0]) * (f32)CTRL * b->isr);
+    pwm_ph = fractf(pwm_ph + (0.12f + 5.0f * b->k[0] * b->k[0]) * b->step);
     B.pwm = 0.5f + 0.42f * tsin(pwm_ph);
 }
 

@@ -32,9 +32,21 @@ buffer) that the picture reads.
 
 Instruments draw into a 240 x 240 buffer of 8-bit ink levels: 0 is the bezel's black, 255 is
 full ink. A 256-entry palette turns ink into the instrument's colour when the frame is sent.
-`h1_present` compares each row with what the panel already shows and reports rectangles of at
-most 20 rows, so the device sends only what moved. It also returns the byte count, which the
+`h1_present` compares the frame with what the panel already shows, in tiles of 8 pixels, and
+reports rectangles of at most 20 rows, so the device sends only what moved. Two ink levels that
+come out as the same colour count as no change. It also returns the byte count, which the
 simulator turns into its screen-link meter.
+
+The device takes the same thing in pieces, because sending is as slow as drawing there (a full
+screen is 21 ms of SPI). `h1_present_begin` finds what changed, copies it to the panel's copy and
+queues the rectangles; `h1_present_next` hands them out; their pixels are read from `h1_panel()`,
+which the next frame's drawing does not touch. The drawing primitives call a hook
+(`h1_while_drawing`), and `app/app.c` sends a rectangle from it whenever the panel has finished
+the last one. A frame costs the longer of drawing and sending, not their sum.
+
+KNOT VOID clears a path through the picture before it draws its cord. It marks the path in a
+1-bit mask (`g_bed_move`, `g_bed_to`) and clears the framebuffer under the mask once
+(`g_bed_clear`), so a cord that crosses itself is not cleared stroke by stroke.
 
 Motion uses springs integrated with the real frame time, so the art moves the same at any frame
 rate and never snaps.
@@ -45,6 +57,13 @@ One `InstDef`: a name, an ink colour, four knob names, eight algorithm names, de
 functions: `block` (once per 32 frames), `note`, `render` (one voice), an optional `post` (the
 mix), and `draw`. Adding an instrument is one new file, one line in the table and `NINST` plus one.
 
+An instrument holds the numbers of one algorithm at a time. With LAYERS on, more than one of its
+algorithms can sound in the same block, so `block` is called again for each before that
+algorithm's voices are rendered. `Blk.step` is the time that has passed: the control block's the
+first time `block` is called in it, 0 on the later calls. Anything in `block` that moves on its
+own (a phase, a wander) must advance by `Blk.step`, or it would run faster with every layer.
+`post` runs once per instrument, on that instrument's own mix.
+
 ## The sequencer
 
 Time is 96 ticks per quarter note. A bar is 384, 288, 480, 288 or 336 ticks for 4/4, 3/4, 5/4,
@@ -52,6 +71,21 @@ Time is 96 ticks per quarter note. A bar is 384, 288, 480, 288 or 336 ticks for 
 pattern is 64 steps of up to four notes, on a 1/8, 1/16 or 1/32 grid, and is saved with the
 rest of the state. `eng_seq_info` gives the picture what it needs to draw the progress line or
 the notches.
+
+Every recorded note also stores its part: the instrument and algorithm it was played on, in one
+byte (`PART`). Every voice carries the part it sounds and whether the sequencer started it. With
+LAYERS off (`st.seq[6] == 0`) the stored parts are ignored and recorded notes go through the same
+path as a key, on the instrument in hand. With LAYERS on, the sequencer starts voices on the
+stored part directly, past the arpeggiator (the loop records what the arpeggiator played, not the
+keys held). The engine then renders the voices part by part into a mix per instrument, runs each
+instrument's `post` on its mix, and sums them into the one effects chain, which takes its
+settings from the instrument in hand. An instrument that is not in hand and has gone quiet keeps
+its `post` running for a third of a second, fading, so its tail is not cut. The snapshot for the picture
+leaves out the voices of other instruments.
+
+The saved state is version 5. Version 4 is the same without the step notes' parts at the end:
+`h1_state_load` takes it, with LAYERS off and no parts kept. A step note with no part kept
+belongs to whichever instrument is in hand.
 
 ## Controls as values
 

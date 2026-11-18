@@ -27,7 +27,7 @@ static void haunt_block(const Blk *b)
     H.dread = b->k[1];
     H.shiver = b->k[2];
     H.depth = b->k[3];
-    hum_ph = fractf(hum_ph + 50.0f * (f32)CTRL * b->isr);
+    hum_ph = fractf(hum_ph + 50.0f * b->step);
     H.hum = hum_ph < 0.5f ? 1.0f : 0.35f;
 }
 

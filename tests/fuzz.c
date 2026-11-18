@@ -213,7 +213,11 @@ static void part_state(int rounds)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
-        if (h1_state_load(odd + 1, size) != 0)
+        if (n % 5 == 4) {                                    /* the state before LAYERS: version 4, and shorter */
+            odd[1 + 4] = 4;
+            if (h1_state_load(odd + 1, size - 256u) != 0 || h1_layers())
+                die("a version 4 state was refused, or came back with LAYERS on", n, h1_layers(), 0, 0);
+        } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
         for (k = 0; k < 6; k++)
             frame(16, 1);
@@ -236,6 +240,14 @@ static void part_panel(int steps)
     for (inst = 0; inst < h1_instrument_count(); inst++) {
         fresh(inst & 1 ? 0xFFFF0000u : 0u);
         h1_encoder(H1_ENC_PRESET, inst);
+        if (inst & 2) {                                      /* half of them with LAYERS on from the start */
+            h1_button(H1_BTN_SEQ, 1);
+            h1_button(H1_BTN_REC, 1);
+            h1_button(H1_BTN_REC, 0);
+            h1_button(H1_BTN_SEQ, 0);
+            if (!h1_layers())
+                die("SEQ and REC together did not turn LAYERS on", inst, 0, 0, 0);
+        }
         for (n = 0; n < steps; n++) {
             poke(1);
             if (n % 4 == 0)

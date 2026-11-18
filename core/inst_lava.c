@@ -25,7 +25,7 @@ static void lava_block(const Blk *b)
     V.cut = 90.0f * exp2fx(b->k[1] * 6.6f);
     V.lean = b->k[2];
     V.sub = b->k[3];
-    wob_ph = fractf(wob_ph + b->bpm * (1.0f / 60.0f) * (f32)CTRL * b->isr);      /* QUAKE wobbles in time */
+    wob_ph = fractf(wob_ph + b->bpm * (1.0f / 60.0f) * b->step);      /* QUAKE wobbles in time */
     V.wob = 0.5f - 0.5f * tsin(wob_ph + 0.25f);
 }
 

@@ -23,7 +23,7 @@ static const uint8_t ORDER[NALGO] = {2, 0, 1, 3, 4, 5, 6, 7};
 
 static void orbit_block(const Blk *b)
 {
-    f32 dt = (f32)CTRL * b->isr;
+    f32 dt = b->step;
     O.algo = ORDER[b->algo];
     O.sweep = b->k[0];
     O.spin = b->k[1];

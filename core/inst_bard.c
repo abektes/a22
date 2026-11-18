@@ -52,7 +52,7 @@ static void bard_block(const Blk *b)
     B.age = b->k[3];
     B.g = clampf((0.35f + 0.6f * B.bite) * a->bright * (1.0f - 0.35f * B.age), 0.08f, 0.98f);
     B.t60 = 4.5f * a->ring * (1.0f - 0.4f * B.age);
-    wheel_ph = fractf(wheel_ph + 3.1f * (f32)CTRL * b->isr);
+    wheel_ph = fractf(wheel_ph + 3.1f * b->step);
     if (a->kind == PLUCK) {
         svf_set(&body_f[0], a->f1, a->q, b->isr);
         svf_set(&body_f[1], a->f2, a->q + 1.0f, b->isr);

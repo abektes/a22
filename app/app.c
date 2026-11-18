@@ -165,8 +165,8 @@ void app_init(void)
         return;
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
-    if (n == (int)size)
-        h1_state_load(blob, size);                          /* refused unless it is this version's */
+    if (n > 0)
+        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or the one before */
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -292,11 +292,13 @@ static void say_perf(void)
 
 static void speak(void)
 {
-    static int inst_was = -1, algo_was = -1, page_was = -1, val_was[H1_NENC];
+    static int inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, val_was[H1_NENC];
     char t[96], *d, *end = t + sizeof t - 1;
-    int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), k, quiet = 0;
+    int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     if (ann_on()) {
         int where = ann_where();
+        if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
+            ann_say(lay ? "LAYERS ON" : "LAYERS OFF", 0, ANN_NOW);
         if (where || inst != inst_was || algo != algo_was) {
             d = say_cat(t, end, where ? APP_NAME ". " : "");
             d = say_cat(d, end, h1_instrument_name(inst));
@@ -331,6 +333,7 @@ static void speak(void)
     inst_was = inst;
     algo_was = algo;
     page_was = page;
+    lay_was = lay;
     if (pf_ask) {
         pf_ask = 0;
         if (ann_on())
