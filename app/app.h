@@ -1,6 +1,4 @@
-/* h1 on the FM-1: the app's half of fm1-base's contract (device/unity.c includes this, then app.c).
- * NOT YET BUILT FOR THE DEVICE: written against fm1-base's template, to be compiled and checked
- * with the JieLi toolchain once the design is approved in the simulator. */
+/* h1 on the FM-1: the app's half of fm1-base's contract (device/unity.c includes this, then app.c). */
 #pragma once
 #include <stdint.h>
 #include "plat.h"

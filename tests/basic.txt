@@ -1,0 +1,61 @@
+# h1 in fm1-base's host simulator: the device app (app/) with the platform simulated.
+#   ./build.sh --host, then app/build/host/h1_host tests/basic.txt app/build/host
+wait 600
+shot boot.png
+# a key sounds, and lets go
+key 7 down
+wait 50
+wav note.wav
+wait 300
+wavstop
+expect peak_db_min -50
+key 7 up
+wait 200
+# a note over MIDI sounds too
+midi 90 3C 64
+wait 50
+peakreset
+wav midi.wav
+wait 300
+wavstop
+expect peak_db_min -50
+midi 80 3C 00
+wait 200
+# a screen reader hears where it is, then each change
+listen
+wait 100
+said HOME. DUST. WOW. MUFFLE. SWAY
+turn PRESET 1
+wait 200
+said ORBIT. NEBULA
+turn ALGO 1
+wait 200
+said ORBIT. DRIFT
+turn K1 3
+wait 600
+said SWEEP
+tap FX
+wait 100
+said PAGE
+tap FX
+wait 100
+said HOME
+# SAVE writes the settings, and a restart keeps them
+tap SAVE
+wait 200
+reboot
+wait 600
+turn ALGO 1
+wait 200
+said ORBIT. PULSAR
+# the sequencer has the white keys while it runs: REC arms the loop, a key starts the take
+tap REC
+wait 100
+key 12 down
+wait 150
+key 12 up
+wait 300
+leds
+shot loop.png
+tap PLAY
+wait 100

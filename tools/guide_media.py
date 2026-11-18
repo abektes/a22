@@ -49,10 +49,22 @@ def run(outdir, words):
     subprocess.run([HOST, outdir] + words, check=True, stdout=subprocess.DEVNULL)
 
 
-# a little phrase: (time in ms, key, down)
-PHRASE = [(0, 5, 1), (380, 5, 0), (420, 9, 1), (440, 12, 1), (1300, 9, 0), (1300, 12, 0),
-          (1450, 2, 1), (1700, 2, 0), (1750, 7, 1), (2000, 7, 0), (2050, 14, 1), (2050, 17, 1),
-          (2800, 14, 0), (2800, 17, 0)]
+# a little tune that fills the three seconds and loops: two bars at 160 BPM (a beat is 375 ms),
+# a chord on each bar and a melody in eighths over it, all let go before the loop comes round
+def _tune():
+    ev = []
+    for t0, chord in ((0, (5, 9, 12)), (1500, (2, 5, 9))):
+        for k in chord:
+            ev += [(t0, k, 1), (t0 + 1350, k, 0)]
+    melody = [17, 16, 14, 12, 14, 16, 17, 19, 21, 19, 17, 16, 14, None, 12, None]
+    for i, k in enumerate(melody):
+        if k is not None:
+            t = i * 187
+            ev += [(t, k, 1), (t + 150, k, 0)]
+    return ev
+
+
+PHRASE = _tune()
 
 
 def loop_script(i, frames_dir):

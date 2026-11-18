@@ -10,7 +10,7 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   inst_*.c     one file per instrument: its sound and its picture, side by side
 port/web/    the browser simulator: the core as WebAssembly, one HTML file
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
-port/fm1/    the device, on fm1-base (written, not yet compiled)
+app/         the device, on fm1-base (base/, a submodule): built by ./build.sh
 tools/       build scripts
 dist/        the built simulator page
 ```
@@ -56,7 +56,8 @@ the notches.
 ## Controls as values
 
 `h1_control` reports what each encoder currently means (its name, range, value and value text)
-and `h1_control_set` sets it outright. The device never calls them. The simulator uses them to
+and `h1_control_set` sets it outright. On the device, `app/app.c` reads `h1_control` to tell a
+screen reader a control's name and value. The simulator uses both to
 show each control as a labelled slider, while its nudge buttons, the mouse wheel and the number
 keys still send real encoder detents.
 
@@ -82,4 +83,5 @@ both).
 - `tools/build_host.sh` then `build/h1host OUTDIR script...` for images and WAVs.
 - `tools/build_web.sh` for `dist/h1-simulator.html` (clang with the wasm32 target and wasm-ld;
   set `WASM2JS` to binaryen's wasm2js to include the plain-JavaScript fallback).
-- The device build goes through fm1-base's `tools/build.py` with `port/fm1` as the app.
+- `./build.sh` builds the device package: fm1-base's `tools/build.py` with `app/` as the app.
+- `sh tests/run_tests.sh` runs the device app in fm1-base's host simulator.
