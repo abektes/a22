@@ -60,7 +60,11 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
 - [ ] Metronome: hold GLO cycles CLICK REC, CLICK ON, CLICK OFF, and holding never opens the page.
 - [ ] MIDI in over USB plays notes, and CC 20 to 23 move the four knobs.
 - [ ] Change the instrument, an algorithm and a knob, wait ten seconds, switch off and on: they
-      are kept. Hold SAVE resets the instrument.
+      are kept.
+- [ ] Turn a knob, turn ALGORITHM and back: each algorithm has its knobs where they were left.
+      Hold SAVE says the algorithm's name and RESET, and its four knobs are as new. Held two
+      seconds it says the instrument's name and RESET. Held four seconds, ALL RESET.
+- [ ] Writing steps, eight keys held together land on one step, and it plays all eight.
 - [ ] Leave it running for thirty minutes. No freeze, no SAFE MODE.
 
 ## 3. Leave h1 again

@@ -10,8 +10,10 @@
  *   GLO held   the metronome: while recording, always, or off
  *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
- *   SAVE       saves now; held, resets this instrument; held three seconds, every instrument and
- *              the KEYS and GLOBAL pages (the sequencer and what it holds are left alone)
+ *   SAVE       saves now; held, resets the four knobs of the algorithm in hand; held on, this
+ *              instrument (every algorithm's knobs and its pages); held four seconds, every
+ *              instrument and the KEYS and GLOBAL pages (the sequencer and what it holds are left
+ *              alone)
  *   PLAY REC   the sequencer. Loop: REC arms a take, or overdubs while it plays. Step: REC is
  *              step-write. REC held clears.
  *   OCT- OCT+  octave; both, back to the middle
@@ -75,7 +77,7 @@ uint8_t *page_value(int pg, int i)
     case PG_KEYS: return &st.keys[i];
     case PG_GLO: return &st.glo[i];
     case PG_SEQ: return &st.seq[i == 3 && st.seq[0] == SEQ_STEP ? 4 : i];
-    default: return &ip->knob[i];
+    default: return &KNOBS_NOW(st.inst)[i];
     }
 }
 
@@ -92,7 +94,7 @@ static f32 page_t = 9.0f;                        /* seconds since the page opene
 static f32 knob_touch[4] = {9.0f, 9.0f, 9.0f, 9.0f};
 static int active_col = 0;
 static f32 col_v[4], col_vv[4];                  /* the gauges, eased */
-static char toast_s[20];
+static char toast_s[24];
 static f32 toast_t = 9.0f;
 static f32 vol_t = 9.0f, vol_x, vol_v;           /* the volume bar: seconds since MASTER last moved, and where it shows */
 static int vol_seen = -1;
@@ -283,7 +285,7 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (type == 0xB0u && d1 == 123)
         eng_post(EV_PANIC, 0);
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
-        st.ip[st.inst].knob[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
+        KNOBS_NOW(st.inst)[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         knob_touch[d1 - 20] = 0.0f;
     }
 }
@@ -387,10 +389,15 @@ void h1_button(int btn, int down)
     }
 }
 
+/* how long SAVE is held for each reset, in milliseconds */
+#define HOLD_RESET_ALGO 900u
+#define HOLD_RESET_INST 2200u
+#define HOLD_RESET_ALL 4000u
+
 static void holds(void)
 {
     /* hold REC: clear. With LAYERS on, first what was recorded on the instrument in hand, and held on to
-     * three seconds, the lot (as SAVE resets the instrument, then everything). */
+     * three seconds, the lot (as SAVE resets a step further the longer it is held). */
     if ((btn_held & (1u << H1_BTN_REC)) && !btn_fired[H1_BTN_REC] && now - btn_ms[H1_BTN_REC] > 700u) {
         btn_fired[H1_BTN_REC] = 1;
         if (st.seq[6] && eng_seq_has(st.inst)) {
@@ -421,21 +428,37 @@ static void holds(void)
         toast(O_CLICK[st.seq[5]], 0, 0, 0, -1);
         mark_dirty();
     }
-    if ((btn_held & (1u << H1_BTN_SAVE)) && !btn_fired[H1_BTN_SAVE] && now - btn_ms[H1_BTN_SAVE] > 900u) {
-        int alg = st.ip[st.inst].algo;
+    /* hold SAVE: back to how it came, a step further the longer it stays down. First the algorithm in
+     * hand (its four knobs), then the instrument (every algorithm's knobs and its pages), then the lot. */
+    if ((btn_held & (1u << H1_BTN_SAVE)) && !btn_fired[H1_BTN_SAVE] && now - btn_ms[H1_BTN_SAVE] > HOLD_RESET_ALGO) {
+        int i;
         btn_fired[H1_BTN_SAVE] = 1;
+        knobs_default(st.inst, st.ip[st.inst].algo);
+        for (i = 0; i < 4; i++)
+            knob_touch[i] = 0.0f;                /* (the strip shows where they went) */
+        toast(insts[st.inst]->algo[st.ip[st.inst].algo], 0, 0, " RESET", -1);
+        mark_dirty();
+    }
+    if ((btn_held & (1u << H1_BTN_SAVE)) && btn_fired[H1_BTN_SAVE] == 1 && now - btn_ms[H1_BTN_SAVE] > HOLD_RESET_INST) {
+        int alg = st.ip[st.inst].algo, i;
+        btn_fired[H1_BTN_SAVE] = 2;
         st.ip[st.inst] = insts[st.inst]->def;
+        knobs_default(st.inst, -1);
         vis.algo_prev = alg;
         vis.algo = st.ip[st.inst].algo;
         vis.algo_t = 0.0f;
-        toast("RESET", 0, 0, 0, -1);
+        for (i = 0; i < 4; i++)
+            knob_touch[i] = 0.0f;
+        toast(insts[st.inst]->name, 0, 0, " RESET", -1);
         mark_dirty();
     }
-    if ((btn_held & (1u << H1_BTN_SAVE)) && btn_fired[H1_BTN_SAVE] == 1 && now - btn_ms[H1_BTN_SAVE] > 3000u) {
+    if ((btn_held & (1u << H1_BTN_SAVE)) && btn_fired[H1_BTN_SAVE] == 2 && now - btn_ms[H1_BTN_SAVE] > HOLD_RESET_ALL) {
         int i;                                   /* still held: everything, as it was the first time it was switched on */
-        btn_fired[H1_BTN_SAVE] = 2;
-        for (i = 0; i < NINST; i++)
+        btn_fired[H1_BTN_SAVE] = 3;
+        for (i = 0; i < NINST; i++) {
             st.ip[i] = insts[i]->def;
+            knobs_default(i, -1);
+        }
         st.keys[0] = st.keys[1] = st.keys[2] = st.keys[3] = 0;
         st.glo[0] = 112;
         st.glo[1] = 0;
@@ -486,7 +509,7 @@ static void goto_page(int pg)
 
 static void set_knob(int i, int v)
 {
-    st.ip[st.inst].knob[i] = (uint8_t)iclamp(v, 0, 100);
+    KNOBS_NOW(st.inst)[i] = (uint8_t)iclamp(v, 0, 100);
     knob_touch[i] = 0.0f;
     mark_dirty();
 }
@@ -533,7 +556,7 @@ void h1_encoder(int enc, int d)
     default: {
         int i = enc - H1_ENC_K1;
         if (page == PG_HOME)
-            set_knob(i, st.ip[st.inst].knob[i] + accel(enc, d));
+            set_knob(i, KNOBS_NOW(st.inst)[i] + accel(enc, d));
         else {
             const ParamDef *p = page_param(page, i);
             int step = p->kind == PK_ENUM || (p->kind == PK_INT && p->max - p->min < 16) ? d : accel(enc, d);
@@ -578,7 +601,7 @@ int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
     default: {
         int i = enc - H1_ENC_K1;
         if (page == PG_HOME) {
-            v = st.ip[st.inst].knob[i]; b = 100; nm = insts[st.inst]->knob[i];
+            v = KNOBS_NOW(st.inst)[i]; b = 100; nm = insts[st.inst]->knob[i];
             put_i(d, v);
         } else {
             const ParamDef *p = page_param(page, i);
@@ -621,7 +644,7 @@ void h1_control_set(int enc, int v)
         break;
     default:
         if (page == PG_HOME) {
-            if (iclamp(v, 0, 100) != st.ip[st.inst].knob[enc - H1_ENC_K1])
+            if (iclamp(v, 0, 100) != KNOBS_NOW(st.inst)[enc - H1_ENC_K1])
                 set_knob(enc - H1_ENC_K1, v);
         } else
             set_param(enc - H1_ENC_K1, v);

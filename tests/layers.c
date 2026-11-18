@@ -210,9 +210,16 @@ int main(void)
     CHECK(seen[C] && seen[B] && only(seen, C, B), "the steps keep their parts over a restart");
 
     /* the state before LAYERS (version 4: the same, without the parts): it loads, LAYERS off, steps kept */
-    memcpy(blob4, blob, sizeof blob4);
+    memset(blob4, 0xFF, sizeof blob4);           /* (its padding, and what is past its end, may hold anything) */
+    memcpy(blob4, blob, offsetof(H1State, steps));
     blob4[4] = 4;
-    blob4[H1_VERSION_4_SIZE - 1u] = blob4[H1_VERSION_4_SIZE - 2u] = 0xFF;   /* (its padding may hold anything) */
+    {
+        const H1State *s6 = (const H1State *)(const void *)blob;
+        int i, j;
+        for (i = 0; i < NSTEP; i++)              /* (a step held four notes then) */
+            for (j = 0; j < 4; j++)
+                blob4[offsetof(H1State, steps) + (size_t)i * 4u + (size_t)j] = s6->steps[i][j];
+    }
     h1_init(44100);
     CHECK(h1_state_load(blob4 + 0, (uint32_t)H1_VERSION_4_SIZE) == 0, "a version 4 state loads");
     CHECK(!h1_layers(), "a version 4 state has LAYERS off");

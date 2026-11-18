@@ -31,7 +31,9 @@ static Blk blk;                                  /* the numbers of the instrumen
 typedef struct Lfo { f32 ph, sh, drift; } Lfo;
 typedef struct IRun {
     Blk b;                                       /* its numbers for this control block */
-    f32 knob_s[4];
+    f32 knob_s[4];                               /* the knobs of the algorithm in hand, eased */
+    f32 kmod;                                    /* what the LFO adds to a knob, and which (-1: none) */
+    int kmod_k;
     Lfo lf;                                      /* its own LFO, while it is not the one in hand */
     f32 vol, panmod;
     f32 att, kd, sus, kr;
@@ -504,7 +506,7 @@ static void loop_stop(void)
  * WRITE on, what is played lands on the nearest step. */
 static volatile int step_playing, step_write, step_cursor, step_at;
 static f32 step_acc, step_off;
-static uint8_t step_snd[4], step_sp[4];          /* the notes the step holds, and the part of each (0: through route) */
+static uint8_t step_snd[NSNOTE], step_sp[NSNOTE];         /* the notes the step holds, and the part of each (0: through route) */
 static int step_nsnd, step_gesture;
 
 static void step_release(void)
@@ -523,7 +525,7 @@ static void step_fire(int i, f32 len)
 {
     int j;
     step_release();
-    for (j = 0; j < 4; j++)
+    for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j]) {
             int n = st.steps[i][j] - 1, part = 0;
             if (layers()) {
@@ -611,10 +613,10 @@ static void free_tick(f32 dticks)
 static void step_put(int i, int note)
 {
     int j, part = live_part();
-    for (j = 0; j < 4; j++)
+    for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j] == note + 1 && (!layers() || st.step_part[i][j] == part))
             return;
-    for (j = 0; j < 3 && st.steps[i][j]; j++)
+    for (j = 0; j < NSNOTE - 1 && st.steps[i][j]; j++)
         ;
     st.steps[i][j] = (uint8_t)(note + 1);
     st.step_part[i][j] = (uint8_t)part;
@@ -623,7 +625,7 @@ static void step_put(int i, int note)
 static void step_clear(int i)
 {
     int j;
-    for (j = 0; j < 4; j++)
+    for (j = 0; j < NSNOTE; j++)
         st.steps[i][j] = st.step_part[i][j] = 0;
 }
 
@@ -634,13 +636,13 @@ static int tag_inst(int part) { return part & 0x80 ? PART_INST(part) : cur_i; }
 static void step_clear_inst(int i, int inst)
 {
     int j, k = 0;
-    for (j = 0; j < 4; j++)
+    for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j] && tag_inst(st.step_part[i][j]) != inst) {
             st.steps[i][k] = st.steps[i][j];
             st.step_part[i][k] = st.step_part[i][j];
             k++;
         }
-    for (; k < 4; k++)
+    for (; k < NSNOTE; k++)
         st.steps[i][k] = st.step_part[i][k] = 0;
 }
 
@@ -969,13 +971,17 @@ static void switch_instrument(int i)
         ir[j].linger = 0;                        /* (every voice is gone: nothing of another instrument rings on) */
 }
 
-/* An instrument's numbers for this control block: its knobs eased (~12 ms), its LFO moved on and put on
- * its target, its envelope rates. Once a block for each instrument that sounds. */
+/* An instrument's numbers for this control block: the knobs of the algorithm it is on eased (~12 ms), its
+ * LFO moved on and put on its target, its envelope rates. Once a block for each instrument that sounds.
+ * (Every algorithm has its own four knobs. The eased ones are those of the algorithm in hand, the only
+ * ones a hand can turn, and they ease across a change of algorithm too. A part that goes on sounding on
+ * another algorithm takes its knobs as they stand: part_knobs.) */
 static f32 blk_time;
 static void inst_touch(int i)
 {
     IRun *r = &ir[i];
     const InstParams *ip = &st.ip[i];
+    const uint8_t *kn = KNOBS_NOW(i);
     Lfo *lf = i == cur_i ? &lfo_live : &r->lf;
     f32 dt = (f32)CTRL * ISR, brate = SR / (f32)CTRL, lfo, depth, f;
     int k, target;
@@ -983,7 +989,7 @@ static void inst_touch(int i)
         return;
     if (r->at != blkno - 1u)                     /* it was silent: the knobs where they stand */
         for (k = 0; k < 4; k++)
-            r->knob_s[k] = (f32)ip->knob[k] * 0.01f;
+            r->knob_s[k] = (f32)kn[k] * 0.01f;
     r->at = blkno;
 
     f = 0.05f * exp2fx((f32)ip->lfo[1] * 0.09f);
@@ -1006,17 +1012,18 @@ static void inst_touch(int i)
     if (i == cur_i)
         lfo_out = lfo * depth;
 
-    for (k = 0; k < 4; k++) {
-        r->knob_s[k] += ((f32)ip->knob[k] * 0.01f - r->knob_s[k]) * 0.06f;
-        r->b.k[k] = r->knob_s[k];
-    }
+    for (k = 0; k < 4; k++)
+        r->knob_s[k] += ((f32)kn[k] * 0.01f - r->knob_s[k]) * 0.06f;
     r->vol = 1.0f;
     r->panmod = 0.0f;
+    r->kmod_k = -1;
     r->b.bend = ((f32)st.glo[2] - 50.0f) * 0.01f;
     if (target == 0)
         r->b.bend += lfo * depth * depth * 12.0f;
-    else if (target <= 4)
-        r->b.k[target - 1] = sat(r->b.k[target - 1] + lfo * depth * 0.5f);
+    else if (target <= 4) {
+        r->kmod_k = target - 1;
+        r->kmod = lfo * depth * 0.5f;
+    }
     else if (target == 5)
         r->vol = 1.0f - depth * (0.5f + 0.5f * lfo);
     else
@@ -1037,12 +1044,22 @@ static void inst_touch(int i)
  * own clocks have not moved in this control block. They move once a block, whoever asks first. */
 static const Blk *part_set(int part)
 {
-    int i = PART_INST(part);
+    int i = PART_INST(part), k;
     IRun *r = &ir[i];
     inst_touch(i);
     if (r->owner == part && r->adv == blkno)
         return &r->b;
     r->b.algo = PART_ALGO(part);
+    /* the part's own four knobs: the eased ones on the algorithm the instrument is on, and as they
+     * stand on any other */
+    if (PART_ALGO(part) == (st.ip[i].algo < NALGO ? st.ip[i].algo : 0))
+        for (k = 0; k < 4; k++)
+            r->b.k[k] = r->knob_s[k];
+    else
+        for (k = 0; k < 4; k++)
+            r->b.k[k] = (f32)KNOBS(i, PART_ALGO(part))[k] * 0.01f;
+    if (r->kmod_k >= 0)
+        r->b.k[r->kmod_k] = sat(r->b.k[r->kmod_k] + r->kmod);
     r->b.step = r->adv == blkno ? 0.0f : (f32)CTRL * ISR;
     r->adv = blkno;
     r->owner = (uint8_t)part;
@@ -1373,6 +1390,9 @@ void eng_init(uint32_t sample_rate)
     step_acc = step_off = 0.0f;
     free_on = 0;
     click_at = -1;
+    ev_r = ev_w;                                 /* (and whatever the panel had asked for is not done) */
+    pending_i = -1;
+    fade_blocks = 0;
 }
 
 /* ---- for the main loop ------------------------------------------------------------------ */
@@ -1423,7 +1443,7 @@ int eng_seq_has(int inst)
     int i, j, ne = nlev;
     if (st.seq[0] == SEQ_STEP) {
         for (i = 0; i < NSTEP; i++)
-            for (j = 0; j < 4; j++)
+            for (j = 0; j < NSNOTE; j++)
                 if (st.steps[i][j] && tag_inst(st.step_part[i][j]) == inst)
                     return 1;
         return 0;
