@@ -14,8 +14,9 @@ Voice voices[NVOICE];
 f32 ks_line[NVOICE][2][KS_LEN] H1_POOL;
 uint32_t eng_rng = 0x2F6E2B1u;
 
-const InstDef *const insts[NINST] = {&inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
-                                     &inst_knot, &inst_ink, &inst_tide, &inst_haunt, &inst_bard, &inst_turbo, &inst_orbit, &inst_cozy, &inst_koi};
+const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_haunt, &inst_tide,
+                                     &inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
+                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo};
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
 static const InstDef *cur;

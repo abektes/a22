@@ -50,7 +50,7 @@ typedef struct InstParams {
 } InstParams;
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 3u
+#define H1_VERSION 4u
 
 typedef struct H1State {
     uint32_t magic;

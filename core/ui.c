@@ -8,6 +8,7 @@
  *   FX SEL ENV LFO GLO ARP SEQ   open that page; again, or HOME, goes back
  *   SEQ held   swaps the sequencer between LOOP and STEP
  *   GLO held   the metronome: while recording, always, or off
+ *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
  *   SAVE       saves now; held, resets this instrument
  *   PLAY REC   the sequencer. Loop: REC arms a take, or overdubs while it plays. Step: REC is
@@ -297,9 +298,21 @@ void h1_button(int btn, int down)
         return;
     if (!down) {
         btn_held &= ~(1u << btn);
-        if (btn == H1_BTN_REC && !btn_fired[btn])
+        /* a button with a hold does its tap on the way up, and only if the hold never fired */
+        if (btn_fired[btn])
+            return;
+        if (btn == H1_BTN_REC)
             eng_post(EV_REC, 0);
-        if (btn == H1_BTN_SAVE && !btn_fired[btn]) {
+        if (btn == H1_BTN_GLO)
+            open_page(PG_GLO);
+        if (btn == H1_BTN_SEQ)
+            open_page(PG_SEQ);
+        if (btn == H1_BTN_HOME) {
+            if (page == PG_HOME)
+                name_t = 0.0f;
+            page = PG_HOME;
+        }
+        if (btn == H1_BTN_SAVE) {
             dirty = 1;
             dirty_ms = now - 5000u;
             toast("SAVED", 0, 0, 0, -1);
@@ -314,9 +327,7 @@ void h1_button(int btn, int down)
     case H1_BTN_SEL: open_page(PG_KEYS); break;
     case H1_BTN_ENV: open_page(PG_ENV); break;
     case H1_BTN_LFO: open_page(PG_LFO); break;
-    case H1_BTN_GLO: open_page(PG_GLO); break;
     case H1_BTN_ARP: open_page(PG_ARP); break;
-    case H1_BTN_SEQ: open_page(PG_SEQ); break;
     case H1_BTN_EDIT:
         if (seq.mode == SEQ_STEP && seq.write && page == PG_HOME) {
             eng_post(EV_STEP_REST, 0);           /* writing steps: a rest */
@@ -324,11 +335,6 @@ void h1_button(int btn, int down)
         }
         st.hud ^= 1;
         mark_dirty();
-        break;
-    case H1_BTN_HOME:
-        if (page == PG_HOME)
-            name_t = 0.0f;
-        page = PG_HOME;
         break;
     case H1_BTN_PLAY: eng_post(EV_PLAY, 0); break;
     case H1_BTN_OCTDN:
