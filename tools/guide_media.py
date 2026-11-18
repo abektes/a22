@@ -8,9 +8,10 @@ still. Everything comes from the host renderer, so the pictures are the real fir
     python3 tools/guide_media.py                         # builds build/h1host first
     python3 tools/guide_media.py --site ../jakehandynew  # and copies everything into the site
 
-With --site it also copies dist/h1-simulator.html to the site's public/h1/simulator.html, wrapped
-in a proper document (the built file is a fragment meant for an artifact host) so it renders as
-UTF-8. The guide page itself (h1.html in the site repo) is hand-written: update its text by hand.
+With --site it also copies the browser simulator into the site as public/h1/simulator.html. The
+simulator lives in its own repo, jakehandy/fm1-browser-simulator, and builds to one self-contained
+file with h1 inside; pass its path with --simulator (default: a clone next to this one). The guide
+page itself (h1.html in the site repo) is hand-written: update its text by hand.
 Needs clang, ffmpeg (with libwebp) and ImageMagick's convert.
 """
 import os
@@ -120,11 +121,6 @@ def main():
         site_copy(sys.argv[sys.argv.index("--site") + 1])
 
 
-SIM_HEAD = ('<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-            '<link rel="canonical" href="https://jakehandy.com/public/h1/simulator.html">\n')
-
-
 def site_copy(site):
     dest = os.path.join(site, "public", "h1")
     if not os.path.isdir(os.path.join(site, "public")):
@@ -132,10 +128,13 @@ def site_copy(site):
     os.makedirs(dest, exist_ok=True)
     for f in glob.glob(os.path.join(OUT, "*")):
         shutil.copy(f, dest)
-    sim = open(os.path.join(ROOT, "dist", "h1-simulator.html"), encoding="utf-8").read()
-    if not sim.lstrip().lower().startswith("<!doctype"):
-        sim = SIM_HEAD + sim + "\n</html>\n"
-    open(os.path.join(dest, "simulator.html"), "w", encoding="utf-8").write(sim)
+    sim = os.path.join(ROOT, "..", "fm1-browser-simulator", "dist", "fm1-simulator.html")
+    if "--simulator" in sys.argv:
+        sim = sys.argv[sys.argv.index("--simulator") + 1]
+    if os.path.isfile(sim):
+        shutil.copy(sim, os.path.join(dest, "simulator.html"))
+    else:
+        print("no simulator at", sim, "- left the site's copy as it was")
     print("copied pictures and the simulator to", dest)
 
 

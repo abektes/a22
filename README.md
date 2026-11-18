@@ -35,9 +35,9 @@ h1 isn't released for the device yet. The design is being approved in the browse
 The device port in `port/fm1` is written, but it hasn't been compiled or flashed, and nothing should
 be flashed until the simulator is signed off.
 
-**Try it now in the browser:** open [the simulator](https://jakehandy.com/public/h1/simulator.html),
-or build it yourself with `tools/build_web.sh` and open `dist/h1-simulator.html`. It runs the same C
-code that goes on the device.
+**Try it now in the browser:** open [the simulator](https://jakehandy.com/public/h1/simulator.html). It
+lives in its own repo, [fm1-browser-simulator](https://github.com/jakehandy/fm1-browser-simulator),
+opens on h1, runs the same C code that goes on the device, and can play other FM-1 firmwares too.
 
 **On the FM-1 (once there is a build):** h1 is built on
 [fm1-base](https://github.com/charlesvestal/fm1-base) and installs the same way as other FM-1
@@ -78,4 +78,9 @@ up, or down with <kbd>Shift</kbd>.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is laid out and
 [docs/RESEARCH.md](docs/RESEARCH.md) for the hardware and what was learned from other firmwares.
 `python3 tools/guide_media.py` renders the pictures in `docs/img` from the current build. Add
-`--site <path to jakehandynew>` to also copy them, and the simulator, to the guide site.
+`--site <path to jakehandynew>` to also copy them, and the simulator from a clone of
+fm1-browser-simulator, to the guide site.
+
+## Licence
+
+MIT. h1 builds on [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0).
