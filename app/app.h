@@ -16,6 +16,11 @@ void app_splash(void);                   /* instrument comes up */
 enum { OBJ_STATE, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 
+#ifdef PLAT_HOST                         /* the host simulator's script: "badstart" (app.c) */
+#define APP_HOST_CMD
+int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d);
+#endif
+
 void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
 void app_panic(void);

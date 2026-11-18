@@ -63,3 +63,16 @@ leds
 shot loop.png
 tap PLAY
 wait 100
+# a start that failed (a crash or a hang in its first 30 seconds): the next one leaves the saved
+# state alone and comes up as new, and the start after that has the saved state again
+badstart
+reboot
+wait 600
+where
+wait 100
+said h1. COZY. TINE
+reboot
+wait 600
+where
+wait 100
+said h1. ORBIT

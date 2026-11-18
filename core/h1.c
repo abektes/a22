@@ -41,14 +41,23 @@ const void *h1_state(uint32_t *size)
 }
 
 /* Take a saved blob. Call it right after h1_init, before the audio starts. Anything that does not
- * look like this version's state is refused, and every value is clamped to its range. */
+ * look like this version's state is refused, and every value is clamped to its range.
+ *
+ * The blob is bytes at any address: it is copied out a byte at a time before anything is read from
+ * it. (A byte buffer may sit at an odd address, and the FM-1's CPU stops on a word read from one:
+ * reading the magic straight out of the blob kept the first h1 from starting once it had saved.) */
 int h1_state_load(const void *blob, uint32_t size)
 {
-    const H1State *s = (const H1State *)blob;
+    const uint8_t *b = (const uint8_t *)blob;
+    H1State in;
     int i, j, pg;
-    if (!blob || size != sizeof st || s->magic != H1_MAGIC || s->version != H1_VERSION)
+    if (!blob || size != sizeof st)
         return -1;
-    st = *s;
+    for (i = 0; i < (int)sizeof in; i++)
+        ((uint8_t *)&in)[i] = b[i];
+    if (in.magic != H1_MAGIC || in.version != H1_VERSION)
+        return -1;
+    st = in;
     if (st.inst >= NINST) st.inst = 0;
     st.octave = (int8_t)iclamp(st.octave, -2, 2);
     st.hud &= 1;

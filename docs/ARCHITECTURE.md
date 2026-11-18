@@ -92,9 +92,29 @@ What h1 puts in the pool, about 321 KB:
 
 These are link-time numbers. Stack depth has not been measured on hardware. Frame and audio time
 can be: send MIDI CC 119 to the FM-1 while a screen reader is listening (`base/tools/fm1_remote.py
-listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max`, the
-times in milliseconds a frame and the audio as a percentage of each block, since it was last asked. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. STACK main
+interrupt`, the times in milliseconds a frame, the audio as a percentage of each block, both since it was
+last asked, and the bytes of each stack never used since the start. If RAM gets tight again, the first things to shrink are the string lines and the reverb
 (16-bit samples halve both).
+
+## What the FM-1 does not forgive
+
+A computer shrugs at things that stop the FM-1's CPU, and a start that stops twice in a row is safe
+mode. The first h1 did exactly that: it read its saved state's magic as a word straight out of a byte
+buffer, the buffer sat at an odd address, and from the first save on it never started again. The rules
+that came out of it:
+
+- Bytes from outside (a saved state) are copied out a byte at a time before anything reads them.
+  `h1_state_load` takes a blob at any address, and clamps every value it keeps.
+- A number that came from a float is masked or clamped before it indexes anything (`tsin`, the string
+  and echo lines), and a loop that runs on a float has a bound.
+- A rectangle sent to the panel is at most 20 rows: the device converts it in a buffer that size.
+- After a start that failed, `app_init` leaves the saved state alone and comes up as new, so one bad
+  start cannot become two.
+- `tests/fuzz.c` holds all of this to account: any saved state from an odd address, any panel input
+  on every instrument, and the sound on a second thread, under `-fsanitize=address,undefined`.
+- `app/fm1.toml` keeps the crash history in flash (`base/tools/fm1_remote.py crashes`) and has the
+  build check the deepest call path against each stack.
 
 ## Building
 
@@ -104,3 +124,4 @@ times in milliseconds a frame and the audio as a percentage of each block, since
   on it, or run `tools/update-h1.sh` there to make it the built-in firmware.
 - `./build.sh` builds the device package: fm1-base's `tools/build.py` with `app/` as the app.
 - `sh tests/run_tests.sh` runs the device app in fm1-base's host simulator.
+- `sh tests/run_fuzz.sh [SEEDS]` runs the crash hunt.

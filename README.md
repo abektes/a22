@@ -155,7 +155,7 @@ core/    the whole firmware: portable C99, no libc, no malloc
 app/     the device: fm1-base's app, a thin pass-through to core/
 base/    fm1-base (a git submodule, with felucca-bsp inside it)
 port/    other builds of the same core: host (pictures, WAVs), rfm1 (the browser simulator)
-tests/   the device app in fm1-base's host simulator
+tests/   the device app in fm1-base's host simulator, and the crash hunt
 ```
 
 - `./build.sh` builds `app/build/h1.fwsc`, a development build with identity `FM-1_48100`. It
@@ -163,9 +163,11 @@ tests/   the device app in fm1-base's host simulator
   builds the release package.
 - `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`. It
   needs only a C compiler and Pillow.
+- `sh tests/run_fuzz.sh` is the crash hunt: the core under the compiler's address and
+  undefined-behaviour checkers, fed any saved state and any panel input.
 - `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes
   pictures and WAVs.
-- CI (`.github/workflows/ci.yml`) runs the tests and builds the firmware on every pull request.
+- CI (`.github/workflows/ci.yml`) runs the tests and the crash hunt and builds the firmware on every pull request.
 - A tag `vX.Y.Z` runs `.github/workflows/release.yml`: the shared
   [fm1-build](https://github.com/zvenson/fm1-build) builder builds the package, runs the tests,
   signs build provenance and publishes the release. Go through

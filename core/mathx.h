@@ -72,7 +72,7 @@ static inline f32 exp2fx(f32 x)
     p = p * f + 6.9314718e-1f;
     p = p * f + 1.0f;
     v.f = p;
-    v.i += n << 23;
+    v.i += n * 8388608;                          /* (n << 23, for a negative n too) */
     return v.f;
 }
 
@@ -88,6 +88,7 @@ static inline f32 softclip(f32 x)
 {
     if (x > 3.0f) return 1.0f;
     if (x < -3.0f) return -1.0f;
+    if (x != x) return 0.0f;                     /* not a number: silence, not whatever the cast makes of it */
     return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
 }
 

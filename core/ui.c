@@ -276,7 +276,7 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (type == 0xB0u && d1 == 123)
         eng_post(EV_PANIC, 0);
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
-        st.ip[st.inst].knob[d1 - 20] = (uint8_t)((d2 * 100 + 63) / 127);
+        st.ip[st.inst].knob[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         knob_touch[d1 - 20] = 0.0f;
     }
 }
@@ -852,6 +852,7 @@ void ui_init(void)
     name_t = 0.0f;
     force_full = 1;
     pal_key[4] = 0;
+    dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
 }
 
 /* ---- presenting ------------------------------------------------------------------------- */

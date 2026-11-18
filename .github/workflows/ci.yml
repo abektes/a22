@@ -35,6 +35,9 @@ jobs:
         run: tools/build_host.sh
       - name: The device app in fm1-base's host simulator
         run: sh tests/run_tests.sh
+      # any saved state and any panel input, with the compiler's address and undefined-behaviour checkers on
+      - name: The crash hunt (tests/fuzz.c)
+        run: sh tests/run_fuzz.sh 16
 
   firmware:
     runs-on: ubuntu-24.04

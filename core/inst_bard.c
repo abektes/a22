@@ -75,6 +75,7 @@ static void pluck(f32 *line, uint32_t w, f32 L, f32 p, f32 amp, uint32_t *rng)
 static f32 string_len(f32 pitch, const Blk *b)
 {
     f32 L = b->sr / mtof(pitch) - (1.0f - B.g) / B.g;
+    L = minf(L, 1.0e6f);                         /* (the loop below ends, whatever the pitch was) */
     while (L > (f32)(KS_LEN - 4))
         L *= 0.5f;
     return maxf(L, 2.0f);
@@ -256,7 +257,7 @@ static f32 hsh(uint32_t n) { n = (n ^ 61u) ^ (n >> 16); n *= 9u; n ^= n >> 4; n 
 
 static f32 pitch_dy(f32 pitch)
 {
-    f32 d = pitch - 50.0f;
+    f32 d = clampf(pitch - 50.0f, -200.0f, 200.0f);
     while (d > 30.0f) d -= 12.0f;
     while (d < -3.0f) d += 12.0f;
     return 3.0f * SGAP + 5.0f - d * 1.0f;        /* below the top line */

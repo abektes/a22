@@ -813,20 +813,9 @@ static void block(f32 *L, f32 *R)
             pending_i = -1;
         }
     }
-    while (pending_i < 0 && ev_r != ev_w) {
-        uint32_t e = evq[ev_r];
-        ev_r = (ev_r + 1u) & 63u;
-        handle(e);
-    }
     ip = &st.ip[cur_i];
     bpm = (f32)iclamp(st.glo[0], 40, 240);
     dticks = bpm * (96.0f / 60.0f) * dt;
-    if (pending_i < 0) {
-        if (st.seq[0] == SEQ_STEP) step_tick(dticks);
-        else loop_tick(dticks);
-        free_tick(dticks);
-        arp_tick(ip, dticks);
-    }
     beat_out = fractf(beat_out + dticks * (1.0f / 96.0f));
 
     /* the LFO */
@@ -873,6 +862,20 @@ static void block(f32 *L, f32 *R)
     blk.bpm = bpm;
     run_time += dt;
     cur->block(&blk);
+
+    /* the panel's events and the sequencers, after the instrument has its numbers for this block:
+     * a note that starts in an instrument's very first block finds them set */
+    while (pending_i < 0 && ev_r != ev_w) {
+        uint32_t e = evq[ev_r];
+        ev_r = (ev_r + 1u) & 63u;
+        handle(e);
+    }
+    if (pending_i < 0) {
+        if (st.seq[0] == SEQ_STEP) step_tick(dticks);
+        else loop_tick(dticks);
+        free_tick(dticks);
+        arp_tick(ip, dticks);
+    }
 
     /* envelope rates */
     att = dt / (0.0015f * exp2fx((f32)ip->env[0] * 0.114f));
@@ -969,6 +972,10 @@ static void block(f32 *L, f32 *R)
     }
 }
 
+#ifdef H1_FUZZ
+uint32_t h1_fuzz_nan;
+#endif
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
@@ -982,6 +989,10 @@ void eng_render(int32_t *lr, uint32_t n)
         }
         take = have < n ? have : n;
         for (i = 0; i < take; i++) {
+#ifdef H1_FUZZ
+            if (L[pos + i] != L[pos + i] || R[pos + i] != R[pos + i])
+                h1_fuzz_nan++;                   /* (tests/fuzz.c: a sound that stopped being numbers) */
+#endif
             lr[0] = (int32_t)(softclip(L[pos + i]) * 7549747.0f);     /* 0.9 of 24-bit full scale */
             lr[1] = (int32_t)(softclip(R[pos + i]) * 7549747.0f);
             lr += 2;

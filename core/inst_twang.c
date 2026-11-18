@@ -74,6 +74,7 @@ static void load(f32 *line, uint32_t w, f32 L, f32 amp, uint32_t *rng)
 static f32 string_len(f32 pitch, const Blk *b)
 {
     f32 L = b->sr / mtof(pitch) - (1.0f - T.g) / T.g;
+    L = minf(L, 1.0e6f);                         /* (the loop below ends, whatever the pitch was) */
     while (L > (f32)(KS_LEN - 4))
         L *= 0.5f;
     return maxf(L, 2.0f);

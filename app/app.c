@@ -37,9 +37,10 @@ static void blit(int x, int y, int w, int h)
 /* ---- how long things take ---------------------------------------------------------------------
  * Measured all the time (three clock reads a frame, two a block of sound). MIDI CC 119 from the
  * computer makes a listening screen reader say the numbers since the last time it was asked:
- *   PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max
+ *   PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. STACK main interrupt
  * DRAW and SEND are milliseconds a frame (the picture drawn, its changed parts sent to the panel);
- * AUDIO is the share of each block's time the sound took, in percent. */
+ * AUDIO is the share of each block's time the sound took, in percent; STACK is the bytes of the main
+ * loop's and the interrupts' stacks that have never been used since the start. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
 static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms; } pf;
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
@@ -84,12 +85,37 @@ static void input(void)
 }
 
 /* ---- fm1-base's calls ----------------------------------------------------------------------- */
+/* A start that crashes or hangs in its first 30 seconds is counted by the platform, and two in a row are
+ * safe mode. After one, the next start leaves the saved state alone and comes up as new, so nothing h1
+ * has saved can keep it from starting. (The save itself stays until the next change is saved over it.) */
+#ifdef PLAT_HOST
+static int host_bad_start;                                  /* the tests' "badstart": the next start is one */
+int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
+{
+    (void)a; (void)b; (void)c; (void)d;
+    if (strcmp(cmd, "badstart"))
+        return 0;
+    host_bad_start = 1;
+    return 1;
+}
+static int last_start_failed(void)
+{
+    int f = host_bad_start;
+    host_bad_start = 0;
+    return f;
+}
+#else
+static int last_start_failed(void) { return bootguard.failed != 0; }
+#endif
+
 void app_init(void)
 {
-    static uint8_t blob[1024];
+    static uint32_t blob[1024 / 4];                         /* words: the store fills it, the core reads it */
     uint32_t size;
     int n;
     h1_init(44100);
+    if (last_start_failed())
+        return;
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n == (int)size)
@@ -177,7 +203,7 @@ static char *say_num(char *d, char *end, uint32_t v)
 
 static void say_perf(void)
 {
-    char t[96], *d, *end = t + sizeof t - 1;
+    char t[120], *d, *end = t + sizeof t - 1;
     uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am;
     f = plat_lock();
     nb = pf_blocks; au = pf_audio; am = pf_audio_max;
@@ -196,7 +222,13 @@ static void say_perf(void)
     d = say_cat(d, end, ". AUDIO ");
     d = say_num(d, end, nb ? (au / nb) * 100u / pf_block_us : 0u);
     d = say_cat(d, end, " MAX ");
-    say_num(d, end, am * 100u / pf_block_us);
+    d = say_num(d, end, am * 100u / pf_block_us);
+    if (plat_stack_left(PLAT_STK_MAIN) >= 0 && plat_stack_left(PLAT_STK_IRQ) >= 0) {
+        d = say_cat(d, end, ". STACK ");                    /* bytes never used since the start */
+        d = say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_MAIN));
+        d = say_cat(d, end, " ");
+        say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_IRQ));
+    }
     ann_say(t, 0, ANN_NOW);
     pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = 0;
     pf.since_ms = plat_ms();
