@@ -4,7 +4,12 @@
 #include "plat.h"
 
 #define APP_NAME "h1"
-#define APP_SPLASH_RGB RGB(0, 0, 0)      /* the bezel's black: the first thing on screen is the instrument */
+#define APP_SPLASH                       /* no paper splash: the screen stays the bezel's black until the */
+void app_splash(void);                   /* instrument comes up */
+#define APP_SPLASH_RGB RGB(0, 0, 0)
+/* the platform's own canvas (its update, crash and safe-mode screens draw text a strip at a time): a strip of
+ * 48 rows is enough, and the pool needs the rest for the framebuffer and the delay lines */
+#define APP_CANVAS_PX (240u * 48u)
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms */
 
 /* the store: the saved state, and the platform's panel calibration */

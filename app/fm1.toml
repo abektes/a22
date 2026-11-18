@@ -7,6 +7,9 @@ usb_product = "h1 FM-1"
 o2 = ["../core/*.c"]
 o2_cflags = ["-DH1_DEVICE=1"]
 words = "words.tsv"
+# one SRAM budget for RAM code, .data/.bss and the pool (base/device/app_packed.ld): h1's pool is big (the
+# framebuffer and its copy, the echo, the reverb, the string lines) and its .data/.bss small
+ram_layout = "packed"
 ble = false
 usb_audio_in = false
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these

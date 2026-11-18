@@ -100,6 +100,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 
 void app_panic(void) { h1_midi(0xB0, 123, 0); }
 
+void app_splash(void) { lcd_fill(0, 0, 240, 240, 0); }
+
 void app_ui_init(void) { lcd_fill(0, 0, 240, 240, 0); }
 
 void app_frame(void)
