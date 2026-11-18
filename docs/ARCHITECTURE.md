@@ -10,7 +10,7 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   inst_*.c     one file per instrument: its sound and its picture, side by side
 port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the FM-1 browser simulator
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
-port/fm1/    the device, on fm1-base (written, not yet compiled)
+app/         the device, on fm1-base (base/, a submodule): built by ./build.sh
 tools/       build scripts
 dist/        h1.rfm1, the build the simulator loads
 ```
@@ -56,13 +56,30 @@ the notches.
 ## Controls as values
 
 `h1_control` reports what each encoder currently means (its name, range, value and value text)
-and `h1_control_set` sets it outright. The device never calls them. The simulator reaches them through the rfm1 port's sim1 exports to
+and `h1_control_set` sets it outright. On the device, `app/app.c` reads `h1_control` to tell a
+screen reader a control's name and value. The simulator reaches both through the rfm1 port's sim1
+exports to
 show each control as a labelled slider, while its nudge buttons, the mouse wheel and the number
 keys still send real encoder detents.
 
-## RAM on the device
+## RAM and flash on the device
 
-The pool holds 336 KB. h1 asks for about 320 KB of it:
+Measured by the first device build (CI, JieLi toolchain 20260730.1, fm1-base c8e0599):
+
+| | Bytes | Of |
+|---|---|---|
+| App image | 304,848 | the 581,564-byte app slot |
+| RAM code | 5,100 | |
+| `.data` + `.bss` | 45,556 | |
+| Pool | 347,492 | |
+| SRAM in all | 398,152 | 475,136, with 76,984 free (the build keeps 8,192 spare) |
+
+`app/fm1.toml` sets `ram_layout = "packed"`: RAM code, `.data`/`.bss` and the pool share one
+budget. fm1-base's default map gives the pool a fixed 336 KB, which h1 overflows. `app/app.h`
+also cuts fm1-base's own canvas to a 48-row strip (23 KB, down from 69 KB), since h1 draws with
+its own framebuffer and the platform only needs the strip for its update and safe-mode text.
+
+What h1 puts in the pool, about 321 KB:
 
 | Buffer | KB |
 |---|---|
@@ -73,9 +90,9 @@ The pool holds 336 KB. h1 asks for about 320 KB of it:
 | Two RGB565 bands for the panel | 19 |
 | LAVA's field and INK's scroll history | 7 |
 
-fm1-base keeps buffers of its own in the same pool, so this needs measuring on the first device
-build. The first things to shrink are the string lines and the reverb (16-bit samples halve
-both).
+These are link-time numbers. Stack depth and CPU time per audio block have not been measured on
+hardware. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+(16-bit samples halve both).
 
 ## Building
 
@@ -83,4 +100,5 @@ both).
 - `tools/build_rfm1.sh [VERSION]` for `dist/h1.rfm1` (clang with the wasm32 target and wasm-ld). Run it in the
   [FM-1 browser simulator](https://github.com/jakehandy/fm1-browser-simulator): open the page and drop the file
   on it, or run `tools/update-h1.sh` there to make it the built-in firmware.
-- The device build goes through fm1-base's `tools/build.py` with `port/fm1` as the app.
+- `./build.sh` builds the device package: fm1-base's `tools/build.py` with `app/` as the app.
+- `sh tests/run_tests.sh` runs the device app in fm1-base's host simulator.

@@ -4,7 +4,7 @@
  * detents), asks it for audio in the audio interrupt and for a frame in the main loop, and
  * sends the dirty parts of the framebuffer to the panel. Three ports share it unchanged:
  * port/rfm1 (the build the browser simulator runs: github.com/jakehandy/fm1-browser-simulator),
- * port/host (tests: WAV and image dumps) and port/fm1 (the device, on fm1-base). */
+ * port/host (tests: WAV and image dumps) and app/ (the device, on fm1-base). */
 #pragma once
 #include <stdint.h>
 

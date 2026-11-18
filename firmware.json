@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "h1",
+  "name": "h1",
+  "author": "Jake Handy",
+  "license": "MIT",
+  "tagline": "Fourteen animated instruments for the FM-1",
+  "description": "Fourteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome.",
+  "tags": ["synth", "sequencer", "experimental"],
+  "install": "https://github.com/jakehandy/h1#install",
+  "site": "https://jakehandy.com/h1",
+  "source": "https://github.com/jakehandy/h1",
+  "screenshot": "docs/img/cozy.png",
+  "hardware": {
+    "models": ["FM-1"],
+    "flash": ["856014", "B36014"],
+    "features": ["screen-reader"]
+  },
+  "credits": "h1 is built on fm1-base by Charles Vestal and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments."
+}

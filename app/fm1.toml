@@ -1,0 +1,25 @@
+# h1's build settings for fm1-base's tools/build.py (../build.sh runs it; the keys are explained at its top)
+name = "h1"                    # names the build's files: app/build/h1.fwsc, h1-X.Y.Z.fwsc
+id_prefix = "FM-1_481"         # h1's own package identity: dev builds FM-1_48100, releases FM-1_481XXYYZZ
+usb_manufacturer = "h1"
+usb_product = "h1 FM-1"
+# the core is the DSP and the drawing: separate units at -O2
+o2 = ["../core/*.c"]
+o2_cflags = ["-DH1_DEVICE=1"]
+words = "words.tsv"
+# one SRAM budget for RAM code, .data/.bss and the pool (base/device/app_packed.ld): h1's pool is big (the
+# framebuffer and its copy, the echo, the reverb, the string lines) and its .data/.bss small
+ram_layout = "packed"
+ble = false
+usb_audio_in = false
+# firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
+tagline = "Fourteen animated instruments for the FM-1"
+repo = "https://github.com/jakehandy/h1"
+licence = "MIT"
+credits = "h1 is built on fm1-base by Charles Vestal and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments."
+author = "Jake Handy"
+description = "Fourteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome."
+tags = ["synth", "sequencer", "experimental"]
+install = "https://github.com/jakehandy/h1#install"
+site = "https://jakehandy.com/h1"
+screenshot = "docs/img/cozy.png"
