@@ -107,7 +107,8 @@ P25Q80 (`0x856014`). A firmware that only knows the Puya can't save or update on
 - [ ] Remove the "Status: no release yet" note from the README's Install section.
 - [ ] Add the repository topics: `m-vave`, `fm-1`, `firmware`, `synthesizer`.
 - [ ] Merge to `main`. `fmhub.json` has to be in the root of the default branch.
-- [ ] Tag: `git tag v0.1.0 && git push origin v0.1.0`. The workflow builds `h1-0.1.0.fwsc`
-      (identity `FM-1_481000100`), tests, attests and publishes the release.
-- [ ] Install the released `h1-0.1.0.fwsc` once on the FM-1, as a last check of the exact file.
+- [ ] Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow builds `h1-X.Y.Z.fwsc`
+      (identity `FM-1_481XXYYZZ`: v0.2.0 is `FM-1_481000200`), tests, attests and publishes the
+      release.
+- [ ] Install the released `h1-X.Y.Z.fwsc` once on the FM-1, as a last check of the exact file.
 - [ ] Submit at [thefirmwarehub.com/submit](https://thefirmwarehub.com/submit/).
