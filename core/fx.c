@@ -1,4 +1,4 @@
-/* H1 - the shared effects: TONE (one knob, low-pass below the middle and high-pass above),
+/* h1 - the shared effects: TONE (one knob, low-pass below the middle and high-pass above),
  * ECHO (tempo-synced ping-pong, run at half rate so 1.5 s fits in 64 KB) and SPACE (a small
  * comb/all-pass reverb). The four knobs of the FX page are all there is. */
 #include "internal.h"

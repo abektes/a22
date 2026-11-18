@@ -1,4 +1,4 @@
-/* H1 on the FM-1 (fm1-base). The whole firmware is the portable core in ../../core; this file only
+/* h1 on the FM-1 (fm1-base). The whole firmware is the portable core in ../../core; this file only
  * passes the panel in, and the sound, the lights and the changed parts of the picture out.
  *
  * NOT YET BUILT FOR THE DEVICE. It follows fm1-base's template (plat.h, lcd_blit, the store) and

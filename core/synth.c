@@ -1,4 +1,4 @@
-/* H1 - the engine: voices, envelopes, LFO, arpeggiator, the sequencer (a loop recorder and a step
+/* h1 - the engine: voices, envelopes, LFO, arpeggiator, the sequencer (a loop recorder and a step
  * sequencer, one at a time) and the block loop that
  * calls the current instrument. Runs in the audio interrupt; the main loop talks to it through a
  * small lock-free queue (eng_post) and reads back plain floats for the picture. */
@@ -15,7 +15,7 @@ f32 ks_line[NVOICE][2][KS_LEN] H1_POOL;
 uint32_t eng_rng = 0x2F6E2B1u;
 
 const InstDef *const insts[NINST] = {&inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
-                                     &inst_knot, &inst_ink, &inst_tide, &inst_haunt};
+                                     &inst_knot, &inst_ink, &inst_tide, &inst_haunt, &inst_bard, &inst_turbo, &inst_orbit, &inst_cozy, &inst_koi};
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
 static const InstDef *cur;

@@ -44,12 +44,12 @@ turns, and click when voices are stolen.
 
 **Smoothness.** Draw only what changed, in strips, and let the last strip leave by DMA while the
 next frame is computed. Firmwares that redraw whole screens sit at 12 to 15 frames a second.
-TripDeck, the closest thing to H1's idea, renders its plasma at 120 x 120 and gets about 12.
+TripDeck, the closest thing to h1's idea, renders its plasma at 120 x 120 and gets about 12.
 
 **Chip traps the community found.** Inline 64-bit multiplies next to 16-bit loads corrupt
 registers; there is no 64-bit divide; the watchdog bites at 8 seconds.
 
-## Decisions for H1
+## Decisions for h1
 
 - Build on fm1-base (MPL-2.0, and the app may carry any licence). Copy no GPL code.
 - One freestanding C99 core, no libc, compiled three ways: browser, host tests, device.

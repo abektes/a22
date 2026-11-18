@@ -1,4 +1,4 @@
-/* H1 - INK: the lead. One voice a note, each of them sliding to its pitch and shaking once it is
+/* h1 - INK: the lead. One voice a note, each of them sliding to its pitch and shaking once it is
  * there, like a bowed string or a whistle. The picture is a scroll going by under a brush: every
  * note is a stroke, as high as its pitch, as wide as it is loud, so a slide is a curve, vibrato is
  * a wave, and a tune is a line of handwriting that runs off to the left.
@@ -188,7 +188,7 @@ static void ink_col(int style, int x, f32 y, f32 w, uint32_t cn, uint32_t id, f3
 static void ink_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, shake = vis->k[1], press = vis->k[2], dry = vis->k[3], mt = smooth01(vis->algo_t);
-    f32 speed = 18.0f + 0.26f * (f32)st.glo[0], dim = 0.2f + 0.8f * absf(2.0f * mt - 1.0f), bw = (5.0f + 21.0f * press);
+    f32 speed = 18.0f + 0.26f * (f32)st.glo[0], dim = 0.2f + 0.8f * absf(2.0f * mt - 1.0f), bw = (3.0f + 29.0f * press * (0.4f + 0.6f * press));
     int i, c, x, style = mt < 0.5f ? vis->algo_prev : vis->algo, any = 0;
 
     if (vis->fresh) {
@@ -268,7 +268,7 @@ static void ink_draw(const Vis *vis)
                     else
                         ink_col(style, x, yy, ww, cn * 2u + (uint32_t)(x & 1), h->id[i], (f32)c, dry, press, fade);
                 }
-            } else if (w0 > 0.6f && w1 <= 0.2f && press > 0.3f && style == 0) {      /* where a stroke began: blots */
+            } else if (w0 > 0.6f && w1 <= 0.2f && press > 0.3f) {      /* where a stroke began: blots */
                 int k;
                 for (k = 0; k < 4; k++) {
                     f32 r = hs(cn * 11u + (uint32_t)k);
@@ -285,9 +285,25 @@ static void ink_draw(const Vis *vis)
     if (!any)
         spring(&pen_y, &pen_v, pen_y, 6.0f, dt);
     {
+        /* PRESS: the brush is pushed into the paper. Its head splays as wide as the stroke it will
+         * leave, the handle leans over, and a wet mark under it shows the width before you play. */
         f32 by = pen_y + (any ? 0.0f : 3.0f * sin_turns(t * 0.35f)) + shake * 2.0f * sin_turns(t * 5.5f);
-        g_line(PEN + 5.0f, by - 5.0f, PEN + 26.0f, by - 26.0f, 2.2f, (any ? 0.9f : 0.5f) * dim);
-        g_line(PEN + 1.0f, by - 1.0f, PEN + 5.0f, by - 5.0f, 4.5f, (any ? 1.0f : 0.6f) * dim);
+        f32 hw = 0.5f * bw, lean = 0.125f - 0.07f * press, hx = cos_turns(lean), hy = -sin_turns(lean);
+        f32 hl = 9.0f + 6.0f * press, a0 = (any ? 1.0f : 0.6f) * dim, fx = PEN + hx * hl, fy = by + hy * hl;
+        int q;
+        if (!any) {
+            g_vspan((int)PEN, by - hw, by + hw, 0.22f * dim);
+            g_vspan((int)PEN - 1, by - hw * 0.8f, by + hw * 0.8f, 0.12f * dim);
+        }
+        {                                        /* the head: a wedge from the ferrule down to the paper */
+            f32 tri[6];
+            tri[0] = fx; tri[1] = fy; tri[2] = PEN + 1.0f; tri[3] = by - hw * 0.92f; tri[4] = PEN + 1.0f; tri[5] = by + hw * 0.92f;
+            g_fill(tri, 3, a0 * 0.8f);
+            for (q = -1; q <= 1; q++)
+                g_line(fx, fy, PEN + 1.0f, by + (f32)q * hw * 0.92f, 1.6f, a0);
+        }
+        g_line(fx, fy, fx + hx * 30.0f, fy + hy * 30.0f, 2.6f + 1.2f * press, (any ? 0.9f : 0.5f) * dim);
+        g_disc(fx, fy, 2.4f + 1.0f * press, a0);
     }
 }
 

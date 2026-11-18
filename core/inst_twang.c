@@ -1,4 +1,4 @@
-/* H1 - TWANG: plucked strings. Each voice is a real delay-line string, loaded at the note with the
+/* h1 - TWANG: plucked strings. Each voice is a real delay-line string, loaded at the note with the
  * shape a plectrum leaves in it, and the screen is those eight strings, moving the way a plucked
  * string moves: a kink running up and down between the ends.
  *
@@ -257,7 +257,7 @@ static void twang_draw(const Vis *vis)
     hit = maxf(0.0f, hit - dt * 5.0f);
 
     for (i = 0; i < NSTR; i++) {
-        f32 e[4], x0, y0, dx, dy, len, nx, ny, xy[2 * (NSEG + 1)], amp, live, A, zz = buzz * 4.5f;
+        f32 e[4], x0, y0, dx, dy, len, nx, ny, xy[2 * (NSEG + 1)], amp, live, A, zz = buzz * 9.0f, bzone = 0.16f + 0.4f * buzz;
         layout(vis->algo, i, e);
         if (mt < 1.0f) {
             f32 p[4];
@@ -291,12 +291,24 @@ static void twang_draw(const Vis *vis)
                 for (n = 0; n < 5; n++)
                     d += c[n] * sin_turns((f32)(n + 1) * u * 0.5f) * cos_turns((f32)(n + 1) * S[i].ph);
             d *= A;
-            if (u < 0.2f && zz > 0.05f)          /* BUZZ: the bridge end rattles */
-                d += ((j & 1) ? zz : -zz) * (1.0f - u * 5.0f) * (0.6f + 2.0f * amp + 0.4f * sin_turns(vis->t * 9.0f + (f32)i * 0.3f));
+            if (u < bzone && zz > 0.05f)         /* BUZZ: the bridge end rattles, further along the harder it buzzes */
+                d += ((j & 1) ? zz : -zz) * (1.0f - u / bzone) * (0.55f + 1.6f * amp + 0.45f * sin_turns(vis->t * 9.0f + (f32)i * 0.3f));
             xy[2 * j] = x0 + dx * u * live + nx * d;
             xy[2 * j + 1] = y0 + dy * u * live + ny * d;
         }
         g_poly(xy, NSEG + 1, 0, (vis->algo == 6 ? wline * 1.5f : wline), 0.5f + 0.5f * sat(amp * 4.0f));
+        if (buzz > 0.04f) {                      /* and the bridge it rattles on: a plate that grows teeth and throws sparks */
+            f32 bw = 4.0f + 7.0f * buzz, tw = (f32)(int)(vis->t * 22.0f), k;
+            int q, nsp = (int)(buzz * 3.99f) + (amp > 0.05f ? 2 : 0);
+            g_line(x0 - nx * bw, y0 - ny * bw, x0 + nx * bw, y0 + ny * bw, 1.5f + 2.0f * buzz, 0.45f + 0.5f * buzz);
+            for (q = 0; q < nsp; q++) {
+                f32 h1 = fractf(sin_turns(tw * 0.137f + (f32)(i * 7 + q * 3) * 0.211f) * 43.7f), h2 = fractf(h1 * 17.3f + 0.31f);
+                f32 su = 0.03f + 0.22f * h1 * (0.4f + buzz), sd = (h2 - 0.5f) * (10.0f + 26.0f * buzz) * (0.5f + amp);
+                f32 sx = x0 + dx * su * live + nx * sd, sy = y0 + dy * su * live + ny * sd;
+                k = 1.5f + 3.0f * h2 * buzz;
+                g_line(sx - nx * k, sy - ny * k, sx + nx * k, sy + ny * k, 1.2f, (0.35f + 0.65f * sat(amp * 3.0f)) * buzz);
+            }
+        }
         if (mute > 0.01f)                        /* DAMP: the felt */
             g_line(x0 + dx * live, y0 + dy * live, e[2], e[3], 6.0f, 0.75f);
     }

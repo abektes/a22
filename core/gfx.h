@@ -1,4 +1,4 @@
-/* H1 - graphics: an 8-bit intensity framebuffer (0 = the bezel's black, 255 = full ink) and
+/* h1 - graphics: an 8-bit intensity framebuffer (0 = the bezel's black, 255 = full ink) and
  * anti-aliased vector primitives. One ink colour per instrument is applied by a palette when
  * the frame is presented, so the art is drawn once, in shades.
  *

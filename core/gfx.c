@@ -1,4 +1,4 @@
-/* H1 - graphics primitives. See gfx.h. */
+/* h1 - graphics primitives. See gfx.h. */
 #include "gfx.h"
 
 #ifdef H1_DEVICE

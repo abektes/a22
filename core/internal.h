@@ -1,4 +1,4 @@
-/* H1 - what the core's files share. Not for ports. */
+/* h1 - what the core's files share. Not for ports. */
 #pragma once
 #include "h1.h"
 #include "mathx.h"
@@ -6,7 +6,7 @@
 
 #define NVOICE 8
 #define NSTEP 64                 /* the step sequencer's pattern, at most */
-#define NINST 9
+#define NINST 14
 #define NALGO 8
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
@@ -50,7 +50,7 @@ typedef struct InstParams {
 } InstParams;
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 2u
+#define H1_VERSION 3u
 
 typedef struct H1State {
     uint32_t magic;
@@ -119,7 +119,8 @@ typedef struct InstDef {
     void (*draw)(const Vis *vis);
 } InstDef;
 
-extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt;
+extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt,
+                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi;
 extern const InstDef *const insts[NINST];
 
 /* ---- settings pages ------------------------------------------------------------------- */

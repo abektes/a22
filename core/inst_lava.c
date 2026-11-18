@@ -1,4 +1,4 @@
-/* H1 - LAVA: the bass. One oscillator pushed through a wavefolder (drive it harder and the wave
+/* h1 - LAVA: the bass. One oscillator pushed through a wavefolder (drive it harder and the wave
  * doubles back on itself, again and again) and then a low-pass filter. The picture is a lava lamp
  * drawn as a map: every note is a blob that rises out of the pool at the bottom, and the screen
  * shows the contour lines of the lot of them, merging and splitting as they pass.

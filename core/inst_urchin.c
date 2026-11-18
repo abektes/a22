@@ -1,4 +1,4 @@
-/* H1 - URCHIN: the FM instrument. Two modulators crossfading under one carrier, eight ways to
+/* h1 - URCHIN: the FM instrument. Two modulators crossfading under one carrier, eight ways to
  * wire them, and a spiny round thing whose outline is itself an FM waveform wrapped in a circle.
  *
  *   K1 RATIO   which overtones the modulator adds      the wiggles riding on his spines
@@ -142,10 +142,14 @@ static int cs_ready, spin_dir = 1;
 
 static f32 spine(int algo, f32 th, f32 mlo, f32 mfr, f32 I, f32 t)
 {
-    f32 L = (f32)LOBES[algo];
+    /* RATIO: every step up adds two spines, the outline melting from one count to the next */
+    f32 L = (f32)LOBES[algo] + 2.0f * (mlo - 1.0f);
     f32 w = L * th;
     f32 m0 = sin_turns(mlo * th + phase2), m1 = sin_turns((mlo + 1.0f) * th - phase2);
-    f32 s = sin_turns(w + I * (m0 + (m1 - m0) * mfr));
+    f32 md = I * (m0 + (m1 - m0) * mfr);
+    f32 s = sin_turns(w + md);
+    if (mfr > 0.001f)
+        s += (sin_turns(w + 2.0f * th + md) - s) * mfr;
     switch (algo) {
     default: return s;                                             /* KEYS: soft lobes */
     case 1: return 2.0f * absf(s) - 1.0f;                          /* BELL: scallops */
@@ -274,7 +278,7 @@ static void urchin_draw(const Vis *vis)
     /* the outline */
     mlo = (f32)((int)x + 1);
     mfr = smooth01(x - (f32)(int)x);
-    I = vis->k[1] * (0.22f + 0.3f * lev);
+    I = 0.07f + vis->k[1] * (0.22f + 0.3f * lev);
     A = 7.0f + 17.0f * vis->k[1] + 20.0f * lev;
     R0 = (58.0f + 3.0f * sin_turns(vis->t * 0.31f)) * (1.0f + 0.16f * kick);
     mt = smooth01(vis->algo_t);

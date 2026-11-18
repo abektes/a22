@@ -1,4 +1,4 @@
-/* H1 - the public calls that are not the UI's or the engine's own: start-up and saved state. */
+/* h1 - the public calls that are not the UI's or the engine's own: start-up and saved state. */
 #include "internal.h"
 
 static void defaults(void)
