@@ -1,11 +1,13 @@
 /* h1 - what the core's files share. Not for ports. */
 #pragma once
+#include <stddef.h>
 #include "h1.h"
 #include "mathx.h"
 #include "gfx.h"
 
 #define NVOICE 8
 #define NSTEP 64                 /* the step sequencer's pattern, at most */
+#define NSNOTE 8                 /* notes a step holds, at most */
 #define NINST 14
 #define NALGO 8
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
@@ -42,7 +44,9 @@ typedef struct Voice {
 
 /* ---- saved parameters ----------------------------------------------------------------- */
 typedef struct InstParams {
-    uint8_t knob[4];             /* 0..100: the four live modulations of the home screen */
+    uint8_t knob0[4];            /* 0..100. In an InstDef: where the four home knobs start, on every algorithm.
+                                  * In a saved state they are what the knobs were before version 6, when the
+                                  * algorithms of an instrument shared them; H1State.knob holds them now. */
     uint8_t algo;
     uint8_t env[4];              /* attack, decay, sustain, release: 0..100 */
     uint8_t lfo[4];              /* shape, rate, depth, target */
@@ -52,8 +56,13 @@ typedef struct InstParams {
 } InstParams;
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 5u
-#define H1_VERSION_4_SIZE (sizeof(H1State) - NSTEP * 4u)   /* version 4 ended before step_part */
+#define H1_VERSION 6u
+/* Versions 4 and 5 are the same as this one up to steps. There a step held four notes, not eight
+ * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an
+ * instrument's algorithms shared InstParams.knob0. h1_state_load reads both. */
+#define H1_OLD_SNOTE 4u
+#define H1_VERSION_4_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
+#define H1_VERSION_5_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
 
 typedef struct H1State {
     uint32_t magic;
@@ -67,9 +76,15 @@ typedef struct H1State {
     InstParams ip[NINST];
     uint8_t ink[NINST][3];
     uint8_t rsv[5];
-    uint8_t steps[NSTEP][4];     /* the step pattern: up to four notes a step, note + 1, 0 = none */
-    uint8_t step_part[NSTEP][4]; /* the part each of those notes was played on (PART), 0 = none kept */
+    uint8_t steps[NSTEP][NSNOTE];       /* the step pattern: up to eight notes a step, note + 1, 0 = none */
+    uint8_t step_part[NSTEP][NSNOTE];   /* the part each of those notes was played on (PART), 0 = none kept */
+    uint8_t knob[NINST][NALGO][4];   /* 0..100: the four live modulations of the home screen, each algorithm its own */
 } H1State;
+
+/* the four home knobs of an instrument's algorithm, and of the algorithm it is on */
+#define KNOBS(inst, algo) (st.knob[inst][(algo) < NALGO ? (algo) : 0])
+#define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
+void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs as new; algo < 0: all of the instrument's */
 
 /* A part: an instrument and one of its algorithms, in a byte. What a recorded note remembers, so that
  * with LAYERS on it goes on sounding as it was played when another instrument is in hand. */

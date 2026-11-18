@@ -259,10 +259,15 @@ static void part_state(int rounds)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
-        if (n % 5 == 4) {                                    /* the state before LAYERS: version 4, and shorter */
+        if (n % 5 == 4) {                                    /* the state before LAYERS: version 4, 664 bytes */
             odd[1 + 4] = 4;
-            if (h1_state_load(odd + 1, size - 256u) != 0 || h1_layers())
+            if (h1_state_load(odd + 1, 664u) != 0 || h1_layers())
                 die("a version 4 state was refused, or came back with LAYERS on", n, h1_layers(), 0, 0);
+        } else if (n % 5 == 2) {                             /* the one before a step's eight notes and each algorithm's
+                                                              * knobs: version 5, 920 bytes */
+            odd[1 + 4] = 5;
+            if (h1_state_load(odd + 1, 920u) != 0)
+                die("a version 5 state was refused", n, 0, 0, 0);
         } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
         for (k = 0; k < 6; k++)

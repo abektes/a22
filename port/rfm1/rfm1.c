@@ -160,7 +160,7 @@ static void state_in(void)
     uint32_t n = get32(image + 4);
     if (get32(image) != MAGIC || n > FLASH_SIZE - 16u || get32(image + 8 + n) != crc32(image, 8 + n))
         return;
-    h1_state_load(image + 8, n);         /* refused by the core unless it is this version's */
+    h1_state_load(image + 8, n);         /* refused by the core unless it is this version's or an older one it knows */
 }
 
 static int c_flash_stage(const uint8_t *bytes, uint32_t n)

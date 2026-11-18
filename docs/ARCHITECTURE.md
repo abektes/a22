@@ -93,13 +93,21 @@ algorithms can sound in the same block, so `block` is called again for each befo
 algorithm's voices are rendered. `Blk.step` is the time that has passed: the control block's the
 first time `block` is called in it, 0 on the later calls. Anything in `block` that moves on its
 own (a phase, a wander) must advance by `Blk.step`, or it would run faster with every layer.
+
+The four home knobs belong to the algorithm: `st.knob[instrument][algorithm][4]`, read through
+`KNOBS` and `KNOBS_NOW`. Every algorithm starts on the instrument's `def.knob0`. The engine eases
+the knobs of the algorithm an instrument is on (`inst_touch`), which are the only ones a hand can
+turn, and they ease across a change of algorithm too. A part that goes on sounding on another
+algorithm gets that algorithm's knobs as they stand (`part_set`). What an instrument keeps for all
+its voices follows the algorithm in hand: its `post`, and a clock in `block` whose rate is a knob
+(ORBIT's spin). `tests/knobs.c` holds all of it, and the three resets on SAVE.
 `post` runs once per instrument, on that instrument's own mix.
 
 ## The sequencer
 
 Time is 96 ticks per quarter note. A bar is 384, 288, 480, 288 or 336 ticks for 4/4, 3/4, 5/4,
 6/8 and 7/8. The loop recorder stores timed events in RAM and is lost at power off. The step
-pattern is 64 steps of up to four notes, on a 1/8, 1/16 or 1/32 grid, and is saved with the
+pattern is 64 steps of up to eight notes, on a 1/8, 1/16 or 1/32 grid, and is saved with the
 rest of the state. `eng_seq_info` gives the picture what it needs to draw the progress line or
 the notches.
 
@@ -114,9 +122,13 @@ settings from the instrument in hand. An instrument that is not in hand and has 
 its `post` running for a third of a second, fading, so its tail is not cut. The snapshot for the picture
 leaves out the voices of other instruments.
 
-The saved state is version 5. Version 4 is the same without the step notes' parts at the end:
-`h1_state_load` takes it, with LAYERS off and no parts kept. A step note with no part kept
-belongs to whichever instrument is in hand.
+The saved state is version 6: 1880 bytes. Versions 4 and 5 are the same up to the steps, where
+a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
+shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.
+`h1_state_load` takes all three, straight from the bytes: a version 4 state comes up with LAYERS
+off and no parts kept, and in both older ones every algorithm starts from where the instrument's
+knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
+to whichever instrument is in hand.
 
 ## Controls as values
 

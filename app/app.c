@@ -172,7 +172,7 @@ static int core2_wait(void) { return plat_cpu2_wait(); }
 
 void app_init(void)
 {
-    static uint32_t blob[1024 / 4];                         /* words: the store fills it, the core reads it */
+    static uint32_t blob[2048 / 4];                         /* words: the store fills it, the core reads it */
     uint32_t size;
     int n;
     h1_init(44100);
@@ -186,7 +186,7 @@ void app_init(void)
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n > 0)
-        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or the one before */
+        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one of the two before */
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
