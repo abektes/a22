@@ -42,10 +42,11 @@ same C code that goes on the device, and can play other FM-1 firmwares too.
 
 ## Install
 
-> **Status: no release yet.** The first one, v0.1.0, ships once every check in
-> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) has passed on a real FM-1. Until then this
-> section describes how the release installs. Don't flash a development build unless you are the
-> one doing that testing.
+> **v0.1.0 is the first release.** It has been installed from the stock firmware and played on one
+> FM-1, a unit bought in November 2026. Going back to stock from h1, installing h1 from another
+> custom firmware, and a unit with the older flash chip have not been tried yet:
+> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has. h1 is not on The Firmware
+> Hub yet, so for now install it [from a terminal](#from-a-terminal).
 
 ### Before you install
 
