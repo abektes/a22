@@ -181,15 +181,16 @@ Every cut is stored with its highs lifted and the player (`smp_read`) lowers the
 
 ## RAM and flash on the device
 
-Measured by the first device build (CI, JieLi toolchain 20260730.1, fm1-base c8e0599):
+As the build prints them (CI's one-core build of what became v0.2.0; v0.1.0's image was 304,848 bytes,
+and the recordings are 162,048 of the difference):
 
 | | Bytes | Of |
 |---|---|---|
-| App image | 304,848 | the 581,564-byte app slot |
+| App image | 526,284 | the 581,564-byte app slot, with 55,280 free |
 | RAM code | 5,100 | |
-| `.data` + `.bss` | 45,556 | |
-| Pool | 347,492 | |
-| SRAM in all | 398,152 | 475,136, with 76,984 free (the build keeps 8,192 spare) |
+| `.data` + `.bss` | 55,944 | |
+| Pool | 355,172 | |
+| SRAM in all | 416,220 | 475,136, with 58,916 free (the build keeps 8,192 spare) |
 
 `app/fm1.toml` sets `ram_layout = "packed"`: RAM code, `.data`/`.bss` and the pool share one
 budget. fm1-base's default map gives the pool a fixed 336 KB, which h1 overflows. `app/app.h`
