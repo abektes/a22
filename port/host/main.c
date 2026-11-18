@@ -9,11 +9,17 @@
  *   key K 1|0     press or release a key   btn B 1|0     press or release a button
  *   master V      the volume knob, 0..1000
  *   run MS        advance MS milliseconds  shot NAME     write OUTDIR/NAME.ppm
- *   wav NAME      start writing audio      bytes         print the present() byte count stats
+ *   wav NAME      start writing audio      bytes         print the present() byte count stats, and what a
+ *                                                        frame took to draw here (the FM-1 takes about 39 times as long)
  */
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#ifdef __SSE2__
+#include <pmmintrin.h>
+#endif
 #include "../../core/h1.h"
 
 static uint32_t now_ms;
@@ -22,6 +28,14 @@ static uint32_t wav_frames;
 static const char *outdir = ".";
 static uint64_t bytes_sum;
 static uint32_t bytes_max, frames_n;
+static double draw_s, draw_max;
+
+static double now_s(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
 
 static void wav_header(FILE *f, uint32_t frames)
 {
@@ -50,7 +64,13 @@ static void run(uint32_t ms)
             wav_frames += 735;
         }
         now_ms += 1000 / 60 + (frames_n % 3 == 0);
-        h1_frame(now_ms);
+        {
+            double t0 = now_s(), d;
+            h1_frame(now_ms);
+            d = now_s() - t0;
+            draw_s += d;
+            if (d > draw_max && frames_n > 2) draw_max = d;
+        }
         b = h1_present(0);
         bytes_sum += b;
         if (b > bytes_max && frames_n > 2) bytes_max = b;
@@ -82,6 +102,10 @@ int main(int argc, char **argv)
     int i = 2;
     if (argc < 2) { fprintf(stderr, "usage: h1host OUTDIR script...\n"); return 2; }
     outdir = argv[1];
+#ifdef __SSE2__
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);          /* as the FM-1 does: a denormal costs it nothing */
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
     h1_init(44100);
     run(20);
 #define ARG(n) (i + (n) < argc ? atoi(argv[i + (n)]) : 0)
@@ -108,7 +132,8 @@ int main(int argc, char **argv)
             printf("frames %u  avg %u bytes (%.1f ms at 44 Mbit/s)  max %u bytes (%.1f ms)\n", frames_n,
                    (unsigned)(bytes_sum / (frames_n ? frames_n : 1)), (double)(bytes_sum / (frames_n ? frames_n : 1)) * 8.0 / 44000.0,
                    bytes_max, bytes_max * 8.0 / 44000.0);
-            bytes_sum = 0; bytes_max = 0; frames_n = 0;
+            printf("draw avg %.3f ms  max %.3f ms here\n", draw_s * 1000.0 / (frames_n ? frames_n : 1), draw_max * 1000.0);
+            bytes_sum = 0; bytes_max = 0; frames_n = 0; draw_s = 0.0; draw_max = 0.0;
             i += 1;
         } else if (!strcmp(w, "leds")) {                       /* the key lights, low key first: # lit, . dark */
             uint32_t m = h1_key_leds();

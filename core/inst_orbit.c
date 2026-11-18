@@ -185,7 +185,7 @@ static void orbit_render(Voice *v, const Blk *b, f32 *out, int n)
 enum { ROCK, RINGED, COMET, PROBE, MAN, GATE };
 static struct { f32 x, y, z; } star[NS];
 static struct { f32 ang, z, rot, rotv, seed; uint8_t on, kind; } fly[NF];
-static f32 roll, turn, pop, popv, idle_t, lens, big, ping[4], ping_a[4];
+static f32 roll, turn, pop, popv, idle_t, lens, big, ping[4], ping_a[4], comet_t;
 static uint32_t seen;
 static int ready;
 
@@ -261,15 +261,9 @@ static void body(int kind, f32 x, f32 y, f32 r, f32 rot, f32 seed, f32 a, f32 an
         g_mode(G_MAX);
         half_ellipse(x, y, r * 1.9f, r * 0.5f, 1.0f + r * 0.05f, a);
         break;
-    case COMET: {
-        f32 tx = -cos_turns(ang), ty = -sin_turns(ang);
-        g_disc(x, y, r * 0.5f, a);
-        for (i = -2; i <= 2; i++) {
-            f32 sp = (f32)i * 0.035f, cc = cos_turns(sp), ss = sin_turns(sp), dx = tx * cc - ty * ss, dy = ty * cc + tx * ss, L = r * (5.0f - absf((f32)i) * 1.2f);
-            g_line(x + dx * r * 0.4f, y + dy * r * 0.4f, x + dx * L, y + dy * L, 1.0f + r * 0.08f * (i == 0 ? 1.0f : 0.5f), a * (i == 0 ? 0.9f : 0.55f));
-        }
+    case COMET:                                  /* its tail streams back the way it came, and lags as it is swung round */
+        g_comet(x, y, r * 0.8f, -cos_turns(ang), -sin_turns(ang), r * 6.5f, r * 1.6f * (seed - 0.5f), a, comet_t, seed);
         break;
-    }
     case PROBE: {                                /* a box, two panels, a dish */
         f32 bx = c * r * 0.35f, by = s * r * 0.35f, px = -s, py = c;
         for (i = -1; i <= 1; i += 2) {
@@ -365,14 +359,11 @@ static void centre(int algo, f32 a, const Vis *vis, f32 S, f32 lev)
         break;
     case 3: {                                    /* COMET: one great one going round, its tail always away from the middle */
         f32 an = turn * 0.5f, hx = cx + cos_turns(an) * 62.0f, hy = cy + sin_turns(an) * 34.0f;
-        f32 dx = hx - cx, dy = hy - cy, il = rsqrtf(dx * dx + dy * dy + 0.01f), L = 34.0f + S * 1.6f;
+        f32 dx = hx - cx, dy = hy - cy, il = rsqrtf(dx * dx + dy * dy + 0.01f);
         dx *= il; dy *= il;
-        g_disc(cx, cy, 2.5f, a * 0.8f);
-        for (i = -3; i <= 3; i++) {
-            f32 sp = (f32)i * 0.02f, c = cos_turns(sp), s = sin_turns(sp), ex = dx * c - dy * s, ey = dy * c + dx * s, wv = 3.0f * sin_turns(t * 0.8f + (f32)i * 0.2f);
-            g_line(hx, hy, hx + ex * L * (1.0f - absf((f32)i) * 0.13f) - ey * wv, hy + ey * L * (1.0f - absf((f32)i) * 0.13f) + ex * wv, i == 0 ? 2.0f : 1.0f, a * (0.9f - absf((f32)i) * 0.18f));
-        }
-        g_disc(hx, hy, 3.5f + S * 0.12f + 2.0f * lev, a);
+        g_glow(cx, cy, 9.0f + 3.0f * lev, a * 0.5f);         /* the star it goes round */
+        g_disc(cx, cy, 2.2f, a);
+        g_comet(hx, hy, 3.6f + S * 0.1f + 1.5f * lev, dx, dy, 40.0f + S * 1.7f, (18.0f + S * 0.3f) * sin_turns(an + 0.15f), a, t, 0.37f);
         break;
     }
     case 4:                                      /* QUASAR: a disc of light falling in, and two jets getting out */
@@ -475,6 +466,7 @@ static void orbit_draw(const Vis *vis)
     lens += ((grav * 34.0f + (algo == 7 ? 16.0f : 0.0f)) - lens) * minf(1.0f, dt * 5.0f);
     big += ((16.0f + 24.0f * sweep) - big) * minf(1.0f, dt * 6.0f);
     S = big * (1.0f + 0.12f * pop);
+    comet_t = t;
     speed = 0.1f + 0.45f * lev + (algo == 6 ? 0.5f : 0.0f);
     cr = cos_turns(roll); sr = sin_turns(roll);
 
