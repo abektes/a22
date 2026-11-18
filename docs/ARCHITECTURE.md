@@ -69,6 +69,14 @@ KNOT VOID clears a path through the picture before it draws its cord. It marks t
 1-bit mask (`g_bed_move`, `g_bed_to`) and clears the framebuffer under the mask once
 (`g_bed_clear`), so a cord that crosses itself is not cleared stroke by stroke.
 
+Most of a frame is lines (URCHIN draws about 950 of them over 49,000 pixels), and a pixel of a line
+costs the FM-1 far more than it costs a desktop. `g_line` sets up a line in floats and then steps a
+pixel's distance from it in integers, down each column and from column to column. In a path
+(`g_poly`, `g_arc`) a stroke's round start lies inside the stroke before it, so it is left out. The
+old way, a float distance at every pixel, is kept for a line too long, too far off the screen or too
+wide for the integers. `tests/lines.c` holds `g_line` to within one ink level of 255 of a float
+distance at every pixel, over random lines, paths and arcs.
+
 Motion uses springs integrated with the real frame time, so the art moves the same at any frame
 rate and never snaps.
 

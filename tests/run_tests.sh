@@ -1,6 +1,7 @@
 #!/bin/sh
 # h1's tests: the device app in fm1-base's host simulator (the platform simulated, the same app.c
-# and core as the firmware), then LAYERS (tests/layers.c) and two cores (tests/cores.c) on the core alone. The release workflow
+# and core as the firmware), then LAYERS (tests/layers.c), two cores (tests/cores.c) and the line drawing
+# (tests/lines.c) on the core alone. The release workflow
 # runs this after the build; a failure stops it.
 set -eu
 cd "$(dirname "$0")/.."
@@ -26,3 +27,7 @@ else
     diff build/cores1.txt build/cores2.txt | head -20
     exit 1
 fi
+# g_line against a distance worked out in floats at every pixel: never more than one ink level off
+"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
+    core/gfx.c tests/lines.c -o build/h1lines -lm
+ASAN_OPTIONS=detect_leaks=0 build/h1lines
