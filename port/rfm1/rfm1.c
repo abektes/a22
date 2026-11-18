@@ -340,7 +340,7 @@ static void c_shutdown(void) { if (booted && h1_state_dirty()) state_out(); }
 static int c_halted(void) { return 0; }
 
 static const core_t core = {
-    ABI, "h1", "h1", H1_RELEASE, H1_SOURCE_URL, "h1", "LicenseRef-All-Rights-Reserved", 0, FLASH_SIZE,
+    ABI, "h1", "h1", H1_RELEASE, H1_SOURCE_URL, "h1", "MIT", 0, FLASH_SIZE,
     {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"},
     0, 0, &panel, &KEYMAP[0][0],
     c_options, c_boot_options, c_init, c_tick, c_frame, c_idle, c_audio, c_midi_in, c_midi_out_take, c_dump,
