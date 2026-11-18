@@ -60,7 +60,7 @@ typedef struct H1State {
     uint8_t hud;                 /* the knob strip pinned on the home screen */
     uint8_t keys[4];             /* root, scale, glide, hold */
     uint8_t glo[4];              /* tempo, swing, tune, bright */
-    uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid */
+    uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid, click */
     InstParams ip[NINST];
     uint8_t ink[NINST][3];
     uint8_t rsv[5];
@@ -152,6 +152,7 @@ enum { EV_NOTE_ON = 1, EV_NOTE_OFF, EV_PANIC, EV_INST, EV_UNLATCH, EV_REC, EV_PL
        EV_SEQ_MODE };            /* loop <-> step: stop whichever was running */
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 enum { SEQ_LOOP, SEQ_STEP };
+enum { CLICK_REC, CLICK_ON, CLICK_OFF };       /* the metronome: while recording, always, never */
 
 /* what the screen needs to know about the sequencer */
 typedef struct SeqInfo {
