@@ -2,9 +2,9 @@
 #include "gfx.h"
 
 #ifdef H1_DEVICE
-uint8_t g_fb[FB_W * FB_H] __attribute__((section(".pool")));
+uint32_t g_fb_w[FB_W * FB_H / 4] __attribute__((section(".pool")));
 #else
-uint8_t g_fb[FB_W * FB_H];
+uint32_t g_fb_w[FB_W * FB_H / 4];
 #endif
 
 static int gm = G_MAX;
@@ -18,7 +18,7 @@ void g_origin(f32 ox, f32 oy) { gox = ox; goy = oy; }
 
 void g_clear(void)
 {
-    uint32_t *p = (uint32_t *)(void *)g_fb;
+    uint32_t *p = g_fb_w;
     uint32_t i;
     for (i = 0; i < FB_W * FB_H / 4u; i++)
         p[i] = 0;

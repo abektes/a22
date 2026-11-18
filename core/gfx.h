@@ -12,7 +12,10 @@
 
 enum { G_MAX, G_ADD, G_PAINT };   /* MAX: line art (crossings don't blow out); PAINT: alpha over (a = 0 erases) */
 
-extern uint8_t g_fb[FB_W * FB_H];
+/* The framebuffer is kept as words, so it sits on a word boundary whatever the linker puts in front of
+ * it: g_clear writes it a word at a time, and the FM-1's CPU stops on a word written to an odd address. */
+extern uint32_t g_fb_w[FB_W * FB_H / 4];
+#define g_fb ((uint8_t *)g_fb_w)
 
 void g_clear(void);
 void g_fade(int mul256);                                   /* every pixel * mul/256: trails */

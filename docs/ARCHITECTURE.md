@@ -106,6 +106,10 @@ that came out of it:
 
 - Bytes from outside (a saved state) are copied out a byte at a time before anything reads them.
   `h1_state_load` takes a blob at any address, and clamps every value it keeps.
+- Nothing is read or written a word at a time through a byte pointer. A byte array sits wherever the
+  linker has room, odd addresses included: what is cleared or compared by words (the framebuffer) is
+  declared as words. `tools/build_host.sh` makes a cast that raises alignment an error; a cast through
+  `void *` hides from it, so there are none.
 - A number that came from a float is masked or clamped before it indexes anything (`tsin`, the string
   and echo lines), and a loop that runs on a float has a bound.
 - A rectangle sent to the panel is at most 20 rows: the device converts it in a buffer that size.
