@@ -1,4 +1,4 @@
-/* H1 - BONK: the drum kit. Twelve drums, one on every note of the octave (the octave you play it
+/* h1 - BONK: the drum kit. Twelve drums, one on every note of the octave (the octave you play it
  * in tunes it), each of them a synthesised hit: a tone that drops, a burst of filtered noise, a
  * cluster of clashing squares, in different amounts. The picture is a composition of twelve
  * shapes, one a drum; hit one and it fills, jumps and throws a ring. The algorithm is the kit,
@@ -70,7 +70,7 @@ static void bonk_block(const Blk *b)
 {
     K.algo = b->algo;
     K.tune = (b->k[0] - 0.5f) * 24.0f;
-    K.dec = exp2fx((b->k[1] - 0.5f) * 3.6f);
+    K.dec = exp2fx((b->k[1] - 0.5f) * 5.4f);
     K.punch = b->k[2];
     K.dirt = b->k[3];
 }
@@ -428,6 +428,15 @@ static void bonk_draw(const Vis *vis)
             shape(i, x, y, sz * (1.0f + rr * (0.5f + 1.0f * decay) * (i == OHAT ? 0.3f : 1.0f)), s->rot + bob * 0.006f, 0.0f, ra, 1.3f);
             if (algo == 6)                       /* ZAP: and a streak behind it */
                 g_line(x - 60.0f * (1.0f - s->ring), y + 52.0f * (1.0f - s->ring), x - 14.0f, y + 12.0f, 1.5f, ra);
+        }
+        {                                        /* DECAY: every shape trails outlines of itself, more the longer it rings */
+            f32 gh = decay * 3.0f;
+            int g;
+            for (g = 1; g <= 3; g++) {
+                f32 ga = sat(gh - (f32)(g - 1)) * (0.42f - 0.09f * (f32)g) * (0.7f + 0.6f * sat(s->e * 2.0f));
+                if (ga > 0.02f)
+                    shape(i, x, y, sz * (1.0f + (0.16f + 0.05f * s->e) * (f32)g * (i == OHAT ? 0.3f : 1.0f)), s->rot + bob * 0.006f, 0.0f, ga, 1.0f);
+            }
         }
         shape(i, x, y, sz, s->rot + bob * 0.006f + (i == RIM || i == CRASH ? s->pop * 0.2f : 0.0f), s->e, a, lw);
     }

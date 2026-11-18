@@ -1,4 +1,4 @@
-/* H1 host port: runs the core on a computer from a small script and writes what it made:
+/* h1 host port: runs the core on a computer from a small script and writes what it made:
  * frames as PGM/PPM images and the sound as a WAV. No hardware, no browser: this is where the
  * art is tuned and where tests run.
  *

@@ -1,4 +1,4 @@
-/* H1 - TIDE: the pad. Detuned saws through a slow filter, and a night sea under whatever the
+/* h1 - TIDE: the pad. Detuned saws through a slow filter, and a night sea under whatever the
  * algorithm hangs in the sky. The keyboard lies across the water: every note lifts a swell at its
  * own place and lights a star above it.
  *
@@ -319,12 +319,26 @@ static void tide_draw(const Vis *vis)
             xy[2 * j + 1] = y0 + y + heave;
         }
         g_poly(xy, NPT, 0, 1.3f + 2.0f * u, 0.3f + 0.7f * u);
-        /* the light on the water */
+        /* the light on the water: under the moon the swell itself lights up. The lit stretch of
+         * each wave is broken into glints by two slow ripples crossing, so the path shivers
+         * instead of blinking, and it widens towards you. */
         if (vis->algo != 3 && vis->algo != 4 && vis->algo != 6 && vis->algo != 7 && my < H - 4.0f) {
-            f32 gl = (0.25f + 0.75f * glow) * (0.5f + 0.5f * sin_turns(t * (0.5f + 0.13f * (f32)k) + u * 3.0f)) * mt;
-            f32 half = (5.0f + 20.0f * u) * (0.5f + glow) * (0.7f + 0.3f * sin_turns(t * 0.37f + (f32)k * 0.41f));
-            f32 cx = mx + 6.0f * sin_turns(t * 0.21f + (f32)k * 0.3f) * u, yy = y0 + heave - 3.0f - 2.0f * u;
-            g_line(cx - half, yy, cx + half, yy, 2.0f + 1.6f * u, gl);
+            f32 half = (4.0f + 34.0f * u * (0.55f + 0.45f * u)) * (0.6f + 0.8f * glow), gl = (0.35f + 0.65f * glow) * mt;
+            f32 cx = mx + 4.0f * u * sin_turns(t * 0.13f + (f32)k * 0.29f), px = 0.0f, py = 0.0f, pa = 0.0f, x;
+            f32 r1 = 0.022f + 0.003f * (f32)k, r2 = 0.057f - 0.002f * (f32)k, lw2 = 2.9f + 3.3f * u;
+            for (x = cx - half; x <= cx + half + 0.5f; x += 2.5f) {
+                f32 fx = (x + 9.0f) * (1.0f / 6.0f), d = (x - cx) / half, yy, m, ga;
+                int j0 = iclamp((int)fx, 0, NPT - 2);
+                yy = lerpf(xy[2 * j0 + 1], xy[2 * j0 + 3], sat(fx - (f32)j0));
+                m = sin_turns(x * r1 + t * 0.21f * dir + (f32)k * 0.37f) + sin_turns(x * r2 - t * 0.34f * dir + (f32)k * 0.61f);
+                m = smooth01(m * 0.9f + 0.25f);
+                ga = gl * (1.0f - d * d) * m;
+                if (pa > 0.04f && ga > 0.04f)
+                    g_line(px, py - 0.5f, x, yy - 0.5f, lw2 * (0.55f + 0.45f * sat(0.5f * (pa + ga) * 1.5f)), sat(0.75f * (pa + ga)));
+                px = x; py = yy; pa = ga;
+            }
+            if (k == 0)                          /* where the path meets the horizon it is one bright seam */
+                g_line(mx - 3.0f - 5.0f * glow, H + 2.0f, mx + 3.0f + 5.0f * glow, H + 2.0f, 1.4f, gl * 0.9f);
         }
     }
 }

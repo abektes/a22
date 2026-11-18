@@ -1,4 +1,4 @@
-/* H1 - PIP: the chiptune instrument. Pulse, stepped triangle, wave RAM and shift-register
+/* h1 - PIP: the chiptune instrument. Pulse, stepped triangle, wave RAM and shift-register
  * noise, and a creature made of fat pixels who sings them.
  *
  *   K1 SHAPE   pulse width (or the algorithm's own shape)   his mouth: wide pulse, wide mouth
@@ -210,7 +210,7 @@ static const char *const FEET[NALGO] = {
 
 #define NBIT 28
 static struct { f32 x, y, vx, vy, life; } bits[NBIT];
-static f32 hop, hopv, str, strv, mouth_o, blink, look_x, look_v;
+static f32 hop, hopv, str, strv, mouth_o, blink, look_x, look_v, wob_ph, zflash;
 static uint32_t seen;
 static int dance;
 
@@ -259,7 +259,7 @@ static void pip_draw(const Vis *vis)
     int x, y, i, res, bs, mouth_w, open, blinking, lookr;
 
     if (vis->fresh) {
-        hop = hopv = str = strv = mouth_o = 0.0f;
+        hop = hopv = str = strv = mouth_o = zflash = 0.0f;
         seen = vis->notes;
         for (i = 0; i < NBIT; i++)
             bits[i].life = 0.0f;
@@ -272,6 +272,7 @@ static void pip_draw(const Vis *vis)
     if (vis->notes != seen) {
         f32 kick = 150.0f + absf(zap) * 260.0f;
         seen = vis->notes;
+        zflash = 1.0f;
         hopv = zap < -0.06f ? kick * 0.8f : -kick;
         strv += 3.5f;
         dance ^= 1;
@@ -312,13 +313,17 @@ static void pip_draw(const Vis *vis)
                     ma[y][x] = mb[y][x];
     }
 
-    sy = 1.0f + str * 0.5f;
-    sx = 1.0f - str * 0.3f;
+    /* the sway keeps its own clock, so turning WOBBLE changes its speed without a jump */
+    wob_ph = fractf(wob_ph + dt * (0.8f + wob));
+    zflash = maxf(0.0f, zflash - dt * 3.0f);
+    /* ZAP: wound up tall on his toes, or squat and ready to duck */
+    sy = 1.0f + str * 0.5f + zap * 0.13f;
+    sx = 1.0f - str * 0.3f - zap * 0.07f;
     x0 = 120.0f - 6.0f * cs * sx;
     y0 = 20.0f + hop + (12.0f * cs) * (1.0f - sy) + 2.5f * sin_turns(vis->t * 0.6f);
 
     for (y = 0; y < 12; y += bs) {
-        f32 shear = wob * 10.0f * sin_turns(vis->t * (0.8f + wob) + (f32)y * 0.09f);
+        f32 shear = wob * 10.0f * sin_turns(wob_ph + (f32)y * 0.09f);
         for (x = 0; x < 12; x += bs) {
             int on = 0, u, w;
             for (u = 0; u < bs; u++)
@@ -335,7 +340,7 @@ static void pip_draw(const Vis *vis)
         f32 fb = (f32)bs, ew = bs == 2 ? 2.0f : fb * 0.5f, eh = (bs == 2 ? 2.0f : fb * 0.6f) * (blinking ? 0.3f : 1.0f);
         f32 eyc = ((f32)((mouth_o > 0.5f ? 5 : 6) / bs) + 0.5f) * fb, myc = ((f32)(9 / bs) + 0.5f) * fb;
         f32 mw = maxf((f32)mouth_w, fb * 0.75f), mh = fb * (open ? 0.7f : 0.3f);
-        f32 shear = wob * 10.0f * sin_turns(vis->t * (0.8f + wob) + eyc * 0.09f);
+        f32 shear = wob * 10.0f * sin_turns(wob_ph + eyc * 0.09f);
         int e;
         if (myc - mh * 0.5f < eyc + eh * 0.5f + 0.5f)
             myc = eyc + eh * 0.5f + 0.5f + mh * 0.5f;
@@ -346,6 +351,22 @@ static void pip_draw(const Vis *vis)
         }
         g_rect(x0 + (6.0f - mw * 0.5f) * cs * sx + shear, y0 + (myc - mh * 0.5f) * cs * sy, mw * cs * sx, mh * cs * sy, 0.0f);
         g_mode(G_MAX);
+    }
+
+    /* ZAP: arrows either side of him, as many as it is strong, that fire off with each note */
+    if (absf(zap) >= 0.06f) {
+        f32 dir = zap > 0.0f ? -1.0f : 1.0f, fly = (1.0f - zflash) * (1.0f - zflash), a0 = 0.4f + 0.6f * zflash;
+        int nz = iclamp((int)(absf(zap) * 4.0f) + 1, 1, 4), side;
+        for (side = 0; side < 2; side++)
+            for (i = 0; i < nz; i++) {
+                f32 cx = side ? 224.0f : 16.0f, cy = 112.0f - dir * ((f32)i - 0.5f * (f32)(nz - 1)) * 16.0f;
+                cy += dir * (zflash > 0.0f ? (fly - 1.0f) * 22.0f : 0.0f) + dir * 2.0f * sin_turns(vis->t * 1.2f + (f32)i * 0.17f);
+                g_rect(cx - 2.0f, cy + dir * 4.0f - 2.0f, 4.0f, 4.0f, a0);
+                g_rect(cx - 6.0f, cy - 2.0f, 4.0f, 4.0f, a0);
+                g_rect(cx + 2.0f, cy - 2.0f, 4.0f, 4.0f, a0);
+                g_rect(cx - 10.0f, cy - dir * 4.0f - 2.0f, 4.0f, 4.0f, a0 * 0.8f);
+                g_rect(cx + 6.0f, cy - dir * 4.0f - 2.0f, 4.0f, 4.0f, a0 * 0.8f);
+            }
     }
 
     /* bits */

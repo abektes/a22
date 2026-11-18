@@ -1,4 +1,4 @@
-/* H1 - small math kit. Single precision only: the FM-1's FPU has no doubles and
+/* h1 - small math kit. Single precision only: the FM-1's FPU has no doubles and
  * the firmware links no libm, so everything the core needs lives here. */
 #pragma once
 #include <stdint.h>

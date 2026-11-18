@@ -1,4 +1,4 @@
-/* H1 - the panel and the screen around the instruments: what every knob and button does, the
+/* h1 - the panel and the screen around the instruments: what every knob and button does, the
  * home overlays (the name flash, the knob strip, toasts) and the settings pages, which are one
  * layout for every page and every instrument: four columns, one per knob, left to right.
  *

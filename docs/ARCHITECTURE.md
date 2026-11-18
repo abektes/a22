@@ -1,4 +1,4 @@
-# How H1 is built
+# How h1 is built
 
 ```
 core/        the whole firmware: portable C99, single-precision float, no libc, no malloc
@@ -62,7 +62,7 @@ keys still send real encoder detents.
 
 ## RAM on the device
 
-The pool holds 336 KB. H1 asks for about 320 KB of it:
+The pool holds 336 KB. h1 asks for about 320 KB of it:
 
 | Buffer | KB |
 |---|---|

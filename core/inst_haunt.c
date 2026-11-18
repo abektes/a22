@@ -1,4 +1,4 @@
-/* H1 - HAUNT: the spooky one. Slow, cold, mostly air: a few sines that drift against each other,
+/* h1 - HAUNT: the spooky one. Slow, cold, mostly air: a few sines that drift against each other,
  * a wind that whistles at the note's pitch, and a great deal of room. The picture is a dark place
  * with something in it. Every note calls up an apparition, a hooded shape hung from threads, that
  * lets itself down while you hold the key and frays away when you let go. Something small is

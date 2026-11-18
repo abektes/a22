@@ -1,4 +1,4 @@
-/* H1 - KNOT: bells and pure tones, added up from sine partials that each die away at their own
+/* h1 - KNOT: bells and pure tones, added up from sine partials that each die away at their own
  * rate. The picture is a harmonograph: every sounding note is a pendulum going round at its own
  * pitch, the pen hangs from all of them, and the line it leaves is the harmony itself. An octave
  * is a three-leafed rose, a fifth has five petals, and because the keyboard is tempered

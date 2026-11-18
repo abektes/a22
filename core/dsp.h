@@ -1,4 +1,4 @@
-/* H1 - DSP bricks the instruments share. Header-only, single precision. */
+/* h1 - DSP bricks the instruments share. Header-only, single precision. */
 #pragma once
 #include "mathx.h"
 
