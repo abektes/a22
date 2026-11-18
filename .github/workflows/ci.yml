@@ -91,11 +91,12 @@ jobs:
             app/build/h1.sym
             app/build/firmware.json
           if-no-files-found: error
-      # The same firmware with the chip's second core on (FM1B_CPU2=1: app.c gives it every other voice). Not what a
-      # release is built as: kept beside the normal build for trying on an FM-1 and timing against it.
-      - name: Build the firmware with the second core
-        run: FM1B_CPU2=1 ./build.sh
-      - name: Hashes, and where every function is (second core)
+      # The same firmware without the chip's second core (FM1B_CPU2=0: the first core renders every voice). Not what
+      # a release is built as: kept beside the normal build for an FM-1 whose second core misbehaves, and for timing
+      # against it.
+      - name: Build the firmware with one core
+        run: FM1B_CPU2=0 ./build.sh
+      - name: Hashes, and where every function is (one core)
         run: |
           sha256sum app/build/h1.fwsc app/build/h1.bin
           "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
@@ -103,7 +104,7 @@ jobs:
           cat app/build/h1.sym
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
-          name: h1-dev-build-two-cores
+          name: h1-dev-build-one-core
           path: |
             app/build/h1.fwsc
             app/build/h1.bin

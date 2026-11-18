@@ -158,8 +158,8 @@ static int last_start_failed(void)
 static int last_start_failed(void) { return bootguard.failed != 0; }
 #endif
 
-/* The second core, in a build that has it (fm1.toml cpu2 = true, or FM1B_CPU2=1 in the build's environment):
- * the core's render hands it every other voice. Where it does not start, or once it has been given up, the
+/* The second core, in a build that has it (fm1.toml cpu2 = true; FM1B_CPU2=0 in the build's environment makes
+ * one without): the core's render hands it every other voice. Where it does not start, or once it has been given up, the
  * first core does all of them, as in a build without it. The sound is the same either way. */
 #ifndef FM1B_CPU2
 #define FM1B_CPU2 0

@@ -43,11 +43,13 @@ anything `block` and `note` set up. It must not write memory another voice's `re
 and BARD each set a `sounding` flag from `render`; both cores only ever set it, and `post` reads it
 after they are done.)
 
-The second core is not in the default build. `FM1B_CPU2=1 ./build.sh` makes the build that has it,
-and CI keeps both packages. Some FM-1s misread memory on the second core. fm1-base checks each job
-it hands over, and `app/fm1.toml` sets `cpu2_fallback`, so an FM-1 that fails a check goes on with
-one core until it is switched off. A misread inside a job's own data is not checked. The timing
-readout ends with `CORES 2` and how deep the second core's stack has gone, or `CORES 1` and why.
+The second core is in the default build (`cpu2 = true` in `app/fm1.toml`). On an FM-1 playing 16
+notes a second it took the picture from 34 to 44 frames a second on average, and the slowest
+setting from 12 to 28. `FM1B_CPU2=0 ./build.sh` makes the build without it, and CI keeps both
+packages. Some FM-1s misread memory on the second core. fm1-base checks each job it hands over,
+and `app/fm1.toml` sets `cpu2_fallback`, so an FM-1 that fails a check goes on with one core until
+it is switched off. A misread inside a job's own data is not checked. The timing readout ends with
+`CORES 2` and how deep the second core's stack has gone, or `CORES 1` and why.
 
 ## The picture
 
@@ -158,7 +160,7 @@ can be: send MIDI CC 119 to the FM-1 while a screen reader is listening (`base/t
 listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. KB n RECTS n.
 STACK main interrupt`: the times in milliseconds a frame, the audio as a percentage of each block, the
 kilobytes and rectangles sent to the panel a frame, all since it was last asked, and the bytes of each
-stack never used since the start. A build with the second core adds `CORES 2 n` or `CORES 1 why`. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+stack never used since the start. A build with the second core (the default) adds `CORES 2 n` or `CORES 1 why`. If RAM gets tight again, the first things to shrink are the string lines and the reverb
 (16-bit samples halve both).
 
 ## What the FM-1 does not forgive

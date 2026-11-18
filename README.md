@@ -177,8 +177,8 @@ tests/   the device app in fm1-base's host simulator, LAYERS and two cores on th
 - `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`, then
   runs `tests/layers.c`, `tests/cores.c` and `tests/lines.c` on the core alone. It needs only a C
   compiler and Pillow.
-- `FM1B_CPU2=1 ./build.sh` builds the firmware with the chip's second core rendering half the
-  voices. It is not the default: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- The chip's second core renders half the voices. `FM1B_CPU2=0 ./build.sh` builds the firmware
+  without it: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - `sh tests/run_fuzz.sh` is the crash hunt: the core under the compiler's address and
   undefined-behaviour checkers, fed any saved state and any panel input.
 - `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes

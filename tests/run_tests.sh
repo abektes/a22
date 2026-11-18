@@ -8,8 +8,9 @@ cd "$(dirname "$0")/.."
 ./build.sh --host
 out=app/build/host
 "$out/h1_host" tests/basic.txt "$out"
-# and the build with the second core (the simulator runs its jobs at once, in order): the same script
-FM1B_CPU2=1 ./build.sh --host
+# (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
+# and the build without it: the same script
+FM1B_CPU2=0 ./build.sh --host
 "$out/h1_host" tests/basic.txt "$out"
 ./build.sh --host
 mkdir -p build
