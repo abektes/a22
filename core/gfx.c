@@ -306,6 +306,114 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
     }
 }
 
+/* ---- a bed: what a wide stroke with no ink clears -------------------------------------------
+ * A path is stamped into a mask of one bit a pixel, and the mask is taken out of the picture in one
+ * go. However often the path crosses itself, each pixel is cleared once: a 9-wide g_line with no ink
+ * went over every pixel of a tangled cord five and six times, and that was most of its frame. */
+#define BED_WORDS ((FB_W + 31) / 32)
+#ifdef H1_DEVICE
+static uint32_t bed[FB_H * BED_WORDS] __attribute__((section(".pool")));
+#else
+static uint32_t bed[FB_H * BED_WORDS];
+#endif
+static int bed_y0 = FB_H, bed_y1 = -1;           /* the rows that hold anything */
+static int32_t bed_x, bed_y;                     /* where the path is, 16.16 */
+static int bed_px, bed_py;
+
+static void bed_dot(int x, int y)
+{
+    static const int8_t HW[9] = {2, 3, 4, 4, 4, 4, 4, 3, 2};   /* a disc 9 across */
+    int j;
+    if (x == bed_px && y == bed_py)
+        return;
+    bed_px = x;
+    bed_py = y;
+    if (x < -4 || x > FB_W + 3 || y < -4 || y > FB_H + 3)
+        return;
+    if (y - 4 < bed_y0) bed_y0 = imax(0, y - 4);
+    if (y + 4 > bed_y1) bed_y1 = imin(FB_H - 1, y + 4);
+    for (j = 0; j < 9; j++) {
+        int yy = y + j - 4, a = x - HW[j], b = x + HW[j];
+        uint32_t *row, ma, mb;
+        if ((unsigned)yy >= FB_H)
+            continue;
+        if (a < 0) a = 0;
+        if (b > FB_W - 1) b = FB_W - 1;
+        if (a > b)
+            continue;
+        row = &bed[yy * BED_WORDS];
+        ma = 0xFFFFFFFFu << (a & 31);
+        mb = 0xFFFFFFFFu >> (31 - (b & 31));
+        if (a >> 5 == b >> 5)
+            row[a >> 5] |= ma & mb;
+        else {
+            row[a >> 5] |= ma;
+            row[b >> 5] |= mb;
+        }
+    }
+}
+
+static int32_t bed_fix(f32 v)                    /* 16.16, and far enough off the screen is all the same */
+{
+    if (!(v > -64.0f)) v = -64.0f;               /* (whatever v is, a number comes out) */
+    if (v > (f32)FB_W + 64.0f) v = (f32)FB_W + 64.0f;
+    return (int32_t)(v * 65536.0f);
+}
+
+void g_bed_move(f32 x, f32 y)
+{
+    bed_x = bed_fix(x + gox);
+    bed_y = bed_fix(y + goy);
+    bed_px = bed_py = -99;
+    bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+}
+
+void g_bed_to(f32 x, f32 y)
+{
+    int32_t x1 = bed_fix(x + gox), y1 = bed_fix(y + goy), dx = x1 - bed_x, dy = y1 - bed_y;
+    int32_t l = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    int n = (int)(l / (3 * 65536)) + 1, i;       /* a stamp every three pixels or less */
+    dx /= n;
+    dy /= n;
+    for (i = 1; i < n; i++) {
+        bed_x += dx;
+        bed_y += dy;
+        bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+    }
+    bed_x = x1;
+    bed_y = y1;
+    bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+}
+
+void g_bed_clear(void)
+{
+    int y, w, n;
+    for (y = bed_y0; y <= bed_y1; y++) {
+        uint32_t *row = &bed[y * BED_WORDS];
+        for (w = 0; w < BED_WORDS; w++) {
+            uint32_t m = row[w];
+            uint32_t *fw;
+            if (!m)
+                continue;
+            row[w] = 0;
+            fw = &g_fb_w[(y * FB_W + w * 32) / 4];   /* (a row starts on a word, and so does every 32 pixels of it) */
+            for (n = 0; m; n++, m >>= 4) {
+                uint8_t *p = (uint8_t *)&fw[n];
+                if ((m & 15u) == 15u) {
+                    fw[n] = 0;
+                    continue;
+                }
+                if (m & 1u) p[0] = 0;
+                if (m & 2u) p[1] = 0;
+                if (m & 4u) p[2] = 0;
+                if (m & 8u) p[3] = 0;
+            }
+        }
+    }
+    bed_y0 = FB_H;
+    bed_y1 = -1;
+}
+
 void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a)
 {
     int i;

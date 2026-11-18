@@ -273,10 +273,10 @@ static void knot_draw(const Vis *vis)
             f32 rr = 12.0f + (f32)i * 13.0f + 5.0f * sin_turns(t * 0.05f + (f32)i * 0.13f);
             g_ring(120.0f, 122.0f, rr, 1.2f, (0.2f + 0.5f * sat(sum) * (0.5f + 0.5f * sin_turns(t * 0.21f - (f32)i * 0.11f))) * style_a);
         }
-        g_mode(G_PAINT);
+        g_bed_move(hx[0], hy[0]);                /* the cord's bed: the rings stop short of it */
         for (k = step; k <= NP; k += step)
-            g_line(hx[k - step], hy[k - step], hx[k], hy[k], 9.0f, 0.0f);
-        g_mode(G_MAX);
+            g_bed_to(hx[k], hy[k]);
+        g_bed_clear();
         for (k = step; k <= NP; k += step)
             g_line(hx[k - step], hy[k - step], hx[k], hy[k], 1.6f, style_a * (1.0f - 0.7f * (f32)k / (f32)NP));
     }
