@@ -1,8 +1,8 @@
 # h1
 
-Custom firmware for the M-VAVE FM-1. You get fourteen instruments, and each one is a full-screen animated
-picture you play. Everything is drawn in one ink colour on the bezel's black, so the screen reads
-bigger than it is.
+Custom firmware for the M-VAVE FM-1. Fourteen instruments with dynamic visuals. Eight algorithms 
+and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
+Works on both the original flash chip and the newer UC25HQ80. Uses fm1-base.
 
 <p>
 <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
