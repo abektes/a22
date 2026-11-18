@@ -153,7 +153,7 @@ up, or down with <kbd>Shift</kbd>.
 core/    the whole firmware: portable C99, no libc, no malloc
 app/     the device: fm1-base's app, a thin pass-through to core/
 base/    fm1-base (a git submodule, with felucca-bsp inside it)
-port/    other builds of the same core: host (pictures, WAVs, tests)
+port/    other builds of the same core: host (pictures, WAVs), rfm1 (the browser simulator)
 tests/   the device app in fm1-base's host simulator
 ```
 

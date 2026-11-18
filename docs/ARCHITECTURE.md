@@ -8,11 +8,11 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   gfx.c        anti-aliased lines, discs, rings, ellipses, filled polygons, a stroke font
   ui.c         what every control does, the name flash, the knob strip, the settings pages
   inst_*.c     one file per instrument: its sound and its picture, side by side
-port/web/    the browser simulator: the core as WebAssembly, one HTML file
+port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the FM-1 browser simulator
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
 app/         the device, on fm1-base (base/, a submodule): built by ./build.sh
 tools/       build scripts
-dist/        the built simulator page
+dist/        h1.rfm1, the build the simulator loads
 ```
 
 ## The rule that keeps the simulator honest
@@ -57,7 +57,8 @@ the notches.
 
 `h1_control` reports what each encoder currently means (its name, range, value and value text)
 and `h1_control_set` sets it outright. On the device, `app/app.c` reads `h1_control` to tell a
-screen reader a control's name and value. The simulator uses both to
+screen reader a control's name and value. The simulator reaches both through the rfm1 port's sim1
+exports to
 show each control as a labelled slider, while its nudge buttons, the mouse wheel and the number
 keys still send real encoder detents.
 
@@ -96,7 +97,8 @@ hardware. If RAM gets tight again, the first things to shrink are the string lin
 ## Building
 
 - `tools/build_host.sh` then `build/h1host OUTDIR script...` for images and WAVs.
-- `tools/build_web.sh` for `dist/h1-simulator.html` (clang with the wasm32 target and wasm-ld;
-  set `WASM2JS` to binaryen's wasm2js to include the plain-JavaScript fallback).
+- `tools/build_rfm1.sh [VERSION]` for `dist/h1.rfm1` (clang with the wasm32 target and wasm-ld). Run it in the
+  [FM-1 browser simulator](https://github.com/jakehandy/fm1-browser-simulator): open the page and drop the file
+  on it, or run `tools/update-h1.sh` there to make it the built-in firmware.
 - `./build.sh` builds the device package: fm1-base's `tools/build.py` with `app/` as the app.
 - `sh tests/run_tests.sh` runs the device app in fm1-base's host simulator.
