@@ -68,6 +68,7 @@ int h1_state_load(const void *blob, uint32_t size)
     st.seq[0] &= 1;
     if (st.seq[3] > 2) st.seq[3] = 1;
     if (st.seq[4] > 2) st.seq[4] = 1;
+    if (st.seq[5] > 2) st.seq[5] = CLICK_REC;
     for (i = 0; i < NSTEP; i++)
         for (j = 0; j < 4; j++)
             if (st.steps[i][j] > 128) st.steps[i][j] = 0;

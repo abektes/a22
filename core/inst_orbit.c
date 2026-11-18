@@ -18,10 +18,13 @@ static struct {
 } O;
 static f32 spin_ph, rise_ph;
 
+/* the order on the knob (NEBULA first); the code below keeps the order they were written in */
+static const uint8_t ORDER[NALGO] = {2, 0, 1, 3, 4, 5, 6, 7};
+
 static void orbit_block(const Blk *b)
 {
     f32 dt = (f32)CTRL * b->isr;
-    O.algo = b->algo;
+    O.algo = ORDER[b->algo];
     O.sweep = b->k[0];
     O.spin = b->k[1];
     O.shimmer = b->k[2];
@@ -431,7 +434,7 @@ static void orbit_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, sweep = vis->k[0], spin = vis->k[1], shimmer = vis->k[2], grav = vis->k[3], mt = smooth01(vis->algo_t);
     f32 lev = sat(vis->level * 3.0f), speed, rate = 0.02f + 0.5f * spin * spin, S, cr, sr;
-    int i, ns = 22 + (int)(shimmer * 42.0f), algo = vis->algo;
+    int i, ns = 22 + (int)(shimmer * 42.0f), algo = ORDER[vis->algo];
 
     if (!ready || vis->fresh) {
         uint32_t s = 0x51A45u;
@@ -508,7 +511,7 @@ static void orbit_draw(const Vis *vis)
 
     /* the thing in the middle */
     if (mt < 1.0f)
-        centre(vis->algo_prev, 1.0f - mt, vis, S * (1.0f - 0.5f * mt), lev);
+        centre(ORDER[vis->algo_prev], 1.0f - mt, vis, S * (1.0f - 0.5f * mt), lev);
     centre(algo, mt, vis, S * (0.5f + 0.5f * mt), lev);
 
     /* what goes by */
@@ -534,7 +537,7 @@ const InstDef inst_orbit = {
     "ORBIT",
     {206, 224, 255},
     {"SWEEP", "SPIN", "SHIMMER", "GRAVITY"},
-    {"DRIFT", "PULSAR", "NEBULA", "COMET", "QUASAR", "RADIO", "WARP", "HOLE"},
+    {"NEBULA", "DRIFT", "PULSAR", "COMET", "QUASAR", "RADIO", "WARP", "HOLE"},
     {{55, 30, 35, 15}, 0, {34, 60, 85, 72}, {0, 55, 0, 0}, {30, 5, 66, 52}, {0, 3, 1, 60}, {0, 0, 0}},
     0.3f,
     orbit_block, orbit_note, orbit_render, 0, orbit_draw,
