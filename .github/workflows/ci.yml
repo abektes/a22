@@ -70,11 +70,21 @@ jobs:
           echo "AC79_SDK=$HOME/fw-AC79_AIoT_SDK" >> "$GITHUB_ENV"
       - name: Build the firmware (a development build)
         run: ./build.sh
+      # for reading a crash record: its pc and rets are addresses in this table
+      - name: Hashes, and where every function is
+        run: |
+          sha256sum app/build/h1.fwsc app/build/h1.bin
+          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
+          wc -l app/build/h1.sym
+          cat app/build/h1.sym
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
           name: h1-dev-build
           path: |
             app/build/h1.fwsc
             app/build/h1.bin
+            app/build/h1.elf
+            app/build/h1.dis
+            app/build/h1.sym
             app/build/firmware.json
           if-no-files-found: error
