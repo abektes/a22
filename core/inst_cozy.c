@@ -39,7 +39,7 @@ static volatile int sounding;
 
 static void cozy_block(const Blk *b)
 {
-    f32 dt = (f32)CTRL * b->isr;
+    f32 dt = b->step;
     C.algo = b->algo;
     C.dust = b->k[0];
     C.wowk = b->k[1];
@@ -47,8 +47,10 @@ static void cozy_block(const Blk *b)
     C.sway = b->k[3];
     wow_ph = fractf(wow_ph + 0.62f * dt);
     flut_ph = fractf(flut_ph + 5.7f * dt);
-    wander_t += (rng_s(&dust_rng) - wander_t) * 0.01f;
-    wander += (wander_t - wander) * 0.02f;
+    if (dt > 0.0f) {
+        wander_t += (rng_s(&dust_rng) - wander_t) * 0.01f;
+        wander += (wander_t - wander) * 0.02f;
+    }
     C.wow = C.wowk * C.wowk * (0.5f * tsin(wow_ph) + 0.09f * tsin(flut_ph) + 0.5f * wander);
     trem_ph = fractf(trem_ph + (3.2f + 2.4f * C.sway) * dt);
     C.trem = tsin(trem_ph);

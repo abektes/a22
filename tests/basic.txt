@@ -40,6 +40,10 @@ said PAGE
 tap FX
 wait 100
 said HOME
+# CC 119 from the computer: the reader is told how long frames and sound take
+midi B0 77 01
+wait 100
+said PERF. FPS
 # SAVE writes the settings, and a restart keeps them
 tap SAVE
 wait 200
@@ -59,3 +63,51 @@ leds
 shot loop.png
 tap PLAY
 wait 100
+# SEQ and REC together: LAYERS, and the reader says so. With it on, what was recorded keeps its
+# instrument: the loop sounds on with another instrument in hand and no key down
+press SEQ
+press REC
+release REC
+release SEQ
+wait 200
+said LAYERS ON
+tap REC
+wait 100
+key 14 down
+wait 150
+key 14 up
+wait 300
+tap REC
+turn PRESET 3
+wait 1500
+peakreset
+wait 4500
+expect peak_db_min -50
+tap SEQ
+wait 2500
+shot layers.png
+tap HOME
+tap PLAY
+turn PRESET -3
+press SEQ
+press REC
+release REC
+release SEQ
+wait 200
+said LAYERS OFF
+# (the settings are written once nothing sounds: the last notes' tails first)
+tap SAVE
+wait 4000
+# a start that failed (a crash or a hang in its first 30 seconds): the next one leaves the saved
+# state alone and comes up as new, and the start after that has the saved state again
+badstart
+reboot
+wait 600
+where
+wait 100
+said h1. COZY. TINE
+reboot
+wait 600
+where
+wait 100
+said h1. ORBIT

@@ -58,13 +58,19 @@ static inline f32 sin_turns(f32 t)
 }
 static inline f32 cos_turns(f32 t) { return sin_turns(t + 0.25f); }
 
-/* 2^x for x in about [-20, 20]: integer part by exponent bits, fraction by a
- * degree-5 polynomial (rel. error < 2e-6) */
+/* 2^x: integer part by exponent bits, fraction by a degree-5 polynomial (rel. error < 2e-6).
+ * Any x: below 2^-126 it is 0, above 2^126 it stays there, and not-a-number is 0. (It used to
+ * trust x to be small: a decay written as exp2fx(-age * 30) wrapped the exponent bits four
+ * seconds into a held note and came back as an enormous number.) */
 static inline f32 exp2fx(f32 x)
 {
     union { f32 f; int32_t i; } v;
-    int32_t n = ifloor(x + 0.5f);
-    f32 f = x - (f32)n, p;
+    int32_t n;
+    f32 f, p;
+    if (!(x > -126.0f)) return 0.0f;
+    if (x > 126.0f) x = 126.0f;
+    n = ifloor(x + 0.5f);
+    f = x - (f32)n;
     p = 1.3333558e-3f;
     p = p * f + 9.6181291e-3f;
     p = p * f + 5.5504109e-2f;
@@ -72,7 +78,7 @@ static inline f32 exp2fx(f32 x)
     p = p * f + 6.9314718e-1f;
     p = p * f + 1.0f;
     v.f = p;
-    v.i += n << 23;
+    v.i += n * 8388608;                          /* (n << 23, for a negative n too) */
     return v.f;
 }
 
@@ -88,6 +94,7 @@ static inline f32 softclip(f32 x)
 {
     if (x > 3.0f) return 1.0f;
     if (x < -3.0f) return -1.0f;
+    if (x != x) return 0.0f;                     /* not a number: silence, not whatever the cast makes of it */
     return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
 }
 

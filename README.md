@@ -131,16 +131,30 @@ That is what the backup is for.
 | REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it. Step: REC turns step-write on and off, PLAY runs the pattern |
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
+| MASTER | Volume. A slim bar up the right edge of the screen shows it while it turns |
 | hold SEQ | Swap LOOP and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
-| hold REC | Clear the loop or the pattern |
+| SEQ + REC | LAYERS on and off: with it on, what you record keeps the instrument and algorithm it was played on |
+| hold REC | Clear the loop or the pattern. With LAYERS on: clear what was recorded on the instrument in hand, and keep holding to three seconds to clear everything |
 | hold HOME | Silence everything |
 | hold SAVE | Reset this instrument (everything else saves by itself) |
+| hold SAVE for three seconds | Reset every instrument, and the KEYS and GLOBAL pages. The sequencer and what it holds are left alone |
 
 A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page.
 While the sequencer runs, the sixteen white keys light as the pattern, left to right: lit where
 there are notes, with the playing step flipped. Up to sixteen steps each key is a step, up to
 thirty-two each key is two.
+
+**LAYERS** (press SEQ and REC together) gives the sequencer more than one instrument. With it on,
+every note in the loop or the step pattern goes on sounding on the instrument and algorithm it was
+recorded with: record a bass line on TWANG, turn PRESETS to KOI, and play or record over it. A
+take started over a stopped loop joins it, and nothing is erased until you hold REC. An
+instrument's knobs, ENV and LFO stay its own, so turning them changes its layer; the effects are
+those of the instrument in hand; the eight voices are shared by all the layers, and a step still
+holds four notes in all. With the ARP on, the loop records the notes the arpeggiator played. The
+picture is the instrument in hand. With LAYERS off, everything recorded plays on the instrument in
+hand. The SEQ page's top line scrolls through the three sequencer hotkeys and shows which way
+LAYERS is set.
 
 In the simulator: <kbd>A</kbd>–<kbd>'</kbd> are the white keys from F and <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd>
 the black keys. <kbd>Z</kbd> <kbd>X</kbd> change the octave, <kbd>←</kbd> <kbd>→</kbd> change the
@@ -154,17 +168,22 @@ core/    the whole firmware: portable C99, no libc, no malloc
 app/     the device: fm1-base's app, a thin pass-through to core/
 base/    fm1-base (a git submodule, with felucca-bsp inside it)
 port/    other builds of the same core: host (pictures, WAVs), rfm1 (the browser simulator)
-tests/   the device app in fm1-base's host simulator
+tests/   the device app in fm1-base's host simulator, LAYERS and two cores on the core alone, and the crash hunt
 ```
 
 - `./build.sh` builds `app/build/h1.fwsc`, a development build with identity `FM-1_48100`. It
   needs JieLi's toolchain and the AC79 SDK (see `base/README.md`). `./build.sh --release X.Y.Z`
   builds the release package.
-- `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`. It
-  needs only a C compiler and Pillow.
+- `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`, then
+  runs `tests/layers.c`, `tests/cores.c` and `tests/lines.c` on the core alone. It needs only a C
+  compiler and Pillow.
+- The chip's second core renders half the voices. `FM1B_CPU2=0 ./build.sh` builds the firmware
+  without it: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- `sh tests/run_fuzz.sh` is the crash hunt: the core under the compiler's address and
+  undefined-behaviour checkers, fed any saved state and any panel input.
 - `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes
   pictures and WAVs.
-- CI (`.github/workflows/ci.yml`) runs the tests and builds the firmware on every pull request.
+- CI (`.github/workflows/ci.yml`) runs the tests and the crash hunt and builds the firmware on every pull request.
 - A tag `vX.Y.Z` runs `.github/workflows/release.yml`: the shared
   [fm1-build](https://github.com/zvenson/fm1-build) builder builds the package, runs the tests,
   signs build provenance and publishes the release. Go through

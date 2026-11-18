@@ -214,6 +214,7 @@ static void input(void)
     }
     if (m < 0) m = 0;
     if (m > 1023) m = 1023;
+    h1_master((int)(m * 1000 / 1023));   /* the picture shows it while it turns */
     gain_q12 = (uint32_t)(m * m) >> 8;   /* the square law fm1-base gives MASTER: m * m >> 12 on 0..4096 */
 }
 

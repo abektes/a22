@@ -2,15 +2,16 @@
 #include "gfx.h"
 
 #ifdef H1_DEVICE
-uint8_t g_fb[FB_W * FB_H] __attribute__((section(".pool")));
+uint32_t g_fb_w[FB_W * FB_H / 4] __attribute__((section(".pool")));
 #else
-uint8_t g_fb[FB_W * FB_H];
+uint32_t g_fb_w[FB_W * FB_H / 4];
 #endif
 
 static int gm = G_MAX;
 static int glevel = 255;      /* the ink level of the primitive being drawn, 0..255 */
 static f32 gdim = 1.0f;
 static f32 gox, goy;
+void (*g_poll_fn)(void);
 
 void g_mode(int mode) { gm = mode; }
 void g_dim(f32 k) { gdim = sat(k); }
@@ -18,7 +19,7 @@ void g_origin(f32 ox, f32 oy) { gox = ox; goy = oy; }
 
 void g_clear(void)
 {
-    uint32_t *p = (uint32_t *)(void *)g_fb;
+    uint32_t *p = g_fb_w;
     uint32_t i;
     for (i = 0; i < FB_W * FB_H / 4u; i++)
         p[i] = 0;
@@ -88,6 +89,7 @@ void g_rect(f32 x, f32 y, f32 w, f32 h, f32 a)
 {
     f32 ya, yb;
     int y0, y1, yy;
+    G_POLL();
     if (w <= 0.0f || h <= 0.0f)
         return;
     set_level(a);
@@ -114,6 +116,7 @@ void g_disc(f32 cx, f32 cy, f32 r, f32 a)
 {
     int y0, y1, y, x, xa, xb;
     f32 ro, ri2, ro2;
+    G_POLL();
     if (r <= 0.0f)
         return;
     set_level(a);
@@ -144,6 +147,7 @@ void g_ring(f32 cx, f32 cy, f32 r, f32 w, f32 a)
 {
     int y0, y1, y, x;
     f32 h = w * 0.5f + 0.5f, ro, ri, ro2, ri2;
+    G_POLL();
     if (r <= 0.0f || w <= 0.0f)
         return;
     if (r <= w * 0.5f) {
@@ -188,6 +192,7 @@ void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
 {
     int y0, y1, x0, x1, x, y;
     f32 pad, irx2, iry2, h;
+    G_POLL();
     if (rx <= 0.05f || ry <= 0.05f) {
         if (rx > 0.05f)
             g_line(cx - rx, cy, cx + rx, cy, w > 0.0f ? w : 1.5f, a);
@@ -227,25 +232,133 @@ void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
     }
 }
 
-void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
+/* one pixel that is on the screen, coverage 1 and up */
+static inline void ink(uint8_t *p, int cov, int mode, int lev)
 {
-    f32 dx, dy, len2, inv, len, ux, uy, R, reach;
-    int i, ia, ib, j, ja, jb;
-    x0 += gox; x1 += gox; y0 += goy; y1 += goy;
-    dx = x1 - x0;
-    dy = y1 - y0;
-    len2 = dx * dx + dy * dy;
-    if (len2 < 1e-4f) {
-        g_disc(x0 - gox, y0 - goy, w * 0.5f, a);
-        return;
+    int v;
+    if (cov > 256)
+        cov = 256;
+    if (mode == G_MAX) {
+        v = (cov * lev) >> 8;
+        if (v > *p)
+            *p = (uint8_t)v;
+    } else if (mode == G_ADD) {
+        v = *p + ((cov * lev) >> 8);
+        *p = (uint8_t)(v > 255 ? 255 : v);
+    } else {
+        v = lev - *p;
+        *p = (uint8_t)(*p + (v * cov) / 256);
     }
-    set_level(a);
-    inv = rsqrtf(len2);
-    len = len2 * inv;
-    ux = dx * inv;
-    uy = dy * inv;
-    R = w * 0.5f + 0.5f;
-    if (absf(dx) >= absf(dy)) {
+}
+
+/* A line as the pixels within R of it. It goes along its major axis m a column at a time (a column
+ * is a row when the line is steep: the strides say which), and down each column over the pixels the
+ * line can reach. How far a pixel is from the line (S) and how far along it (T) are straight in m
+ * and in n, so they are set once in floats and then stepped as integers, S with 20 bits of fraction
+ * and T with 16. No float per pixel or per column, but in the round ends, and none there either
+ * where the end is solid or empty: on the FM-1 a line costs about what its pixels do. Against a
+ * distance worked out in floats at every pixel, no pixel is more than one ink level of 255 off
+ * (tests/lines.c). line_seg hands over only what the integers hold: a line shorter than 2048 that
+ * starts within 2048 of the corner, R under 16.
+ * skip: 1 leaves out the round end at (m0, n0), 2 the one at (m1, n1), for a path whose
+ * neighbouring stroke covers it. */
+#define Q18(v) ((int32_t)((v) * 262144.0f + ((v) < 0.0f ? -0.5f : 0.5f)))
+static void line_scan(f32 m0, f32 n0, f32 m1, f32 n1, f32 um, f32 un, f32 len, f32 R,
+                      int mlim, int nlim, int mstride, int nstride, int skip)
+{
+    const int mode = gm, lev = glevel;
+    const f32 slope = (n1 - n0) / (m1 - m0), reach = R / um + 0.01f;
+    const f32 RR = R * R, solid = R > 1.0f ? (R - 1.0f) * (R - 1.0f) : -1.0f;
+    const int32_t R20 = (int32_t)(R * 1048576.0f), LEN = (int32_t)(len * 65536.0f);
+    const int32_t UM20 = (int32_t)(um * 1048576.0f + 0.5f), UN20 = (int32_t)(un * 1048576.0f + (un < 0.0f ? -0.5f : 0.5f));
+    const int32_t UM16 = (UM20 + 8) >> 4, UN16 = (UN20 + 8) >> 4;
+    const int32_t REACH = (int32_t)(reach * 262144.0f), SLOPE = Q18(slope), N0 = Q18(n0), N1 = Q18(n1);
+    const int ma = imax(0, ifloor(m0 - R - 0.01f) + 1), mb = imin(mlim - 1, ifloor(m1 + R + 0.01f));
+    const int mi = ifloor(m0) + 1, mj = -ifloor(-m1) - 1;          /* mi..mj: the columns between the ends */
+    int32_t NC, S, T;
+    int m = ma, nr;
+    if (ma > mb)
+        return;
+    if (m < mi)
+        NC = N0;
+    else if (m > mj)
+        NC = N1;
+    else
+        NC = Q18(n0 + ((f32)m - m0) * slope);
+    nr = ((NC - REACH) >> 18) + 1;                                   /* the first row the line can reach: S and T are kept there */
+    {
+        f32 pm = (f32)m - m0, pn = (f32)nr - n0;
+        S = (int32_t)((pm * un - pn * um) * 1048576.0f);
+        T = (int32_t)((pm * um + pn * un) * 65536.0f);
+    }
+    for (;;) {
+        int n, na = nr < 0 ? 0 : nr, nb = (NC + REACH) >> 18;
+        if (nb > nlim - 1)
+            nb = nlim - 1;
+        if (na <= nb) {
+            int32_t s = S - (na - nr) * UM20, t = T + (na - nr) * UN16, tb = t + (nb - na) * UN16;
+            uint8_t *p = g_fb + m * mstride + na * nstride;
+            if ((uint32_t)t <= (uint32_t)LEN && (uint32_t)tb <= (uint32_t)LEN) {
+                for (n = na; n <= nb; n++, p += nstride, s -= UM20) {   /* all of it beside the line */
+                    int c = (R20 - (s < 0 ? -s : s)) >> 12;
+                    if (c > 0)
+                        ink(p, c, mode, lev);
+                }
+            } else {
+                for (n = na; n <= nb; n++, p += nstride, s -= UM20, t += UN16) {
+                    int c;
+                    if ((uint32_t)t <= (uint32_t)LEN)
+                        c = (R20 - (s < 0 ? -s : s)) >> 12;
+                    else {                                             /* past an end: how far from it */
+                        f32 qm, qn, d2;
+                        if (t < 0) {
+                            if (skip & 1)
+                                continue;
+                            qm = (f32)m - m0;
+                            qn = (f32)n - n0;
+                        } else {
+                            if (skip & 2)
+                                continue;
+                            qm = (f32)m - m1;
+                            qn = (f32)n - n1;
+                        }
+                        d2 = qm * qm + qn * qn;
+                        if (d2 >= RR)
+                            continue;
+                        c = d2 <= solid ? 256 : cov_of(R - sqrtfx(d2));
+                    }
+                    if (c > 0)
+                        ink(p, c, mode, lev);
+                }
+            }
+        }
+        if (++m > mb)
+            break;
+        {
+            int n2;
+            if (m < mi)
+                NC = N0;
+            else if (m > mj)
+                NC = N1;
+            else if (m == mi)
+                NC = Q18(n0 + ((f32)m - m0) * slope);
+            else
+                NC += SLOPE;
+            n2 = ((NC - REACH) >> 18) + 1;
+            S += UN20 - (n2 - nr) * UM20;
+            T += UM16 + (n2 - nr) * UN16;
+            nr = n2;
+        }
+    }
+}
+
+/* The same in floats at every pixel, for a line too long, too far off or too wide for line_scan's
+ * integers. */
+static void line_far(f32 x0, f32 y0, f32 x1, f32 y1, f32 ux, f32 uy, f32 len, f32 R)
+{
+    f32 reach;
+    int i, ia, ib, j, ja, jb;
+    if (absf(x1 - x0) >= absf(y1 - y0)) {
         f32 slope;
         if (x0 > x1) {
             f32 t = x0; x0 = x1; x1 = t;
@@ -253,14 +366,14 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
             ux = -ux; uy = -uy;
         }
         slope = (y1 - y0) / (x1 - x0);
-        reach = R / absf(ux) + 1.0f;
-        ia = imax(0, ifloor(x0 - R));
-        ib = imin(FB_W - 1, ifloor(x1 + R) + 1);
+        reach = R / absf(ux) + 0.01f;            /* only the pixels the line can reach: the rest have no cover */
+        ia = imax(0, ifloor(x0 - R - 0.01f) + 1);
+        ib = imin(FB_W - 1, ifloor(x1 + R + 0.01f));
         for (i = ia; i <= ib; i++) {
             f32 xc = clampf((f32)i, x0, x1);
             f32 yc = y0 + (xc - x0) * slope;
-            ja = imax(0, ifloor(yc - reach));
-            jb = imin(FB_H - 1, ifloor(yc + reach) + 1);
+            ja = imax(0, ifloor(yc - reach) + 1);
+            jb = imin(FB_H - 1, ifloor(yc + reach));
             for (j = ja; j <= jb; j++) {
                 f32 px = (f32)i - x0, py = (f32)j - y0, t = px * ux + py * uy, d;
                 if (t < 0.0f)
@@ -281,14 +394,14 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
             ux = -ux; uy = -uy;
         }
         slope = (x1 - x0) / (y1 - y0);
-        reach = R / absf(uy) + 1.0f;
-        ja = imax(0, ifloor(y0 - R));
-        jb = imin(FB_H - 1, ifloor(y1 + R) + 1);
+        reach = R / absf(uy) + 0.01f;
+        ja = imax(0, ifloor(y0 - R - 0.01f) + 1);
+        jb = imin(FB_H - 1, ifloor(y1 + R + 0.01f));
         for (j = ja; j <= jb; j++) {
             f32 yc = clampf((f32)j, y0, y1);
             f32 xc = x0 + (yc - y0) * slope;
-            ia = imax(0, ifloor(xc - reach));
-            ib = imin(FB_W - 1, ifloor(xc + reach) + 1);
+            ia = imax(0, ifloor(xc - reach) + 1);
+            ib = imin(FB_W - 1, ifloor(xc + reach));
             for (i = ia; i <= ib; i++) {
                 f32 px = (f32)i - x0, py = (f32)j - y0, t = px * ux + py * uy, d;
                 if (t < 0.0f)
@@ -304,19 +417,180 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
     }
 }
 
+static void line_seg(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a, int skip)
+{
+    f32 dx, dy, len2, inv, len, ux, uy, R;
+    G_POLL();
+    x0 += gox; x1 += gox; y0 += goy; y1 += goy;
+    dx = x1 - x0;
+    dy = y1 - y0;
+    len2 = dx * dx + dy * dy;
+    if (len2 < 1e-4f) {
+        g_disc(x0 - gox, y0 - goy, w * 0.5f, a);
+        return;
+    }
+    set_level(a);
+    if (!glevel && gm != G_PAINT)
+        return;                                  /* no ink: nothing to do */
+    inv = rsqrtf(len2);
+    len = len2 * inv;
+    ux = dx * inv;
+    uy = dy * inv;
+    R = w * 0.5f + 0.5f;
+    if (!(len < 2048.0f && R < 16.0f && absf(x0) < 2048.0f && absf(y0) < 2048.0f)) {
+        line_far(x0, y0, x1, y1, ux, uy, len, R);
+        return;
+    }
+    if (absf(dx) >= absf(dy)) {
+        if (x0 > x1)
+            line_scan(x1, y1, x0, y0, -ux, -uy, len, R, FB_W, FB_H, 1, FB_W, ((skip & 1) << 1) | (skip >> 1));
+        else
+            line_scan(x0, y0, x1, y1, ux, uy, len, R, FB_W, FB_H, 1, FB_W, skip);
+    } else {
+        if (y0 > y1)
+            line_scan(y1, x1, y0, x0, -uy, -ux, len, R, FB_H, FB_W, FB_W, 1, ((skip & 1) << 1) | (skip >> 1));
+        else
+            line_scan(y0, x0, y1, x1, uy, ux, len, R, FB_H, FB_W, FB_W, 1, skip);
+    }
+}
+
+void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a) { line_seg(x0, y0, x1, y1, w, a, 0); }
+
+/* ---- a bed: what a wide stroke with no ink clears -------------------------------------------
+ * A path is stamped into a mask of one bit a pixel, and the mask is taken out of the picture in one
+ * go. However often the path crosses itself, each pixel is cleared once: a 9-wide g_line with no ink
+ * went over every pixel of a tangled cord five and six times, and that was most of its frame. */
+#define BED_WORDS ((FB_W + 31) / 32)
+#ifdef H1_DEVICE
+static uint32_t bed[FB_H * BED_WORDS] __attribute__((section(".pool")));
+#else
+static uint32_t bed[FB_H * BED_WORDS];
+#endif
+static int bed_y0 = FB_H, bed_y1 = -1;           /* the rows that hold anything */
+static int32_t bed_x, bed_y;                     /* where the path is, 16.16 */
+static int bed_px, bed_py;
+
+static void bed_dot(int x, int y)
+{
+    static const int8_t HW[9] = {2, 3, 4, 4, 4, 4, 4, 3, 2};   /* a disc 9 across */
+    int j;
+    if (x == bed_px && y == bed_py)
+        return;
+    bed_px = x;
+    bed_py = y;
+    if (x < -4 || x > FB_W + 3 || y < -4 || y > FB_H + 3)
+        return;
+    if (y - 4 < bed_y0) bed_y0 = imax(0, y - 4);
+    if (y + 4 > bed_y1) bed_y1 = imin(FB_H - 1, y + 4);
+    for (j = 0; j < 9; j++) {
+        int yy = y + j - 4, a = x - HW[j], b = x + HW[j];
+        uint32_t *row, ma, mb;
+        if ((unsigned)yy >= FB_H)
+            continue;
+        if (a < 0) a = 0;
+        if (b > FB_W - 1) b = FB_W - 1;
+        if (a > b)
+            continue;
+        row = &bed[yy * BED_WORDS];
+        ma = 0xFFFFFFFFu << (a & 31);
+        mb = 0xFFFFFFFFu >> (31 - (b & 31));
+        if (a >> 5 == b >> 5)
+            row[a >> 5] |= ma & mb;
+        else {
+            row[a >> 5] |= ma;
+            row[b >> 5] |= mb;
+        }
+    }
+}
+
+static int32_t bed_fix(f32 v)                    /* 16.16, and far enough off the screen is all the same */
+{
+    if (!(v > -64.0f)) v = -64.0f;               /* (whatever v is, a number comes out) */
+    if (v > (f32)FB_W + 64.0f) v = (f32)FB_W + 64.0f;
+    return (int32_t)(v * 65536.0f);
+}
+
+void g_bed_move(f32 x, f32 y)
+{
+    bed_x = bed_fix(x + gox);
+    bed_y = bed_fix(y + goy);
+    bed_px = bed_py = -99;
+    bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+}
+
+void g_bed_to(f32 x, f32 y)
+{
+    int32_t x1 = bed_fix(x + gox), y1 = bed_fix(y + goy), dx = x1 - bed_x, dy = y1 - bed_y;
+    int32_t l = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    int n = (int)(l / (3 * 65536)) + 1, i;       /* a stamp every three pixels or less */
+    dx /= n;
+    dy /= n;
+    for (i = 1; i < n; i++) {
+        bed_x += dx;
+        bed_y += dy;
+        bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+    }
+    bed_x = x1;
+    bed_y = y1;
+    bed_dot((bed_x + 32768) >> 16, (bed_y + 32768) >> 16);
+}
+
+void g_bed_clear(void)
+{
+    int y, w, n;
+    for (y = bed_y0; y <= bed_y1; y++) {
+        uint32_t *row = &bed[y * BED_WORDS];
+        for (w = 0; w < BED_WORDS; w++) {
+            uint32_t m = row[w];
+            uint32_t *fw;
+            if (!m)
+                continue;
+            row[w] = 0;
+            fw = &g_fb_w[(y * FB_W + w * 32) / 4];   /* (a row starts on a word, and so does every 32 pixels of it) */
+            for (n = 0; m; n++, m >>= 4) {
+                uint8_t *p = (uint8_t *)&fw[n];
+                if ((m & 15u) == 15u) {
+                    fw[n] = 0;
+                    continue;
+                }
+                if (m & 1u) p[0] = 0;
+                if (m & 2u) p[1] = 0;
+                if (m & 4u) p[2] = 0;
+                if (m & 8u) p[3] = 0;
+            }
+        }
+    }
+    bed_y0 = FB_H;
+    bed_y1 = -1;
+}
+
+/* whether a stroke from a to b is a line (g_line draws anything shorter as a dot) */
+static int stroke_real(const f32 *a, const f32 *b)
+{
+    f32 dx = (b[0] + gox) - (a[0] + gox), dy = (b[1] + goy) - (a[1] + goy);
+    return dx * dx + dy * dy >= 1e-4f;
+}
+
+/* In G_MAX a stroke's round start lies wholly inside the stroke before it, which is at least as
+ * strong at every pixel of it: it is left out, and the picture is the same. */
 void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a)
 {
-    int i;
-    for (i = 0; i + 1 < n; i++)
-        g_line(xy[i * 2], xy[i * 2 + 1], xy[i * 2 + 2], xy[i * 2 + 3], w, a);
-    if (closed && n > 2)
-        g_line(xy[(n - 1) * 2], xy[(n - 1) * 2 + 1], xy[0], xy[1], w, a);
+    int i, lap = closed && n > 2, joined = gm == G_MAX;
+    for (i = 0; i + 1 < n; i++) {
+        int before = i ? i - 1 : (lap ? n - 1 : -1);
+        line_seg(xy[i * 2], xy[i * 2 + 1], xy[i * 2 + 2], xy[i * 2 + 3], w, a,
+                 joined && before >= 0 && stroke_real(xy + before * 2, xy + i * 2));
+    }
+    if (lap)
+        line_seg(xy[(n - 1) * 2], xy[(n - 1) * 2 + 1], xy[0], xy[1], w, a,
+                 joined && stroke_real(xy + (n - 2) * 2, xy + (n - 1) * 2));
 }
 
 void g_fill(const f32 *xy, int n, f32 a)
 {
-    f32 ex[8], ey[8], ec[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
+    f32 ex[8], ey[8], ec[8], ea[8], ei[8], minx = 1e9f, maxx = -1e9f, miny = 1e9f, maxy = -1e9f, area = 0.0f, sgn;
     int i, x, y, x0, x1, y0, y1;
+    G_POLL();
     if (n < 3 || n > 8)
         return;
     set_level(a);
@@ -337,9 +611,42 @@ void g_fill(const f32 *xy, int n, f32 a)
     x1 = imin(FB_W - 1, ifloor(maxx + 2.0f));
     y0 = imax(0, ifloor(miny - 1.0f));
     y1 = imin(FB_H - 1, ifloor(maxy + 2.0f));
-    for (y = y0; y <= y1; y++)
-        for (x = x0; x <= x1; x++) {
+    for (i = 0; i < n; i++) {                    /* e = ea * x + (eb * y + ec), and 1 / ea for the row's ends */
+        ea[i] = sgn * ex[i];
+        ei[i] = ea[i] > 1e-6f || ea[i] < -1e-6f ? 1.0f / ea[i] : 0.0f;
+    }
+    for (y = y0; y <= y1; y++) {
+        /* where this row can have any cover (xa..xb), and where it is all inside (ia..ib): only the
+         * pixels between the two are worked out edge by edge */
+        f32 xa = (f32)x0, xb = (f32)x1, ia = (f32)x0, ib = (f32)x1;
+        int a0, a1, i0, i1, none = 0;
+        for (i = 0; i < n; i++) {
+            f32 b = sgn * (ey[i] * (f32)y + ec[i]);
+            if (ei[i] == 0.0f) {
+                if (b <= -0.5f) none = 1;
+                if (b < 0.51f) ib = ia - 1.0f;
+            } else if (ea[i] > 0.0f) {
+                xa = maxf(xa, (-0.51f - b) * ei[i]);
+                ia = maxf(ia, (0.51f - b) * ei[i]);
+            } else {
+                xb = minf(xb, (-0.51f - b) * ei[i]);
+                ib = minf(ib, (0.51f - b) * ei[i]);
+            }
+        }
+        if (none || xb < xa)
+            continue;
+        a0 = imax(x0, ifloor(xa));
+        a1 = imin(x1, ifloor(xb) + 1);
+        i0 = ifloor(ia) + 1;
+        i1 = ifloor(ib);
+        if (i1 < i0)
+            i0 = a1 + 1, i1 = a1;                /* no inside on this row */
+        for (x = a0; x <= a1; x++) {
             f32 d = 1e9f;
+            if (x >= i0 && x <= i1) {
+                put(x, y, 256);
+                continue;
+            }
             for (i = 0; i < n && d > -0.5f; i++) {
                 f32 e = sgn * (ex[i] * (f32)x + ey[i] * (f32)y + ec[i]);
                 if (e < d)
@@ -348,11 +655,14 @@ void g_fill(const f32 *xy, int n, f32 a)
             if (d > -0.5f)
                 put(x, y, cov_of(d + 0.5f));
         }
+    }
 }
 
 void g_vspan(int x, f32 y0, f32 y1, f32 a)
 {
     int ya, yb, y;
+    if (!(x & 15))
+        G_POLL();                                /* (a picture made of columns: now and then) */
     x += (int)gox;
     y0 += goy; y1 += goy;
     if ((unsigned)x >= FB_W || y1 <= y0)
@@ -377,14 +687,17 @@ void g_vspan(int x, f32 y0, f32 y1, f32 a)
 
 void g_arc(f32 cx, f32 cy, f32 r, f32 t0, f32 t1, f32 w, f32 a)
 {
-    f32 span = absf(t1 - t0);
-    int n = iclamp((int)(span * r * 0.9f) + 2, 2, 96), i;
-    f32 px = cx + r * cos_turns(t0), py = cy + r * sin_turns(t0);
+    f32 span = absf(t1 - t0), p[4];
+    int n = iclamp((int)(span * r * 0.9f) + 2, 2, 96), i, joined = 0;
+    p[2] = cx + r * cos_turns(t0);
+    p[3] = cy + r * sin_turns(t0);
     for (i = 1; i <= n; i++) {
         f32 t = t0 + (t1 - t0) * (f32)i / (f32)n;
-        f32 qx = cx + r * cos_turns(t), qy = cy + r * sin_turns(t);
-        g_line(px, py, qx, qy, w, a);
-        px = qx; py = qy;
+        p[0] = p[2]; p[1] = p[3];
+        p[2] = cx + r * cos_turns(t);
+        p[3] = cy + r * sin_turns(t);
+        line_seg(p[0], p[1], p[2], p[3], w, a, joined);
+        joined = gm == G_MAX && stroke_real(p, p + 2);   /* (the next stroke's round start is inside this one) */
     }
 }
 

@@ -41,14 +41,30 @@ const void *h1_state(uint32_t *size)
 }
 
 /* Take a saved blob. Call it right after h1_init, before the audio starts. Anything that does not
- * look like this version's state is refused, and every value is clamped to its range. */
+ * look like this version's state is refused, and every value is clamped to its range.
+ *
+ * The blob is bytes at any address: it is copied out a byte at a time before anything is read from
+ * it. (A byte buffer may sit at an odd address, and the FM-1's CPU stops on a word read from one:
+ * reading the magic straight out of the blob kept the first h1 from starting once it had saved.) */
 int h1_state_load(const void *blob, uint32_t size)
 {
-    const H1State *s = (const H1State *)blob;
+    const uint8_t *b = (const uint8_t *)blob;
+    H1State in;
     int i, j, pg;
-    if (!blob || size != sizeof st || s->magic != H1_MAGIC || s->version != H1_VERSION)
+    if (!blob || (size != sizeof st && size != H1_VERSION_4_SIZE))
         return -1;
-    st = *s;
+    for (i = 0; i < (int)sizeof in; i++)         /* (a version 4 state is the same up to where it ends: the rest is none) */
+        ((uint8_t *)&in)[i] = i < (int)size ? b[i] : 0;
+    if (in.magic != H1_MAGIC || in.version != (size == sizeof st ? H1_VERSION : 4u))
+        return -1;
+    if (in.version == 4u) {
+        in.version = H1_VERSION;
+        in.seq[6] = 0;                           /* LAYERS came with version 5 */
+        for (i = 0; i < NSTEP; i++)              /* (and the parts: a version 4 state's last bytes are padding, */
+            for (j = 0; j < 4; j++)              /* which lies where the first of them are now) */
+                in.step_part[i][j] = 0;
+    }
+    st = in;
     if (st.inst >= NINST) st.inst = 0;
     st.octave = (int8_t)iclamp(st.octave, -2, 2);
     st.hud &= 1;
@@ -69,6 +85,7 @@ int h1_state_load(const void *blob, uint32_t size)
     if (st.seq[3] > 2) st.seq[3] = 1;
     if (st.seq[4] > 2) st.seq[4] = 1;
     if (st.seq[5] > 2) st.seq[5] = CLICK_REC;
+    st.seq[6] &= 1;
     for (i = 0; i < NSTEP; i++)
         for (j = 0; j < 4; j++)
             if (st.steps[i][j] > 128) st.steps[i][j] = 0;
@@ -81,6 +98,8 @@ int h1_instrument(void) { return st.inst; }
 const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->name : ""; }
 int h1_algorithm(void) { return st.ip[st.inst].algo; }
 int h1_page(void) { return ui_page(); }
+int h1_layers(void) { return st.seq[6] == 1; }
+void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
 int h1_instrument_count(void) { return NINST; }
 const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
 const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }

@@ -98,7 +98,7 @@ static void bonk_note(Voice *v, const Blk *b)
 static void bonk_render(Voice *v, const Blk *b, f32 *out, int n)
 {
     int type = (int)v->s[8], i, j;
-    const Drum *d = &DRUMS[type < NDRUM ? type : 0];
+    const Drum *d = &DRUMS[type >= 0 && type < NDRUM ? type : 0];
     const Kit *k = &KITS[K.algo];
     Svf fn, fm;
     f32 oct = ((f32)v->note - 60.0f - (f32)type) * (1.0f / 12.0f);     /* which octave it was played in */

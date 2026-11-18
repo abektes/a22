@@ -12,7 +12,15 @@
 
 enum { G_MAX, G_ADD, G_PAINT };   /* MAX: line art (crossings don't blow out); PAINT: alpha over (a = 0 erases) */
 
-extern uint8_t g_fb[FB_W * FB_H];
+/* The framebuffer is kept as words, so it sits on a word boundary whatever the linker puts in front of
+ * it: g_clear writes it a word at a time, and the FM-1's CPU stops on a word written to an odd address. */
+extern uint32_t g_fb_w[FB_W * FB_H / 4];
+#define g_fb ((uint8_t *)g_fb_w)
+
+/* Called at the start of every primitive when set: the port's chance to do a little of something else
+ * (send the last frame's pixels) while a frame is drawn. A long loop that draws nothing can call G_POLL() too. */
+extern void (*g_poll_fn)(void);
+#define G_POLL() do { if (g_poll_fn) g_poll_fn(); } while (0)
 
 void g_clear(void);
 void g_fade(int mul256);                                   /* every pixel * mul/256: trails */
@@ -29,6 +37,12 @@ void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a);
 void g_fill(const f32 *xy, int n, f32 a);                  /* a filled convex polygon, either winding */
 void g_vspan(int x, f32 y0, f32 y1, f32 a);                /* one column of pixels from y0 to y1 (edges), soft ends */
 void g_arc(f32 cx, f32 cy, f32 r, f32 t0, f32 t1, f32 w, f32 a);   /* angles in turns, 0 = east, clockwise on screen */
+
+/* A bed: the path of a stroke 9 wide with no ink, cleared out of the picture in one go (g_bed_clear).
+ * For a cord that passes in front of what is already drawn. */
+void g_bed_move(f32 x, f32 y);
+void g_bed_to(f32 x, f32 y);
+void g_bed_clear(void);
 
 /* stroke font: capitals, digits, a few signs. size = cap height in pixels. */
 f32 g_text_w(const char *s, f32 size);

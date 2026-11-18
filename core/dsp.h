@@ -15,6 +15,8 @@ static inline f32 tsin(f32 t)
     x = t * (f32)SIN_N;
     i = (int32_t)x;
     x -= (f32)i;
+    i &= SIN_N - 1;                              /* (a t just under a whole number rounds up to SIN_N; and whatever
+                                                  * a number that is not one turns into, it stays in the table) */
     return sin_tab[i] + (sin_tab[i + 1] - sin_tab[i]) * x;
 }
 

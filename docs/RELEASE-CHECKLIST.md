@@ -45,10 +45,18 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
       sounds. Note any that stutter (KOI, URCHIN and BONK send the most pixels).
 - [ ] No crackle or dropouts with eight notes held on the heavy instruments (TWANG, BARD, KOI),
       with ECHO and SPACE turned up.
-- [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play.
+- [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play. The
+      bar on the right edge follows the knob and is gone a second after it stops; it does not
+      come up by itself with the knob at rest.
 - [ ] Loop: REC, play a take, REC again, it loops, overdub, hold REC clears. The white keys show
       the pattern and the place runs across.
 - [ ] Step: hold SEQ, REC, enter notes and a rest, PLAY. The white keys show the steps.
+- [ ] LAYERS: SEQ and REC together says LAYERS ON. Record a loop, turn PRESETS, play over it and
+      record again: both instruments play. Turn ALGORITHM: the recorded part does not change.
+      Hold REC clears only the instrument in hand; held three seconds, everything. The same in
+      STEP. SEQ and REC again: LAYERS OFF, and it all plays on the instrument in hand.
+- [ ] The SEQ page's top line scrolls through HOLD SEQ, SEQ + REC and HOLD REC, and reads still
+      for a moment when the page opens.
 - [ ] Metronome: hold GLO cycles CLICK REC, CLICK ON, CLICK OFF, and holding never opens the page.
 - [ ] MIDI in over USB plays notes, and CC 20 to 23 move the four knobs.
 - [ ] Change the instrument, an algorithm and a knob, wait ten seconds, switch off and on: they

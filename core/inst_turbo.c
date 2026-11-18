@@ -21,7 +21,7 @@ static f32 wow_ph, flut_ph, step_ph;
 
 static void turbo_block(const Blk *b)
 {
-    f32 dt = (f32)CTRL * b->isr;
+    f32 dt = b->step;
     T.algo = b->algo;
     T.chorus = b->k[0];
     T.tape = b->k[1];

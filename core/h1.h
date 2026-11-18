@@ -24,10 +24,19 @@ void h1_key(int key, int down);                  /* key 0 = F3 */
 void h1_button(int btn, int down);
 void h1_encoder(int enc, int detents);           /* + = clockwise */
 void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);
+void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame: the core
+                                                  * only shows it (a slim bar while it turns); the port owns the gain */
 void h1_frame(uint32_t now_ms);                  /* advance the animation and draw the frame */
 
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */
 void h1_render(int32_t *lr, uint32_t n);
+
+/* A second core, where a port has one. run hands it fn(arg) and returns 1, or returns 0 (then the core
+ * that asked does the work); wait returns 0 when the job is back, anything else if it was dropped (then
+ * too). h1_render gives it every other voice and does the rest meanwhile, so run and wait are called
+ * from wherever h1_render is. The sound is the same to the bit with or without. Call it before the
+ * audio starts; never is fine. */
+void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 
 /* the picture: 240 x 240 intensities, and the ink ramp that colours them (RGB565, 256 entries) */
 const uint8_t *h1_framebuffer(void);
@@ -37,6 +46,19 @@ const uint16_t *h1_palette(void);
  * 16-bit panel would be sent, the number that decides the frame rate on the device */
 typedef void (*h1_blit_fn)(int x, int y, int w, int h);
 uint32_t h1_present(h1_blit_fn blit);
+/* The same in pieces, for a panel that is slow to take its pixels (the FM-1's: a full screen is 21 ms):
+ * begin() finds what changed and queues it, next() hands out one rectangle at a time, and the pixels
+ * of a queued rectangle are read from h1_panel(), which the next h1_frame does not touch. So the queue
+ * can go out while the next frame is drawn: h1_while_drawing(fn) has fn called many times a frame from
+ * inside the drawing, and fn sends a rectangle when the panel is ready for one. Empty the queue before
+ * the next begin(). */
+void h1_present_begin(void);
+int h1_present_next(int *x, int *y, int *w, int *h);   /* 0: the queue is empty */
+int h1_present_left(void);                       /* rectangles still queued */
+int h1_present_rects(void);                      /* rectangles the last begin() queued */
+uint32_t h1_present_bytes(void);                 /* what the last begin() queued costs to send, in bytes */
+const uint8_t *h1_panel(void);                   /* the picture as the panel has it once the queue is out */
+void h1_while_drawing(void (*fn)(void));
 
 /* lights */
 uint32_t h1_key_leds(void);                      /* bit k = key k */
@@ -52,6 +74,7 @@ void h1_state_saved(void);
 int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current instrument, 0..7 */
 int h1_page(void);                               /* 0 = home, else a settings page */
+int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
 int h1_instrument_count(void);
 const char *h1_instrument_name(int i);
 const char *h1_knob_name(int inst, int k);       /* the four home-screen modulations */

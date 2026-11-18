@@ -35,6 +35,9 @@ jobs:
         run: tools/build_host.sh
       - name: The device app in fm1-base's host simulator
         run: sh tests/run_tests.sh
+      # any saved state and any panel input, with the compiler's address and undefined-behaviour checkers on
+      - name: The crash hunt (tests/fuzz.c)
+        run: sh tests/run_fuzz.sh 8
 
   firmware:
     runs-on: ubuntu-24.04
@@ -70,11 +73,43 @@ jobs:
           echo "AC79_SDK=$HOME/fw-AC79_AIoT_SDK" >> "$GITHUB_ENV"
       - name: Build the firmware (a development build)
         run: ./build.sh
+      # for reading a crash record: its pc and rets are addresses in this table
+      - name: Hashes, and where every function is
+        run: |
+          sha256sum app/build/h1.fwsc app/build/h1.bin
+          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
+          wc -l app/build/h1.sym
+          cat app/build/h1.sym
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
           name: h1-dev-build
           path: |
             app/build/h1.fwsc
             app/build/h1.bin
+            app/build/h1.elf
+            app/build/h1.dis
+            app/build/h1.sym
+            app/build/firmware.json
+          if-no-files-found: error
+      # The same firmware without the chip's second core (FM1B_CPU2=0: the first core renders every voice). Not what
+      # a release is built as: kept beside the normal build for an FM-1 whose second core misbehaves, and for timing
+      # against it.
+      - name: Build the firmware with one core
+        run: FM1B_CPU2=0 ./build.sh
+      - name: Hashes, and where every function is (one core)
+        run: |
+          sha256sum app/build/h1.fwsc app/build/h1.bin
+          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
+          wc -l app/build/h1.sym
+          cat app/build/h1.sym
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: h1-dev-build-one-core
+          path: |
+            app/build/h1.fwsc
+            app/build/h1.bin
+            app/build/h1.elf
+            app/build/h1.dis
+            app/build/h1.sym
             app/build/firmware.json
           if-no-files-found: error

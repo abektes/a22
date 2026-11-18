@@ -10,7 +10,8 @@
  *   GLO held   the metronome: while recording, always, or off
  *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
- *   SAVE       saves now; held, resets this instrument
+ *   SAVE       saves now; held, resets this instrument; held three seconds, every instrument and
+ *              the KEYS and GLOBAL pages (the sequencer and what it holds are left alone)
  *   PLAY REC   the sequencer. Loop: REC arms a take, or overdubs while it plays. Step: REC is
  *              step-write. REC held clears.
  *   OCT- OCT+  octave; both, back to the middle
@@ -93,6 +94,8 @@ static int active_col = 0;
 static f32 col_v[4], col_vv[4];                  /* the gauges, eased */
 static char toast_s[20];
 static f32 toast_t = 9.0f;
+static f32 vol_t = 9.0f, vol_x, vol_v;           /* the volume bar: seconds since MASTER last moved, and where it shows */
+static int vol_seen = -1;
 static int toast_pips = -1;
 
 static SeqInfo seq;                              /* the sequencer, as of this frame */
@@ -106,8 +109,13 @@ static uint8_t btn_fired[H1_NBTN];
 
 static uint16_t pal[256];
 static uint8_t pal_key[5];
-static uint8_t prev_fb[FB_W * FB_H] H1_POOL;
+static uint32_t prev_w[FB_W * FB_H / 4] H1_POOL;   /* what the panel shows now; words, as the framebuffer is */
+#define prev_fb ((uint8_t *)prev_w)
 static int force_full = 1;
+#define RQ_MAX 512
+static uint8_t rq[RQ_MAX][4];                    /* what is queued for the panel: x, y, w, h (h1_present_begin) */
+static int rq_n, rq_i;
+static uint32_t rq_bytes;
 static int dirty;
 static uint32_t dirty_ms;
 
@@ -275,8 +283,26 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (type == 0xB0u && d1 == 123)
         eng_post(EV_PANIC, 0);
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
-        st.ip[st.inst].knob[d1 - 20] = (uint8_t)((d2 * 100 + 63) / 127);
+        st.ip[st.inst].knob[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         knob_touch[d1 - 20] = 0.0f;
+    }
+}
+
+/* MASTER, as the port reads it. The knob is an analog reading and never quite still: the bar comes up
+ * for a real move (over 1.2 % of the travel) and then follows the small ones while it is up. */
+void h1_master(int level)
+{
+    int d;
+    level = iclamp(level, 0, 1000);
+    if (vol_seen < 0) {                          /* the first reading: where it stands, nothing to show */
+        vol_seen = level;
+        vol_x = (f32)level * 0.001f;
+        return;
+    }
+    d = level > vol_seen ? level - vol_seen : vol_seen - level;
+    if (d >= (vol_t < 1.2f ? 3 : 12)) {
+        vol_seen = level;
+        vol_t = 0.0f;
     }
 }
 
@@ -322,6 +348,20 @@ void h1_button(int btn, int down)
     btn_held |= 1u << btn;
     btn_ms[btn] = now;
     btn_fired[btn] = 0;
+    /* SEQ and REC together: LAYERS. Whichever lands second makes the pair, and neither then does what
+     * it does alone (a pair made after one of them has already done its hold does nothing). */
+    if (btn == H1_BTN_SEQ || btn == H1_BTN_REC) {
+        int other = btn == H1_BTN_SEQ ? H1_BTN_REC : H1_BTN_SEQ;
+        if (btn_held & (1u << other)) {
+            if (!btn_fired[other]) {
+                st.seq[6] ^= 1;
+                toast(st.seq[6] ? "LAYERS ON" : "LAYERS OFF", 0, 0, 0, -1);
+                mark_dirty();
+            }
+            btn_fired[btn] = btn_fired[other] = 3;
+            return;
+        }
+    }
     switch (btn) {
     case H1_BTN_FX: open_page(PG_FX); break;
     case H1_BTN_SEL: open_page(PG_KEYS); break;
@@ -349,10 +389,26 @@ void h1_button(int btn, int down)
 
 static void holds(void)
 {
+    /* hold REC: clear. With LAYERS on, first what was recorded on the instrument in hand, and held on to
+     * three seconds, the lot (as SAVE resets the instrument, then everything). */
     if ((btn_held & (1u << H1_BTN_REC)) && !btn_fired[H1_BTN_REC] && now - btn_ms[H1_BTN_REC] > 700u) {
         btn_fired[H1_BTN_REC] = 1;
+        if (st.seq[6] && eng_seq_has(st.inst)) {
+            eng_post(EV_CLEAR, 1 + st.inst);
+            toast(insts[st.inst]->name, 0, 0, " CLEARED", -1);
+            btn_fired[H1_BTN_REC] = 2;           /* (and the lot, if it stays down) */
+        } else if (st.seq[6]) {
+            toast(insts[st.inst]->name, 0, 0, " EMPTY", -1);   /* nothing of this instrument's to clear */
+            btn_fired[H1_BTN_REC] = 2;
+        } else {
+            eng_post(EV_CLEAR, 0);
+            toast(st.seq[0] == SEQ_STEP ? "STEPS CLEARED" : "LOOP CLEARED", 0, 0, 0, -1);
+        }
+    }
+    if ((btn_held & (1u << H1_BTN_REC)) && btn_fired[H1_BTN_REC] == 2 && now - btn_ms[H1_BTN_REC] > 3000u) {
+        btn_fired[H1_BTN_REC] = 1;
         eng_post(EV_CLEAR, 0);
-        toast(st.seq[0] == SEQ_STEP ? "STEPS CLEARED" : "LOOP CLEARED", 0, 0, 0, -1);
+        toast("ALL CLEARED", 0, 0, 0, -1);
     }
     if ((btn_held & (1u << H1_BTN_SEQ)) && !btn_fired[H1_BTN_SEQ] && now - btn_ms[H1_BTN_SEQ] > 550u) {
         btn_fired[H1_BTN_SEQ] = 1;
@@ -373,6 +429,22 @@ static void holds(void)
         vis.algo = st.ip[st.inst].algo;
         vis.algo_t = 0.0f;
         toast("RESET", 0, 0, 0, -1);
+        mark_dirty();
+    }
+    if ((btn_held & (1u << H1_BTN_SAVE)) && btn_fired[H1_BTN_SAVE] == 1 && now - btn_ms[H1_BTN_SAVE] > 3000u) {
+        int i;                                   /* still held: everything, as it was the first time it was switched on */
+        btn_fired[H1_BTN_SAVE] = 2;
+        for (i = 0; i < NINST; i++)
+            st.ip[i] = insts[i]->def;
+        st.keys[0] = st.keys[1] = st.keys[2] = st.keys[3] = 0;
+        st.glo[0] = 112;
+        st.glo[1] = 0;
+        st.glo[2] = 50;
+        st.glo[3] = 100;
+        st.octave = 0;
+        st.hud = 0;
+        eng_post(EV_UNLATCH, 0);
+        toast("ALL RESET", 0, 0, 0, -1);
         mark_dirty();
     }
     if ((btn_held & (1u << H1_BTN_HOME)) && !btn_fired[H1_BTN_HOME] && now - btn_ms[H1_BTN_HOME] > 700u) {
@@ -648,6 +720,22 @@ static void draw_toast(void)
     g_dim(1.0f);
 }
 
+/* The volume, while MASTER turns: a slim bar up the right edge, drawn like a knob's on the strip. */
+static void draw_volume(f32 dt)
+{
+    f32 a = 1.0f - smooth01((vol_t - 0.9f) / 0.5f), y0 = 176.0f, h = 112.0f, x = 234.0f;
+    spring(&vol_x, &vol_v, (f32)(vol_seen < 0 ? 0 : vol_seen) * 0.001f, 40.0f, dt);
+    if (a <= 0.01f)
+        return;
+    g_mode(G_PAINT);
+    g_rect(x - 6.0f, y0 - h - 7.0f, 12.0f, h + 14.0f, 0.0f);
+    g_mode(G_MAX);
+    g_dim(a);
+    g_line(x, y0, x, y0 - h, 2.0f, 0.3f);
+    g_line(x, y0, x, y0 - h * sat(vol_x), 4.0f, 1.0f);
+    g_dim(1.0f);
+}
+
 /* a tiny rounded square: the settings pages' map of the panel's buttons */
 static void rsquare(f32 x, f32 y, f32 sz, f32 a)
 {
@@ -718,12 +806,37 @@ static void draw_page(void)
     int i, j;
     f32 intro = ease_out(page_t / 0.22f);
     g_text(12.0f, 14.0f, pd->title, 22.0f, 3.0f, 1.0f, 0);
-    if (page == PG_SEQ || page == PG_GLO) {      /* what holding this page's button does */
-        if (page == PG_SEQ)
-            put_s(buf, "HOLD SEQ: LOOP / STEP");
-        else
-            put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
+    if (page == PG_GLO) {                        /* what holding this page's button does */
+        put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
         g_text(13.0f, 43.0f, buf, 8.0f, 1.0f, 0.5f * intro, 0);
+    }
+    if (page == PG_SEQ) {
+        /* The sequencer's buttons do three things held or paired, more than the line holds: they go by
+         * as a marquee, still for a moment when the page opens, then round and round. */
+        const char *hint[3];
+        f32 wd[3], total = 0.0f, off, x;
+        hint[0] = "HOLD SEQ: LOOP / STEP";
+        hint[1] = st.seq[6] ? "SEQ + REC: LAYERS ON" : "SEQ + REC: LAYERS OFF";
+        hint[2] = st.seq[6] ? "HOLD REC: CLEAR PART, THEN ALL" : "HOLD REC: CLEAR";
+        for (i = 0; i < 3; i++) {
+            wd[i] = g_text_w(hint[i], 8.0f) + 22.0f;
+            total += wd[i];
+        }
+        off = maxf(0.0f, page_t - 1.4f) * 26.0f;
+        off -= total * (f32)ifloor(off / total);
+        x = 13.0f - off;
+        for (j = 0; j < 6; j++) {                /* twice round: the line never shows its end */
+            i = j % 3;
+            if (x + wd[i] > 0.0f && x < 240.0f) {
+                g_text(x, 43.0f, hint[i], 8.0f, 1.0f, 0.5f * intro, 0);
+                g_disc(x + wd[i] - 11.0f, 47.0f, 1.2f, 0.35f * intro);
+            }
+            x += wd[i];
+        }
+        g_mode(G_PAINT);                         /* a margin each side, as the page's other text keeps */
+        g_rect(0.0f, 40.0f, 11.0f, 14.0f, 0.0f);
+        g_rect(229.0f, 40.0f, 11.0f, 14.0f, 0.0f);
+        g_mode(G_MAX);
     }
     for (i = 1; i < NPAGE; i++)                  /* the panel's two rows of six: a square where a button has a page */
         rsquare(165.0f + (f32)PAGE_AT[i][0] * 11.0f, 12.0f + (f32)PAGE_AT[i][1] * 11.0f, 8.0f, i == page ? 1.0f : 0.3f);
@@ -801,6 +914,7 @@ void ui_frame(uint32_t now_ms)
     name_t += dt;
     page_t += dt;
     toast_t += dt;
+    vol_t += dt;
 
     build_palette();
     g_clear();
@@ -823,6 +937,7 @@ void ui_frame(uint32_t now_ms)
         draw_seq_mark();
         draw_toast();
     }
+    draw_volume(dt);
     vis.fresh = 0;
     vis.enter += dt;
 }
@@ -834,62 +949,136 @@ void ui_init(void)
     vis.algo_t = 1.0f;
     name_t = 0.0f;
     force_full = 1;
+    rq_n = rq_i = 0;                             /* (nothing queued for the panel) */
     pal_key[4] = 0;
+    dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
+    btn_held = 0;                                /* (and no button is down) */
 }
 
-/* ---- presenting ------------------------------------------------------------------------- */
-static int row_range(int y, int *x0, int *x1)
+/* ---- presenting: only what changed goes to the panel -----------------------------------------
+ * A row is 30 tiles of 8 pixels. A tile is dirty when a pixel in it would show another colour than
+ * the panel has now (two ink levels that come out as the same colour are the same). Dirty rows are
+ * taken up to 20 at a time, and inside such a band every run of dirty tiles goes out as its own
+ * rectangle, cut down to the rows that touch it: a ring, or two things far apart, do not drag the
+ * unchanged pixels between them along. */
+#define TILES (FB_W / 8)
+#define PRESENT_RECT 200                 /* what a rectangle costs besides its pixels, in bytes' worth of time */
+#define PRESENT_GAP 256                  /* clean pixels' bytes it is cheaper to send than to start another rectangle */
+static uint32_t row_tiles(int y)
 {
-    const uint8_t *a = &g_fb[y * FB_W], *b = &prev_fb[y * FB_W];
-    int l = 0, r = FB_W - 1;
-    if (force_full) {
-        *x0 = 0;
-        *x1 = FB_W - 1;
-        return 1;
+    const uint32_t *wa = &g_fb_w[y * (FB_W / 4)], *wb = &prev_w[y * (FB_W / 4)];
+    uint32_t m = 0;
+    int t, i;
+    if (force_full)
+        return (1u << TILES) - 1u;
+    for (t = 0; t < TILES; t++, wa += 2, wb += 2) {
+        const uint8_t *a, *b;
+        if (wa[0] == wb[0] && wa[1] == wb[1])
+            continue;
+        a = (const uint8_t *)wa;
+        b = (const uint8_t *)wb;
+        for (i = 0; i < 8; i++)
+            if (a[i] != b[i] && pal[a[i]] != pal[b[i]]) {
+                m |= 1u << t;
+                break;
+            }
     }
-    while (l < FB_W && a[l] == b[l])
-        l++;
-    if (l == FB_W)
-        return 0;
-    while (a[r] == b[r])
-        r--;
-    *x0 = l;
-    *x1 = r;
-    return 1;
+    return m;
 }
 
-uint32_t h1_present(h1_blit_fn blit)
+/* What changed is found in one pass and queued as rectangles, and the changed pixels are copied to
+ * the panel's copy as they are found. From then on a rectangle is read from that copy, not from the
+ * framebuffer: the queue can go out to the panel while the next frame is being drawn. */
+
+void h1_present_begin(void)
 {
-    uint32_t bytes = 0;
     int y = 0;
+    rq_n = rq_i = 0;
+    rq_bytes = 0;
     while (y < FB_H) {
-        int x0, x1, bx0, bx1, y0, yy, xx;
-        if (!row_range(y, &x0, &x1)) {
+        uint32_t rm[20], all = row_tiles(y);
+        int n = 0, y0 = y, t = 0;
+        if (!all) {
             y++;
             continue;
         }
-        y0 = y;
-        bx0 = x0;
-        bx1 = x1;
-        y++;
-        while (y < FB_H && y - y0 < 20 && row_range(y, &x0, &x1)) {
-            /* stop the band where it would start to carry a lot of unchanged pixels */
-            int nb0 = x0 < bx0 ? x0 : bx0, nb1 = x1 > bx1 ? x1 : bx1;
-            if ((nb1 - nb0) > (bx1 - bx0) + 48 && (nb1 - nb0) > 2 * (x1 - x0 + 1))
+        rm[n++] = all;
+        for (y++; y < FB_H && n < 20; y++) {
+            uint32_t m = row_tiles(y);
+            if (!m)
                 break;
-            bx0 = nb0;
-            bx1 = nb1;
-            y++;
+            rm[n++] = m;
+            all |= m;
         }
-        for (yy = y0; yy < y; yy++)
-            for (xx = bx0; xx <= bx1; xx++)
-                prev_fb[yy * FB_W + xx] = g_fb[yy * FB_W + xx];
-        if (blit)
-            blit(bx0, y0, bx1 - bx0 + 1, y - y0);
-        bytes += (uint32_t)((bx1 - bx0 + 1) * (y - y0) * 2 + 16);
+        while (t < TILES) {
+            uint32_t run;
+            int t0, t1, r0 = 0, r1 = n - 1, yy, x0, x1;
+            if (!(all >> t & 1u)) {
+                t++;
+                continue;
+            }
+            t0 = t1 = t;
+            for (;;) {                           /* on through the dirty tiles, and over a gap too small to be worth a rectangle of its own */
+                int u = t1 + 1;
+                while (u < TILES && !(all >> u & 1u))
+                    u++;
+                if (u >= TILES)
+                    break;
+                if ((u - t1 - 1) * 8 * n * 2 > PRESENT_GAP && rq_n < RQ_MAX - FB_H)
+                    break;                       /* (a queue that is nearly full takes whole bands: it cannot overflow) */
+                t1 = u;
+            }
+            run = ((t1 - t0 + 1 >= 32 ? 0u : 1u << (t1 - t0 + 1)) - 1u) << t0;
+            while (!(rm[r0] & run)) r0++;
+            while (!(rm[r1] & run)) r1--;
+            x0 = t0 * 8;
+            x1 = t1 * 8 + 7;
+            for (yy = y0 + r0; yy <= y0 + r1; yy++) {
+                const uint32_t *src = &g_fb_w[(yy * FB_W + x0) / 4];
+                uint32_t *dst = &prev_w[(yy * FB_W + x0) / 4];
+                int k, nw = (x1 - x0 + 1) / 4;
+                for (k = 0; k < nw; k++)
+                    dst[k] = src[k];
+            }
+            rq[rq_n][0] = (uint8_t)x0;
+            rq[rq_n][1] = (uint8_t)(y0 + r0);
+            rq[rq_n][2] = (uint8_t)(x1 - x0 + 1);
+            rq[rq_n][3] = (uint8_t)(r1 - r0 + 1);
+            rq_n++;
+            rq_bytes += (uint32_t)((x1 - x0 + 1) * (r1 - r0 + 1) * 2 + PRESENT_RECT);
+            t = t1 + 1;
+        }
     }
     force_full = 0;
-    return bytes;
+}
+
+int h1_present_next(int *x, int *y, int *w, int *h)
+{
+    if (rq_i >= rq_n)
+        return 0;
+    *x = rq[rq_i][0];
+    *y = rq[rq_i][1];
+    *w = rq[rq_i][2];
+    *h = rq[rq_i][3];
+    rq_i++;
+    return 1;
+}
+
+int h1_present_left(void) { return rq_n - rq_i; }
+uint32_t h1_present_bytes(void) { return rq_bytes; }
+int h1_present_rects(void) { return rq_n; }
+const uint8_t *h1_panel(void) { return prev_fb; }
+void h1_while_drawing(void (*fn)(void)) { g_poll_fn = fn; }
+
+/* all of it at once, for a port that has nothing better to do while it waits */
+uint32_t h1_present(h1_blit_fn blit)
+{
+    int x, y, w, h;
+    h1_present_begin();
+    while (h1_present_next(&x, &y, &w, &h))
+        if (blit)
+            blit(x, y, w, h);
+    return rq_bytes;
 }
 
 const uint8_t *h1_framebuffer(void) { return g_fb; }

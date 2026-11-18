@@ -25,7 +25,7 @@ static void lava_block(const Blk *b)
     V.cut = 90.0f * exp2fx(b->k[1] * 6.6f);
     V.lean = b->k[2];
     V.sub = b->k[3];
-    wob_ph = fractf(wob_ph + b->bpm * (1.0f / 60.0f) * (f32)CTRL * b->isr);      /* QUAKE wobbles in time */
+    wob_ph = fractf(wob_ph + b->bpm * (1.0f / 60.0f) * b->step);      /* QUAKE wobbles in time */
     V.wob = 0.5f - 0.5f * tsin(wob_ph + 0.25f);
 }
 
@@ -116,6 +116,14 @@ static inline f32 nearness(int algo, f32 dx, f32 dy, f32 ir)
     return 1.0f / (d2 + 0.15f);
 }
 
+/* how far along a cell's edge, in pixels, the level is crossed, from the corner worth a to the one worth b
+ * (an edge it does not cross, with both corners the same, is never drawn: any number will do, but a real one) */
+static f32 cross(f32 a, f32 b)
+{
+    f32 d = a - b;
+    return d != 0.0f ? (f32)CELL * a / d : 0.0f;
+}
+
 static void contour(f32 level, f32 w, f32 a)
 {
     int i, j;
@@ -128,10 +136,10 @@ static void contour(f32 level, f32 w, f32 a)
             if (m == 0 || m == 15)
                 continue;
             /* where the line crosses each edge: top, right, bottom, left */
-            ex[0] = x0 + (f32)CELL * fa / (fa - fb); ey[0] = y0;
-            ex[1] = x0 + (f32)CELL; ey[1] = y0 + (f32)CELL * fb / (fb - fc);
-            ex[2] = x0 + (f32)CELL * fd / (fd - fc); ey[2] = y0 + (f32)CELL;
-            ex[3] = x0; ey[3] = y0 + (f32)CELL * fa / (fa - fd);
+            ex[0] = x0 + cross(fa, fb); ey[0] = y0;
+            ex[1] = x0 + (f32)CELL; ey[1] = y0 + cross(fb, fc);
+            ex[2] = x0 + cross(fd, fc); ey[2] = y0 + (f32)CELL;
+            ex[3] = x0; ey[3] = y0 + cross(fa, fd);
 #define SEG(p, q) g_line(ex[p], ey[p], ex[q], ey[q], w, a)
             switch (m) {
             case 1: case 14: SEG(3, 0); break;

@@ -42,7 +42,7 @@ static void pip_block(const Blk *b)
     if (absf(B.zap) < 0.06f) B.zap = 0.0f;
     B.crunch = b->k[3];
     B.chord = iclamp((int)(b->k[0] * 4.99f), 0, 4);
-    pwm_ph = fractf(pwm_ph + (0.12f + 5.0f * b->k[0] * b->k[0]) * (f32)CTRL * b->isr);
+    pwm_ph = fractf(pwm_ph + (0.12f + 5.0f * b->k[0] * b->k[0]) * b->step);
     B.pwm = 0.5f + 0.42f * tsin(pwm_ph);
 }
 
@@ -214,7 +214,7 @@ static f32 hop, hopv, str, strv, mouth_o, blink, look_x, look_v, wob_ph, zflash;
 static uint32_t seen;
 static int dance;
 
-static uint32_t hash2(int x, int y) { uint32_t h = (uint32_t)(x * 374761393 + y * 668265263); h = (h ^ (h >> 13)) * 1274126177u; return h ^ (h >> 16); }
+static uint32_t hash2(int x, int y) { uint32_t h = (uint32_t)x * 374761393u + (uint32_t)y * 668265263u; h = (h ^ (h >> 13)) * 1274126177u; return h ^ (h >> 16); }
 
 static void sprite(int algo, uint8_t m[12][12], const Vis *vis, int mouth_w, int open, int blinking, int look, int up, int face)
 {
