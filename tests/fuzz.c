@@ -5,12 +5,14 @@
  * The FM-1's CPU stops on things a computer shrugs at: a word read from an odd address, a read
  * past the end of an array, a rectangle taller than the buffer it is converted in. Built with
  * -fsanitize=address,undefined, every one of those stops this program too, with the line.
- * It does three things, each from a seed so a failure can be run again:
+ * It does four things, each from a seed so a failure can be run again:
  *
  *   1. state: saved states that pass the magic and version check but hold any bytes at all, handed
  *      over from an odd address, then played. Whatever a store gives back, h1 has to start.
  *   2. panel: every key, button (taps and holds), encoder and MIDI byte in any order and at any
  *      pace, on every instrument and page, with the sound rendered and every frame drawn.
+ *   2b. long notes: every algorithm of every instrument with the knobs at their ends and a chord held
+ *      nine seconds, then let go: what only goes wrong late in a note.
  *   3. two threads: the same, while a second thread renders the sound without waiting its turn,
  *      as the audio interrupt does on the device.
  *
@@ -195,6 +197,36 @@ static void part_panel(int steps)
     }
 }
 
+/* ---- 2b. long notes: every algorithm of every instrument, a chord held nine seconds ----------- */
+static void part_long(void)
+{
+    static const uint8_t EDGE[] = {0, 0, 50, 100, 100, 127};
+    int inst, algo, k, n;
+    part = "long notes";
+    fresh(0);
+    for (inst = 0; inst < h1_instrument_count(); inst++) {
+        for (algo = 0; algo < 8; algo++) {
+            for (k = 0; k < 4; k++)                          /* the knobs at their ends, mostly */
+                h1_midi(0xB0, (uint8_t)(20 + k), below(4) ? EDGE[below(6)] : (uint8_t)below(128));
+            for (k = 0; k < 3; k++)
+                h1_key(below(H1_NKEYS), 1);
+            for (n = 0; n < 390; n++) {                      /* 390 * 1024 frames: nine seconds */
+                sound(1024);
+                if (n % 16 == 0)
+                    frame(370, 0);
+            }
+            for (k = 0; k < H1_NKEYS; k++)
+                h1_key(k, 0);
+            for (n = 0; n < 40; n++)                         /* and the tails */
+                sound(1024);
+            frame(16, 1);
+            h1_encoder(H1_ENC_ALGO, 1);
+        }
+        h1_encoder(H1_ENC_PRESET, 1);
+        frame(16, 1);
+    }
+}
+
 /* ---- 3. the sound on its own thread ---------------------------------------------------------- */
 static volatile int audio_run;
 static void *audio_thread(void *arg)
@@ -234,6 +266,7 @@ int main(int argc, char **argv)
         rng_s = s * 2654435761u + 1u;
         part_state(40);
         part_panel(1500);
+        part_long();
         part_threads(6000);
     }
     printf("fuzz: %u seeds from %u, nothing found\n", seeds, first);
