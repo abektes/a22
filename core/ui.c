@@ -896,7 +896,13 @@ const uint8_t *h1_framebuffer(void) { return g_fb; }
 const uint16_t *h1_palette(void) { return pal; }
 
 /* ---- lights ----------------------------------------------------------------------------- */
-uint32_t h1_key_leds(void) { return eng_sounding_lo(); }
+uint32_t h1_key_leds(void)
+{
+    uint32_t m;
+    if (eng_seq_leds(&m, page == PG_SEQ, fractf(tsec * 2.2f) < 0.6f))
+        return m;                                           /* the sequencer has the keys while it runs */
+    return eng_sounding_lo();
+}
 
 uint32_t h1_button_leds(void)
 {

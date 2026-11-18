@@ -734,6 +734,48 @@ void eng_seq_info(SeqInfo *si)
     si->at = imin(step_at, si->nsteps - 1);
 }
 
+/* The sequencer on the keys, as the stock firmware shows it: the sixteen white keys are the pattern from
+ * left to right. One key a step up to sixteen steps, two steps a key up to thirty-two, and so on up. A key
+ * is lit where its steps hold notes, and the one being played is turned over (a lit one goes dark, a dark
+ * one lights), so the place runs across the keyboard. The loop is shown the same way, in sixteenths.
+ * Returns 0 when the keys are not the sequencer's (then they show what is sounding). */
+int eng_seq_leds(uint32_t *out, int page_open, int blink)
+{
+    static const uint8_t WHITE[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
+    uint32_t m = 0;
+    int n, per, at = -1, wr = -1, i;
+    if (st.seq[0] == SEQ_STEP) {
+        if (!step_playing && !step_write && !page_open)
+            return 0;
+        n = step_count();
+        per = (n + 15) / 16;
+        for (i = 0; i < n; i++)
+            if (st.steps[i][0])
+                m |= 1u << WHITE[i / per];
+        if (step_playing)
+            at = imin(step_at, n - 1) / per;
+        else if (step_write)
+            wr = imin(step_cursor, n - 1) / per;
+    } else {
+        int s = loop_state, ne = nlev;
+        if (s != LOOP_REC && s != LOOP_PLAY && s != LOOP_DUB && !(page_open && s == LOOP_IDLE))
+            return 0;
+        n = imax(1, (int)loop_len / 24);
+        per = (n + 15) / 16;
+        for (i = 0; i < ne; i++)
+            if (lev[i].on & 1)
+                m |= 1u << WHITE[imin(lev[i].tick / 24, n - 1) / per];
+        if (s != LOOP_IDLE)
+            at = imin((int)loop_pos / 24, n - 1) / per;
+    }
+    if (at >= 0)
+        m ^= 1u << WHITE[at];
+    if (wr >= 0)                                            /* the step being written blinks */
+        m = blink ? m | 1u << WHITE[wr] : m & ~(1u << WHITE[wr]);
+    *out = m;
+    return 1;
+}
+
 /* ---- the block ------------------------------------------------------------------------- */
 static void switch_instrument(int i)
 {

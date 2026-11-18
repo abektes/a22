@@ -108,6 +108,12 @@ int main(int argc, char **argv)
                    bytes_max, bytes_max * 8.0 / 44000.0);
             bytes_sum = 0; bytes_max = 0; frames_n = 0;
             i += 1;
+        } else if (!strcmp(w, "leds")) {                       /* the key lights, low key first: # lit, . dark */
+            uint32_t m = h1_key_leds();
+            int k;
+            for (k = 0; k < H1_NKEYS; k++) putchar(m >> k & 1u ? '#' : '.');
+            putchar('\n');
+            i += 1;
         } else { fprintf(stderr, "unknown word %s\n", w); return 2; }
     }
     if (wav) { wav_header(wav, wav_frames); fclose(wav); }
