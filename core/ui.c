@@ -7,6 +7,8 @@
  *   SELECT     home: tempo (the step cursor while writing steps). A page: the next or previous page.
  *   FX SEL ENV LFO GLO ARP SEQ   open that page; again, or HOME, goes back
  *   SEQ held   swaps the sequencer between LOOP and STEP
+ *   GLO held   the metronome: while recording, always, or off
+ *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
  *   SAVE       saves now; held, resets this instrument
  *   PLAY REC   the sequencer. Loop: REC arms a take, or overdubs while it plays. Step: REC is
@@ -29,6 +31,7 @@ static const char *const O_QUANT[] = {"FREE", "1/16", "1/8"};
 static const char *const O_SEQMODE[] = {"LOOP", "STEP"};
 static const char *const O_METER[] = {"4/4", "3/4", "5/4", "6/8", "7/8"};
 static const char *const O_GRID[] = {"1/8", "1/16", "1/32"};
+static const char *const O_CLICK[] = {"CLICK REC", "CLICK ON", "CLICK OFF"};
 
 /* in the order of the buttons that open them, reading the panel's two rows left to right */
 const PageDef pages[NPAGE] = {
@@ -295,9 +298,21 @@ void h1_button(int btn, int down)
         return;
     if (!down) {
         btn_held &= ~(1u << btn);
-        if (btn == H1_BTN_REC && !btn_fired[btn])
+        /* a button with a hold does its tap on the way up, and only if the hold never fired */
+        if (btn_fired[btn])
+            return;
+        if (btn == H1_BTN_REC)
             eng_post(EV_REC, 0);
-        if (btn == H1_BTN_SAVE && !btn_fired[btn]) {
+        if (btn == H1_BTN_GLO)
+            open_page(PG_GLO);
+        if (btn == H1_BTN_SEQ)
+            open_page(PG_SEQ);
+        if (btn == H1_BTN_HOME) {
+            if (page == PG_HOME)
+                name_t = 0.0f;
+            page = PG_HOME;
+        }
+        if (btn == H1_BTN_SAVE) {
             dirty = 1;
             dirty_ms = now - 5000u;
             toast("SAVED", 0, 0, 0, -1);
@@ -312,9 +327,7 @@ void h1_button(int btn, int down)
     case H1_BTN_SEL: open_page(PG_KEYS); break;
     case H1_BTN_ENV: open_page(PG_ENV); break;
     case H1_BTN_LFO: open_page(PG_LFO); break;
-    case H1_BTN_GLO: open_page(PG_GLO); break;
     case H1_BTN_ARP: open_page(PG_ARP); break;
-    case H1_BTN_SEQ: open_page(PG_SEQ); break;
     case H1_BTN_EDIT:
         if (seq.mode == SEQ_STEP && seq.write && page == PG_HOME) {
             eng_post(EV_STEP_REST, 0);           /* writing steps: a rest */
@@ -322,11 +335,6 @@ void h1_button(int btn, int down)
         }
         st.hud ^= 1;
         mark_dirty();
-        break;
-    case H1_BTN_HOME:
-        if (page == PG_HOME)
-            name_t = 0.0f;
-        page = PG_HOME;
         break;
     case H1_BTN_PLAY: eng_post(EV_PLAY, 0); break;
     case H1_BTN_OCTDN:
@@ -350,6 +358,12 @@ static void holds(void)
         btn_fired[H1_BTN_SEQ] = 1;
         set_seq_mode(st.seq[0] == SEQ_STEP ? SEQ_LOOP : SEQ_STEP);
         toast(O_SEQMODE[st.seq[0]], 0, 0, 0, -1);
+    }
+    if ((btn_held & (1u << H1_BTN_GLO)) && !btn_fired[H1_BTN_GLO] && now - btn_ms[H1_BTN_GLO] > 550u) {
+        btn_fired[H1_BTN_GLO] = 1;
+        st.seq[5] = (uint8_t)((st.seq[5] + 1u) % 3u);
+        toast(O_CLICK[st.seq[5]], 0, 0, 0, -1);
+        mark_dirty();
     }
     if ((btn_held & (1u << H1_BTN_SAVE)) && !btn_fired[H1_BTN_SAVE] && now - btn_ms[H1_BTN_SAVE] > 900u) {
         int alg = st.ip[st.inst].algo;
@@ -700,10 +714,17 @@ static void draw_seq_mark(void)
 static void draw_page(void)
 {
     const PageDef *pd = &pages[page];
-    char buf[20];
+    char buf[28];
     int i, j;
     f32 intro = ease_out(page_t / 0.22f);
     g_text(12.0f, 14.0f, pd->title, 22.0f, 3.0f, 1.0f, 0);
+    if (page == PG_SEQ || page == PG_GLO) {      /* what holding this page's button does */
+        if (page == PG_SEQ)
+            put_s(buf, "HOLD SEQ: LOOP / STEP");
+        else
+            put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
+        g_text(13.0f, 43.0f, buf, 8.0f, 1.0f, 0.5f * intro, 0);
+    }
     for (i = 1; i < NPAGE; i++)                  /* the panel's two rows of six: a square where a button has a page */
         rsquare(165.0f + (f32)PAGE_AT[i][0] * 11.0f, 12.0f + (f32)PAGE_AT[i][1] * 11.0f, 8.0f, i == page ? 1.0f : 0.3f);
     for (i = 0; i < 4; i++) {

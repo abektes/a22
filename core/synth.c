@@ -14,8 +14,9 @@ Voice voices[NVOICE];
 f32 ks_line[NVOICE][2][KS_LEN] H1_POOL;
 uint32_t eng_rng = 0x2F6E2B1u;
 
-const InstDef *const insts[NINST] = {&inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
-                                     &inst_knot, &inst_ink, &inst_tide, &inst_haunt, &inst_bard, &inst_turbo, &inst_orbit, &inst_cozy, &inst_koi};
+const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_haunt, &inst_tide,
+                                     &inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
+                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo};
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
 static const InstDef *cur;
@@ -313,8 +314,27 @@ static int nlev;
 static volatile int loop_state = LOOP_EMPTY;
 static volatile f32 loop_pos, loop_len = 768.0f;
 static uint32_t loop_held[4];
-static f32 click_env, click_ph, click_f;
+static f32 click_env, click_ph, click_ph2, click_f, click_pe, click_lp, click_amp;
+static uint32_t click_rng = 0x7407C0DEu;
 static int click_at = -1;
+static f32 free_pos;                             /* the metronome's own bar, when nothing is running under it */
+static int free_on;
+
+/* ---- the metronome: a soft knock on the meter's beats, a little higher on the one ------------- */
+static int click_mode(void) { return st.seq[5] < 3 ? st.seq[5] : CLICK_REC; }
+
+static void click_run(f32 pos, int sound)
+{
+    int bt = seq_bar_ticks(), tick = (int)pos % bt, e = (int)pos / 24;
+    if (e != click_at && sound && seq_accent(tick - tick % 24)) {
+        click_env = 1.0f;
+        click_pe = 1.0f;
+        click_ph = click_ph2 = 0.0f;
+        click_f = tick < 24 ? 392.0f : 294.0f;
+        click_amp = tick < 24 ? 0.3f : 0.23f;
+    }
+    click_at = e;
+}
 static int loop_fresh;                           /* the take about to start replaces the loop */
 
 static void loop_release(void)
@@ -354,14 +374,7 @@ static void loop_tick(f32 dticks)
     b = a + dticks;
     if (s != LOOP_REC)
         loop_play_range(a, b);
-    if (s != LOOP_PLAY) {                        /* the click, while recording: on the meter's beats */
-        int bt = seq_bar_ticks(), tick = (int)b % bt, e = (int)b / 24;
-        if (e != click_at && seq_accent(tick - tick % 24)) {
-            click_env = 1.0f;
-            click_f = tick < 24 ? 2400.0f : 1400.0f;
-        }
-        click_at = e;
-    }
+    click_run(b, s == LOOP_PLAY ? click_mode() == CLICK_ON : click_mode() != CLICK_OFF);
     if (b >= loop_len) {
         b -= loop_len;
         loop_release();
@@ -460,9 +473,37 @@ static void step_tick(f32 dticks)
         int at = step_at;
         step_acc = at >= n ? 0.0f : step_acc - step_len(at);
         at = at + 1 >= n ? 0 : at + 1;
+        if (at == 0) click_at = -1;
         step_at = at;
         step_fire(at, step_len(at) * 0.85f);
     }
+    click_run((f32)(step_at * seq_grid_ticks()) + step_acc, click_mode() == CLICK_ON);
+}
+
+/* with nothing playing, the metronome keeps its own bar: while a take is armed, or always if it is ON */
+static void free_tick(f32 dticks)
+{
+    int cm = click_mode(), s = loop_state, run;
+    if (st.seq[0] == SEQ_STEP)
+        run = !step_playing && cm == CLICK_ON;
+    else
+        run = (s == LOOP_ARMED && cm != CLICK_OFF) || ((s == LOOP_EMPTY || s == LOOP_IDLE) && cm == CLICK_ON);
+    if (!run) {
+        free_on = 0;
+        return;
+    }
+    if (!free_on) {
+        free_on = 1;
+        free_pos = 0.0f;
+        click_at = -1;
+    } else {
+        free_pos += dticks;
+        if (free_pos >= (f32)seq_bar_ticks()) {
+            free_pos -= (f32)seq_bar_ticks();
+            click_at = -1;
+        }
+    }
+    click_run(free_pos, 1);
 }
 
 static void step_put(int i, int note)
@@ -516,6 +557,10 @@ static void eff_note(int note, int on)
         loop_len = (f32)((1 << (st.seq[1] & 3)) * seq_bar_ticks());
         loop_pos = 0.0f;
         click_at = -1;
+        if (free_on && free_pos < (f32)(seq_bar_ticks() - 48)) {
+            loop_pos = free_pos;                 /* the click was counting: the take starts on its bar, not on your first note */
+            click_at = (int)free_pos / 24;
+        }
         loop_state = LOOP_REC;
         arp_acc = 1e9f;
     }
@@ -635,6 +680,7 @@ static void handle(uint32_t e)
                 step_playing = 1;
                 step_at = 0;
                 step_acc = 0.0f;
+                click_at = -1;
                 arp_acc = 1e9f;
                 step_fire(0, step_len(0) * 0.85f);
             }
@@ -736,6 +782,7 @@ static void block(f32 *L, f32 *R)
     if (pending_i < 0) {
         if (st.seq[0] == SEQ_STEP) step_tick(dticks);
         else loop_tick(dticks);
+        free_tick(dticks);
         arp_tick(ip, dticks);
     }
     beat_out = fractf(beat_out + dticks * (1.0f / 96.0f));
@@ -865,10 +912,15 @@ static void block(f32 *L, f32 *R)
 
     if (click_env > 0.001f) {
         for (n = 0; n < CTRL; n++) {
-            f32 c = tsin(click_ph) * click_env * 0.25f;
-            click_ph += click_f * ISR;
+            f32 c;                               /* wood, not a beep: the pitch drops as it lands, and it is gone in a twentieth of a second */
+            click_lp += (noise_s(&click_rng) - click_lp) * 0.2f;
+            c = (tsin(click_ph) + 0.22f * click_pe * tsin(click_ph2) + 0.5f * click_pe * click_lp) * click_env * click_amp;
+            click_ph += click_f * (1.0f + 1.3f * click_pe) * ISR;
             if (click_ph >= 1.0f) click_ph -= 1.0f;
-            click_env *= 0.9965f;
+            click_ph2 += click_f * 2.76f * ISR;
+            if (click_ph2 >= 1.0f) click_ph2 -= 1.0f;
+            click_pe *= 0.9972f;
+            click_env *= 0.99925f;
             L[n] += c;
             R[n] += c;
         }
