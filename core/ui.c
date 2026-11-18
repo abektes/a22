@@ -10,8 +10,10 @@
  *   GLO held   the metronome: while recording, always, or off
  *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE, REC and EDIT tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
- *   EDIT held  with SELECT: the volume of the instrument in hand, beside MASTER, which is everything's.
- *              Either one shows as a ring in the middle of the screen, GLOBAL or INSTRUMENT.
+ *   EDIT held  with SELECT or MASTER: the volume of the instrument in hand, beside MASTER alone, which
+ *              is everything's. Either one shows as a ring in the middle of the screen, GLOBAL or
+ *              INSTRUMENT. After MASTER has been the instrument's, everything's volume stays where it
+ *              was until the knob is turned back through it.
  *   SAVE       saves now; held, resets the four knobs of the algorithm in hand; held on, this
  *              instrument (every algorithm's knobs and its pages); held four seconds, every
  *              instrument and the KEYS and GLOBAL pages (the sequencer and what it holds are left
@@ -100,6 +102,12 @@ static char toast_s[24];
 static f32 toast_t = 9.0f;
 static f32 vol_t = 9.0f;                         /* seconds since MASTER last moved */
 static int vol_seen = -1;
+/* MASTER is a knob with end stops: it says where it stands and nothing else. Turned with EDIT held it
+ * sets the volume of the instrument in hand, and then it no longer stands where the volume of
+ * everything was left. So that volume is held (0..1000 here, -1 while it follows the knob) until the
+ * knob, turned without EDIT, comes back through it and picks it up again. */
+static int glob_held = -1;
+static int master_raw = -1;                      /* the knob at the last reading */
 /* The volume ring: MASTER's (GLOBAL) or that of the instrument in hand (INSTRUMENT), whichever moved last. */
 enum { RING_GLOBAL = 1, RING_INST };
 static int ring_kind;
@@ -302,7 +310,8 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
 
 static f32 ring_value(int kind)
 {
-    return kind == RING_INST ? (f32)INST_VOL(st.inst) * 0.01f : (f32)(vol_seen < 0 ? 0 : vol_seen) * 0.001f;
+    int g = glob_held >= 0 ? glob_held : vol_seen;
+    return kind == RING_INST ? (f32)INST_VOL(st.inst) * 0.01f : (f32)(g < 0 ? 0 : g) * 0.001f;
 }
 
 static void ring_show(int kind)
@@ -320,22 +329,42 @@ static void ring_show(int kind)
 
 int h1_volume_ring(void) { return ring_t < RING_STAYS + 0.4f ? ring_kind : 0; }
 
+static void set_inst_vol(int v);
+
+int h1_global_volume(void) { return glob_held; }
+
 /* MASTER, as the port reads it. The knob is an analog reading and never quite still: the ring comes up
- * for a real move (over 1.2 % of the travel) and then follows the small ones for a moment after. */
+ * for a real move (over 1.2 % of the travel) and then follows the small ones for a moment after.
+ * With EDIT held a real move is the instrument's volume: the knob's travel, less a little at each end
+ * so that both ends are reached, is its 0 to 100. */
 void h1_master(int level)
 {
-    int d;
+    int d, was = master_raw, from;
     level = iclamp(level, 0, 1000);
+    master_raw = level;
     if (vol_seen < 0) {                          /* the first reading: where it stands, nothing to show */
         vol_seen = level;
         return;
     }
     d = level > vol_seen ? level - vol_seen : vol_seen - level;
-    if (d >= (vol_t < 1.2f ? 3 : 12)) {
-        vol_seen = level;
-        vol_t = 0.0f;
-        ring_show(RING_GLOBAL);
+    if (d < (vol_t < 1.2f ? 3 : 12))
+        return;
+    from = vol_seen;
+    vol_seen = level;
+    vol_t = 0.0f;
+    if (btn_held & (1u << H1_BTN_EDIT)) {
+        if (glob_held < 0)
+            glob_held = was;                     /* everything stays as loud as it was a moment ago */
+        btn_fired[H1_BTN_EDIT] = 1;
+        set_inst_vol(((level - 15) * 100 + 485) / 970);
+        return;
     }
+    if (glob_held >= 0) {
+        int near = level > glob_held ? level - glob_held : glob_held - level;
+        if (near <= 12 || (from <= glob_held && level >= glob_held) || (from >= glob_held && level <= glob_held))
+            glob_held = -1;                      /* the knob has come back through it: it follows again */
+    }
+    ring_show(RING_GLOBAL);
 }
 
 /* the volume of the instrument in hand: saved with it, and back at full when the instrument is reset */
@@ -825,7 +854,7 @@ static void shade_disc(f32 cx, f32 cy, f32 r, f32 k)
 
 /* The volume, while it is turned: a ring in the middle of the screen that fills the way a knob turns,
  * from seven o'clock round to five, with the number inside it and whose volume it is under that:
- * GLOBAL (MASTER) or INSTRUMENT (the one in hand: EDIT held, and SELECT). It stays up while EDIT is
+ * GLOBAL (MASTER) or INSTRUMENT (the one in hand: EDIT held, and SELECT or MASTER). It stays up while EDIT is
  * held. The picture behind it sits back while it is up. */
 static void draw_volume(f32 dt)
 {
@@ -861,7 +890,11 @@ static void draw_volume(f32 dt)
     g_arc(cx, cy, r, t0, t0 + sweep, 2.0f, 0.3f);
     if (x > 0.002f)
         g_arc(cx, cy, r, t0, te, 8.0f, 1.0f);
-    g_disc(cx + r * cos_turns(te), cy + r * sin_turns(te), 6.5f, 1.0f);        /* where the knob stands */
+    g_disc(cx + r * cos_turns(te), cy + r * sin_turns(te), 6.5f, 1.0f);        /* where the volume stands */
+    if (ring_kind == RING_GLOBAL && glob_held >= 0) {                          /* and the knob, until it picks it up */
+        f32 tk = t0 + sweep * (f32)vol_seen * 0.001f, rk = r + 11.0f;      /* (outside the ring: seen on either side) */
+        g_disc(cx + rk * cos_turns(tk), cy + rk * sin_turns(tk), 3.0f, 0.9f);
+    }
     g_text(cx, cy - 20.0f, num, nsz, nw, 1.0f, 1);
     g_text(cx, cy + 19.0f, label, lsz, 1.3f, 0.8f, 1);
     g_dim(1.0f);
@@ -1087,6 +1120,8 @@ void ui_init(void)
     dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
     btn_held = 0;                                /* (and no button is down) */
     ring_kind = 0;
+    glob_held = -1;
+    master_raw = -1;
     ring_t = 9.0f;
 }
 

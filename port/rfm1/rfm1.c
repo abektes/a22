@@ -215,6 +215,8 @@ static void input(void)
     if (m < 0) m = 0;
     if (m > 1023) m = 1023;
     h1_master((int)(m * 1000 / 1023));   /* the picture shows it while it turns */
+    if (h1_global_volume() >= 0)         /* (held: the knob was the instrument's and has not come back) */
+        m = h1_global_volume() * 1023 / 1000;
     gain_q12 = (uint32_t)(m * m) >> 8;   /* the square law fm1-base gives MASTER: m * m >> 12 on 0..4096 */
 }
 

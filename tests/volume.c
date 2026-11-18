@@ -251,11 +251,26 @@ int main(void)
     CHECK(h1_volume_ring() == 2, "EDIT held: the ring, INSTRUMENT");
     go(3000);
     CHECK(h1_volume_ring() == 2, "EDIT still held: the ring stays");
-    h1_master(300);                              /* MASTER turned meanwhile: its ring, then the instrument's again */
+    CHECK(h1_global_volume() == -1, "MASTER never turned with EDIT: everything's volume follows the knob");
+    h1_master(300);                              /* MASTER turned meanwhile: it is the instrument's volume now */
     go(60);
-    CHECK(h1_volume_ring() == 1, "EDIT held and MASTER turned: the ring is GLOBAL");
+    CHECK(h1_volume_ring() == 2, "EDIT held and MASTER turned: the ring is INSTRUMENT");
+    CHECK(vol() == 29, "EDIT + MASTER: the instrument is where the knob stands");
+    CHECK(h1_global_volume() == 704, "EDIT + MASTER: everything's volume stays where the knob was");
+    h1_master(0);
+    go(60);
+    CHECK(vol() == 0, "EDIT + MASTER: the bottom of the knob is nothing");
+    h1_master(8);
+    go(60);
+    CHECK(vol() == 0, "EDIT + MASTER: and so is a knob that does not quite reach the bottom");
+    h1_master(990);
+    go(60);
+    CHECK(vol() == 100, "EDIT + MASTER: a knob that does not quite reach the top is full");
+    h1_master(1000);
+    go(60);
+    CHECK(vol() == 100 && h1_global_volume() == 704, "EDIT + MASTER: the top is full, and everything's is still held");
     go(2000);
-    CHECK(h1_volume_ring() == 2, "EDIT still held: the ring is INSTRUMENT again");
+    CHECK(h1_volume_ring() == 2, "EDIT still held: the ring is still INSTRUMENT");
     h1_encoder(H1_ENC_PRESET, 1);                /* another instrument: its name first, then its ring */
     go(100);
     CHECK(h1_volume_ring() == 0, "EDIT held and PRESETS turned: the name has the middle of the screen");
@@ -382,6 +397,68 @@ int main(void)
     hold(H1_BTN_SAVE, 4600);
     for (i = 0; i < NINST; i++)
         CHECK(h1_instrument_volume(i) == 100, "SAVE held to the end: every instrument at full");
+
+    /* ---- MASTER after it has been the instrument's: everything's volume waits for the knob ---- */
+    h1_init(44100);
+    go(100);
+    h1_master(600);
+    go(60);
+    h1_master(600);
+    hud0 = st.hud;
+    h1_button(H1_BTN_EDIT, 1);                   /* at once, before the hold has shown anything */
+    h1_master(900);
+    CHECK(h1_volume_ring() == 2 && vol() == 91, "EDIT + MASTER at once: the instrument's volume, its ring up already");
+    CHECK(h1_global_volume() == 600, "EDIT + MASTER at once: everything's volume is held");
+    h1_button(H1_BTN_EDIT, 0);
+    go(40);
+    CHECK(st.hud == hud0, "EDIT + MASTER is not a tap of EDIT");
+    go(1500);
+    h1_master(904);
+    go(60);
+    CHECK(h1_global_volume() == 600 && h1_volume_ring() == 0, "the knob's own unrest picks nothing up and shows nothing");
+    h1_master(950);                              /* away from where everything's volume was left */
+    go(60);
+    CHECK(h1_global_volume() == 600 && vol() == 91, "MASTER turned away from it: everything's volume stays, and the instrument's");
+    CHECK(h1_volume_ring() == 1, "and the ring is GLOBAL: where it is held, and where the knob is");
+    h1_master(700);                              /* towards it, not there yet */
+    go(60);
+    CHECK(h1_global_volume() == 600, "MASTER turned towards it: not yet");
+    h1_master(560);                              /* through it */
+    go(60);
+    CHECK(h1_global_volume() == -1, "MASTER turned through it: everything's volume follows the knob again");
+    CHECK(vol() == 91, "and the instrument's volume is its own");
+    h1_master(300);
+    go(60);
+    CHECK(h1_global_volume() == -1 && h1_volume_ring() == 1, "and goes on following");
+    h1_button(H1_BTN_EDIT, 1);                   /* again, and this time the knob ends up close to it */
+    h1_master(500);
+    h1_master(310);
+    h1_button(H1_BTN_EDIT, 0);
+    go(1500);
+    CHECK(h1_global_volume() == 300 && vol() == 30, "EDIT + MASTER again: held where it was");
+    h1_master(325);
+    go(60);
+    CHECK(h1_global_volume() == 300, "MASTER nudged away from it: still held");
+    go(1500);
+    h1_master(340);
+    go(60);
+    CHECK(h1_global_volume() == 300, "MASTER moved away from it from beside it: still held");
+    h1_master(305);
+    go(60);
+    CHECK(h1_global_volume() == -1, "MASTER brought close to it: picked up");
+    h1_button(H1_BTN_EDIT, 1);
+    h1_master(800);
+    h1_button(H1_BTN_EDIT, 0);
+    go(100);
+    inst(3);
+    CHECK(h1_global_volume() == 305, "another instrument in hand: everything's volume is still held");
+    h1_button(H1_BTN_EDIT, 1);
+    h1_master(400);
+    h1_button(H1_BTN_EDIT, 0);
+    go(100);
+    CHECK(vol() == 40 && h1_instrument_volume(2) == 100 && h1_global_volume() == 305, "EDIT + MASTER while it is held: the instrument's, and the hold is not moved");
+    h1_init(44100);
+    CHECK(h1_global_volume() == -1, "a new h1 follows the knob");
 
     printf("volume: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

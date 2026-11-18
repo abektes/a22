@@ -192,7 +192,9 @@ void app_init(void)
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float gain_now;
-    float gain = (float)master_q12 * (float)master_q12 * (1.0f / (4096.0f * 4096.0f));   /* MASTER, as a square */
+    int held = h1_global_volume();                          /* (the knob may be the instrument's just now) */
+    float m = held < 0 ? (float)master_q12 * (1.0f / 4096.0f) : (float)held * 0.001f;
+    float gain = m * m;                                     /* MASTER, as a square */
     uint32_t i, t0 = plat_ticks24(), us;
     h1_render(lr, n);                                       /* 24-bit, already limited */
     for (i = 0; i < n; i++) {
