@@ -114,7 +114,7 @@ typedef struct Col { int16_t y[NVOICE]; uint8_t w[NVOICE]; uint8_t id[NVOICE]; }
 static Col hist[HN] H1_POOL;
 static int head;                                 /* the newest column */
 static uint32_t col_n;                           /* columns laid down so far */
-static f32 scroll, pen_y = 120.0f, pen_v, beat_x;
+static f32 scroll, pen_y = 120.0f, pen_v, beat_x, splay;
 static f32 cur_y[NVOICE], cur_w[NVOICE];
 static uint8_t cur_id[NVOICE];
 static uint32_t seen_i[NVOICE];
@@ -292,22 +292,53 @@ static void ink_draw(const Vis *vis)
         /* PRESS: the brush is pushed into the paper. Its head splays as wide as the stroke it will
          * leave, the handle leans over, and a wet mark under it shows the width before you play. */
         f32 by = pen_y + (any ? 0.0f : 3.0f * sin_turns(t * 0.35f)) + shake * 2.0f * sin_turns(t * 5.5f);
-        f32 hw = 0.5f * bw, lean = 0.125f - 0.07f * press, hx = cos_turns(lean), hy = -sin_turns(lean);
-        f32 hl = 9.0f + 6.0f * press, a0 = (any ? 1.0f : 0.6f) * dim, fx = PEN + hx * hl, fy = by + hy * hl;
-        int q;
+        f32 hw = 0.5f * bw, lean = 0.13f - 0.07f * press + clampf(pen_v * 0.0005f, -0.035f, 0.035f) + (any ? 0.0f : 0.008f * sin_turns(t * 0.21f));
+        f32 hx = cos_turns(lean), hy = -sin_turns(lean), px = -hy, py = hx;      /* along the brush, and across it */
+        f32 hl = 23.0f + 6.0f * press, a0 = (any ? 1.0f : 0.78f) * dim, tx = PEN + 0.5f, fx = tx + hx * hl, fy = by + hy * hl;
+        f32 bl = 0.46f, bwd = 5.0f + 2.2f * press, bx = tx + hx * hl * bl, bby = by + hy * hl * bl, q[10];
+        int k;
         if (!any) {
             g_vspan((int)PEN, by - hw, by + hw, 0.22f * dim);
             g_vspan((int)PEN - 1, by - hw * 0.8f, by + hw * 0.8f, 0.12f * dim);
         }
-        {                                        /* the head: a wedge from the ferrule down to the paper */
-            f32 tri[6];
-            tri[0] = fx; tri[1] = fy; tri[2] = PEN + 1.0f; tri[3] = by - hw * 0.92f; tri[4] = PEN + 1.0f; tri[5] = by + hw * 0.92f;
-            g_fill(tri, 3, a0 * 0.8f);
-            for (q = -1; q <= 1; q++)
-                g_line(fx, fy, PEN + 1.0f, by + (f32)q * hw * 0.92f, 1.6f, a0);
+        splay += ((any ? 1.0f : 0.12f) - splay) * minf(1.0f, dt * 14.0f);       /* lifted, the hair comes back to its point */
+        hw *= splay;
+        /* the handle: bamboo, a little thicker at the ferrule, with its joints and the loop it hangs by */
+        g_beam(fx + hx * 3.0f, fy + hy * 3.0f, fx + hx * 70.0f, fy + hy * 70.0f, 6.0f + 1.0f * press, 4.4f, a0 * 0.9f, a0 * 0.9f, 0.0f);
+        g_ring(fx + hx * 73.5f, fy + hy * 73.5f, 3.0f, 1.0f, a0 * 0.8f);
+        g_mode(G_PAINT);
+        for (k = 0; k < 2; k++) {
+            f32 d = 20.0f + 19.0f * (f32)k;
+            g_line(fx + hx * d - px * 4.0f, fy + hy * d - py * 4.0f, fx + hx * d + px * 4.0f, fy + hy * d + py * 4.0f, 1.2f, 0.0f);
         }
-        g_line(fx, fy, fx + hx * 30.0f, fy + hy * 30.0f, 2.6f + 1.2f * press, (any ? 0.9f : 0.5f) * dim);
-        g_disc(fx, fy, 2.4f + 1.0f * press, a0);
+        g_line(fx + hx * 8.0f + px * 0.9f, fy + hy * 8.0f + py * 0.9f, fx + hx * 16.0f + px * 0.8f, fy + hy * 16.0f + py * 0.8f, 1.0f, 0.25f * a0);   /* (a shadow down its length) */
+        g_mode(G_MAX);
+        /* the head: a belly of hair that comes to a point, and splays on the paper as wide as the stroke it will leave */
+        q[0] = tx; q[1] = by;
+        q[2] = bx + px * bwd; q[3] = bby + py * bwd;
+        q[4] = fx + px * 3.0f; q[5] = fy + py * 3.0f;
+        q[6] = fx - px * 3.0f; q[7] = fy - py * 3.0f;
+        q[8] = bx - px * bwd; q[9] = bby - py * bwd;
+        g_fill(q, 5, a0 * 0.8f);
+        if (hw > 1.5f) {
+            f32 tri[6];
+            tri[0] = bx; tri[1] = bby; tri[2] = PEN + 1.0f; tri[3] = by - hw * 0.92f; tri[4] = PEN + 1.0f; tri[5] = by + hw * 0.92f;
+            g_fill(tri, 3, a0 * 0.8f);
+            g_line(bx + px * bwd, bby + py * bwd, PEN + 1.0f, by + hw * 0.92f, 1.2f, a0);
+            g_line(bx - px * bwd, bby - py * bwd, PEN + 1.0f, by - hw * 0.92f, 1.2f, a0);
+        }
+        q[8] = q[0]; q[9] = q[1];
+        g_poly(q, 5, 0, 1.2f, a0);               /* one side, round the ferrule end, */
+        g_line(q[6], q[7], bx - px * bwd, bby - py * bwd, 1.2f, a0);
+        g_line(bx - px * bwd, bby - py * bwd, tx, by, 1.2f, a0);
+        g_mode(G_PAINT);                         /* and the hair itself */
+        for (k = -1; k <= 1; k++) {
+            f32 o = (f32)k * 0.42f;
+            g_line(fx + px * o * 3.0f - hx * 2.5f, fy + py * o * 3.0f - hy * 2.5f, tx + hx * hl * 0.16f + px * o * bwd * 0.5f, by + hy * hl * 0.16f + py * o * bwd * 0.5f, 1.0f, 0.3f * a0);
+        }
+        g_mode(G_MAX);
+        g_line(fx - px * 3.3f, fy - py * 3.3f, fx + px * 3.3f, fy + py * 3.3f, 3.0f, a0);                /* the binding */
+        g_line(fx - px * 3.5f + hx * 4.0f, fy - py * 3.5f + hy * 4.0f, fx + px * 3.5f + hx * 4.0f, fy + py * 3.5f + hy * 4.0f, 1.6f, a0);
     }
 }
 

@@ -36,7 +36,16 @@ void g_rect(f32 x, f32 y, f32 w, f32 h, f32 a);            /* filled, x,y = top-
 void g_poly(const f32 *xy, int n, int closed, f32 w, f32 a);
 void g_fill(const f32 *xy, int n, f32 a);                  /* a filled convex polygon, either winding */
 void g_vspan(int x, f32 y0, f32 y1, f32 a);                /* one column of pixels from y0 to y1 (edges), soft ends */
+void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b);   /* g_fill, the ink running from a at row ya to b at row yb */
+/* Soft things, dithered. In PAINT mode they darken what is under them instead (a = how much). */
+void g_glow(f32 cx, f32 cy, f32 r, f32 a);                 /* a round light: a at the middle, nothing at r */
+void g_beam(f32 x0, f32 y0, f32 x1, f32 y1, f32 w0, f32 w1, f32 a0, f32 a1, f32 soft);
+                                                           /* a stroke whose width and ink run from w0, a0 to w1, a1.
+                                                            * soft 0: a crisp edge. 1: brightest on its axis, nothing at its edge */
 void g_arc(f32 cx, f32 cy, f32 r, f32 t0, f32 t1, f32 w, f32 a);   /* angles in turns, 0 = east, clockwise on screen */
+
+void g_comet(f32 x, f32 y, f32 r, f32 dx, f32 dy, f32 len, f32 curl, f32 a, f32 t, f32 seed);
+                                                           /* head at x, y, r across; tails along the unit vector dx, dy */
 
 /* A bed: the path of a stroke 9 wide with no ink, cleared out of the picture in one go (g_bed_clear).
  * For a cord that passes in front of what is already drawn. */

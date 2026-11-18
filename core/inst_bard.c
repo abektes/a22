@@ -265,7 +265,7 @@ typedef struct Neume {
 } Neume;
 static Neume nm[NNM];
 static int nm_w, cur_staff;
-static f32 cur_x, last_t, last_y, crawl, hopv, hop, ears, pagel, drone_vis;
+static f32 cur_x, last_t, last_y, ears, pagel, drone_vis;
 static f32 bud[12];
 static uint32_t seen_s[NVOICE];
 static const char *const INITIAL[NALGO] = {"L", "H", "P", "G", "R", "S", "B", "O"};
@@ -333,55 +333,211 @@ static void vine(f32 x, f32 y0, f32 y1, int first_bud, const Vis *vis, f32 cours
     }
 }
 
-/* what goes along the bottom of the page: a snail, a hare or a wyrm */
-static void creature(int kind, f32 x, f32 gy, const Vis *vis, f32 lev)
+/* ---- who lives at the bottom of the page: a snail, a hare or a wyrm ---------------------------
+ * None of them slides. Each has a little life of its own: it rests, looks about, makes up its mind,
+ * goes a short way in its own gait, turns round at the edge of its ground or when it feels like it,
+ * and starts at a note. */
+enum { CR_REST, CR_GO, CR_LAND, CR_TURN };
+static struct {
+    f32 x, dir, t, dur, x0, x1, hgt, gait, tilt, head, amp, rear;
+    uint8_t state, left, pose, kind, ready;
+} cr;
+#define CR_XMIN 46.0f
+#define CR_XMAX 160.0f
+
+static void cr_go(int kind, uint32_t *rng)
 {
-    f32 t = vis->t;
+    cr.state = CR_GO;
+    cr.t = 0.0f;
+    cr.x0 = cr.x;
+    if (kind == 1) {                             /* a hop */
+        cr.dur = 0.3f + 0.08f * rng_f(rng);
+        cr.x1 = clampf(cr.x + cr.dir * (13.0f + 11.0f * rng_f(rng)), CR_XMIN - 4.0f, CR_XMAX + 4.0f);
+        cr.hgt = 6.0f + 5.0f * rng_f(rng);
+    } else                                       /* a stretch of crawling */
+        cr.dur = kind == 0 ? 2.5f + 5.0f * rng_f(rng) : 1.2f + 2.8f * rng_f(rng);
+}
+
+static void cr_rest(int kind, uint32_t *rng)
+{
+    uint32_t r = rng_next(rng) >> 8;
+    cr.state = CR_REST;
+    cr.t = 0.0f;
+    cr.dur = (kind == 1 ? 0.7f : 1.2f) + 2.8f * rng_f(rng);
+    cr.pose = (uint8_t)(r % 5u < 2u ? 0 : (r % 5u < 4u ? 1 : 2));     /* just sitting; looking about; busy with something */
+}
+
+static void cr_update(int kind, const Vis *vis, int note)
+{
+    f32 dt = vis->dt, want_tilt = 0.0f, want_head = 0.0f, want_amp = 1.0f, want_rear = 0.0f;
+    uint32_t *rng = vis->rng;
+    if (!cr.ready || vis->fresh || cr.kind != kind) {
+        if (!cr.ready || vis->fresh) {
+            cr.x = 70.0f + 60.0f * rng_f(rng);
+            cr.dir = 1.0f;
+        }
+        cr.kind = (uint8_t)kind;
+        cr.ready = 1;
+        cr.gait = 0.0f;
+        cr_rest(kind, rng);
+    }
+    cr.t += dt;
+    switch (cr.state) {
+    default:
+    case CR_REST:
+        if (kind == 1) {                         /* the hare sits up to look, or puts its nose down to the grass */
+            if (cr.pose == 1) want_tilt = 0.13f * sat(cr.t * 3.0f) * sat((cr.dur - cr.t) * 3.0f);
+            if (cr.pose == 2) want_head = 1.0f;
+        } else if (kind == 0) {                  /* the snail draws its horns in, or feels the air */
+            if (cr.pose == 2) want_head = 1.0f;
+            if (cr.pose == 1) want_rear = 1.0f;
+        } else {                                 /* the wyrm lies nearly still, or rears */
+            want_amp = 0.35f;
+            if (cr.pose != 0) want_rear = 1.0f;
+        }
+        if (note && kind == 1 && cr.t > 0.12f)   /* a note startles the hare into going */
+            cr.dur = minf(cr.dur, cr.t + 0.1f * rng_f(rng));
+        if (cr.t >= cr.dur) {
+            int out = (cr.x > CR_XMAX && cr.dir > 0.0f) || (cr.x < CR_XMIN && cr.dir < 0.0f);
+            if (out || (rng_next(rng) >> 8) % 5u == 0u) {
+                cr.state = CR_TURN;
+                cr.t = 0.0f;
+                cr.dur = kind == 1 ? 0.22f : 0.7f;
+            } else {
+                cr.left = (uint8_t)(kind == 1 ? (rng_next(rng) >> 8) % 4u : 0u);
+                cr_go(kind, rng);
+            }
+        }
+        break;
+    case CR_TURN:                                /* it gathers itself, and comes out facing the other way */
+        want_head = 1.0f;
+        want_amp = 0.15f;
+        if (cr.t >= cr.dur * 0.5f && cr.left != 99u) {
+            cr.dir = -cr.dir;
+            cr.left = 99u;
+        }
+        if (cr.t >= cr.dur) {
+            cr.left = (uint8_t)(kind == 1 ? 1u + (rng_next(rng) >> 8) % 3u : 0u);
+            cr_go(kind, rng);
+        }
+        break;
+    case CR_GO:
+        if (kind == 1) {
+            f32 q = sat(cr.t / cr.dur);
+            cr.x = lerpf(cr.x0, cr.x1, q * (1.6f - 0.6f * q));
+            want_tilt = (0.5f - q) * 0.16f;      /* nose up as it leaves the ground, down as it comes back */
+            if (cr.t >= cr.dur) {
+                cr.x = cr.x1;
+                cr.state = CR_LAND;
+                cr.t = 0.0f;
+                cr.dur = 0.07f + 0.12f * rng_f(rng);
+            }
+        } else {
+            f32 sp = kind == 0 ? 0.5f : 1.1f, pull;
+            cr.gait = fractf(cr.gait + dt * sp);
+            pull = kind == 0 ? maxf(0.0f, sin_turns(cr.gait)) : 0.75f + 0.25f * sin_turns(cr.gait * 2.0f);     /* the snail goes a pull at a time */
+            cr.x += cr.dir * dt * (kind == 0 ? 7.5f * pull * pull : 17.0f * pull) * sat(cr.t * 3.0f) * sat((cr.dur - cr.t) * 3.0f);
+            if (cr.t >= cr.dur || (cr.x > CR_XMAX + 6.0f && cr.dir > 0.0f) || (cr.x < CR_XMIN - 6.0f && cr.dir < 0.0f))
+                cr_rest(kind, rng);
+        }
+        break;
+    case CR_LAND:
+        want_tilt = -0.03f;
+        if (cr.t >= cr.dur) {
+            int out = (cr.x > CR_XMAX && cr.dir > 0.0f) || (cr.x < CR_XMIN && cr.dir < 0.0f);
+            if (cr.left && !out) {
+                cr.left--;
+                cr_go(kind, rng);
+            } else
+                cr_rest(kind, rng);
+        }
+        break;
+    }
+    cr.tilt += (want_tilt - cr.tilt) * minf(1.0f, dt * 14.0f);
+    cr.head += (want_head - cr.head) * minf(1.0f, dt * (kind == 0 ? 3.0f : 7.0f));
+    cr.amp += (want_amp - cr.amp) * minf(1.0f, dt * 4.0f);
+    cr.rear += (want_rear - cr.rear) * minf(1.0f, dt * 3.5f);
+}
+
+static void creature(int kind, f32 gy, const Vis *vis, f32 lev)
+{
+    f32 t = vis->t, x = cr.x, f = cr.dir;
     int i;
     if (kind == 0) {                             /* the snail: a shell that is one long spiral */
-        f32 xy[2 * 26], cx = x, cy = gy - 12.0f - hop * 0.3f;
+        f32 xy[2 * 26], pull = cr.state == CR_GO ? sin_turns(cr.gait) : 0.0f, reach = 3.0f * pull * sat(cr.t * 2.0f);     /* the head goes first, the shell is hauled after */
+        f32 in = sat(maxf(cr.head, ears * 1.4f)), cx = x - f * reach * 0.5f, cy = gy - 12.5f - 0.6f * absf(pull), nx = x + f * (14.0f + reach), ny = gy - 3.0f;
+        f32 hx = nx + f * 5.0f * (1.0f - in), hy = ny - (6.0f + 2.5f * cr.rear) * (1.0f - in);
         for (i = 0; i < 26; i++) {
             f32 u = (f32)i / 25.0f, r = 11.0f * (1.0f - 0.82f * u), an = 0.5f - u * 2.3f;
-            xy[2 * i] = cx + cos_turns(an) * r;
+            xy[2 * i] = cx + f * cos_turns(an) * r;
             xy[2 * i + 1] = cy + sin_turns(an) * r;
         }
         g_poly(xy, 26, 0, 1.8f, 1.0f);
-        g_line(x - 13.0f, gy - 2.5f, x + 15.0f, gy - 2.5f, 4.0f, 1.0f);            /* the foot */
-        g_line(x + 14.0f, gy - 3.0f, x + 19.0f, gy - 9.0f, 3.2f, 1.0f);            /* the neck */
-        for (i = 0; i < 2; i++) {                /* two horns that reach for the music */
-            f32 wv = 0.04f * sin_turns(t * 0.7f + (f32)i * 0.3f) + 0.06f * ears, an = -0.2f + (f32)i * 0.09f - wv;
-            f32 hx = x + 19.0f + cos_turns(an) * (7.0f + 4.0f * lev), hy = gy - 9.0f + sin_turns(an) * (7.0f + 4.0f * lev);
-            g_line(x + 19.0f, gy - 9.0f, hx, hy, 1.2f, 1.0f);
-            g_disc(hx, hy, 1.6f, 1.0f);
+        g_line(cx + f * 6.5f, cy - 8.5f, cx + f * 9.5f, cy - 2.0f, 1.0f, 0.75f);                 /* the growth lines of the shell */
+        g_line(cx - f * 1.0f, cy - 10.8f, cx + f * 1.0f, cy - 7.0f, 1.0f, 0.75f);
+        g_line(cx - f * 8.0f, cy - 7.0f, cx - f * 5.5f, cy - 4.0f, 1.0f, 0.75f);
+        g_beam(x - f * (15.0f + reach * 0.3f), gy - 1.6f, x - f * 6.0f, gy - 2.5f, 1.4f, 4.0f, 1.0f, 1.0f, 0.0f);     /* the foot: a tail that tapers, */
+        g_line(x - f * 6.0f, gy - 2.5f, nx, gy - 2.5f, 4.0f, 1.0f);
+        g_line(nx - f * 1.0f, ny, hx, hy, 3.2f, 1.0f);                                         /* a neck, */
+        for (i = 0; i < 2; i++) {                /* and two horns that feel for the music, and shrink from it when it comes */
+            f32 wv = 0.05f * sin_turns(t * (0.5f + 0.3f * cr.rear) + (f32)i * 0.3f) * (1.0f + 1.5f * cr.rear), an = 0.2f - (f32)i * 0.1f + wv;
+            f32 L = (7.0f + 4.0f * lev + 2.0f * cr.rear) * (1.0f - 0.85f * in), tx = hx + f * cos_turns(an) * L, ty = hy - sin_turns(an) * L;
+            g_line(hx, hy, tx, ty, 1.2f, 1.0f);
+            g_disc(tx, ty, 1.6f, 1.0f);
         }
-    } else if (kind == 1) {                      /* the hare: all ears */
-        f32 by = gy - 9.0f - hop, e = 0.06f * ears;
-        g_ellipse(x, by, 11.0f, 7.0f, 0.0f, 1.0f);
-        g_disc(x + 11.0f, by - 7.0f, 5.0f, 1.0f);
-        g_line(x + 10.0f, by - 10.0f, x + 6.0f + e * 40.0f, by - 25.0f, 2.6f, 1.0f);
-        g_line(x + 12.5f, by - 10.0f, x + 12.0f + e * 60.0f, by - 26.0f, 2.6f, 1.0f);
-        g_disc(x - 11.0f, by - 3.0f, 2.6f, 1.0f);
-        g_line(x - 6.0f, by + 5.0f, x - 10.0f - hop * 0.5f, gy - 1.0f, 2.4f, 1.0f);
-        g_line(x + 6.0f, by + 5.0f, x + 9.0f + hop * 0.5f, gy - 1.0f, 2.0f, 1.0f);
+    } else if (kind == 1) {                      /* the hare */
+        f32 q = cr.state == CR_GO ? sat(cr.t / cr.dur) : 0.0f, air = cr.state == CR_GO ? 4.0f * q * (1.0f - q) : 0.0f;
+        f32 c = cos_turns(cr.tilt), sn = sin_turns(cr.tilt), bx = x, by = gy - 9.5f - cr.hgt * air - 5.0f * maxf(cr.tilt, 0.0f) * (1.0f - air) * 8.0f;
+        f32 nod = cr.head * (1.0f - air), ea, tw = cr.state == CR_REST ? maxf(0.0f, sin_turns(t * 0.37f + cr.x * 0.1f) - 0.93f) * 14.0f : 0.0f;
+#define HX(lx, ly) (bx + f * ((lx) * c + (ly) * sn))
+#define HY(lx, ly) (by + (ly) * c - (lx) * sn)
+        f32 hdx = 11.0f + 2.0f * nod, hdy = -8.0f + 9.0f * nod + 0.6f * sin_turns(t * 3.0f) * nod;
+        /* the hind leg: folded under it when it sits, flung out behind in the air, reaching for the ground as it lands */
+        if (air > 0.05f) {
+            f32 back = sat(1.0f - q * 1.6f), fwd = sat(q * 2.0f - 1.0f);
+            g_line(HX(-6.0f, 3.0f), HY(-6.0f, 3.0f), HX(-9.0f - 7.0f * back + 9.0f * fwd, 7.5f + 2.0f * fwd), HY(-9.0f - 7.0f * back + 9.0f * fwd, 7.5f + 2.0f * fwd), 3.0f, 1.0f);
+            g_line(HX(5.0f, 2.0f), HY(5.0f, 2.0f), HX(9.0f + 5.0f * (1.0f - back), 6.0f + 3.0f * fwd), HY(9.0f + 5.0f * (1.0f - back), 6.0f + 3.0f * fwd), 2.2f, 1.0f);
+        } else {
+            g_line(bx - f * 9.0f, gy - 1.6f, bx + f * 0.5f, gy - 1.6f, 3.0f, 1.0f);            /* a long foot flat on the ground */
+            g_line(HX(6.0f, 2.0f), HY(6.0f, 2.0f), bx + f * (7.5f + 20.0f * maxf(cr.tilt, 0.0f)), cr.tilt > 0.05f ? HY(9.0f, 5.0f) : gy - 1.2f, 2.2f, 1.0f);
+        }
+        g_disc(HX(-5.0f, 0.5f), HY(-5.0f, 0.5f), 7.4f, 1.0f);                                  /* haunch */
+        g_line(HX(-3.0f, -0.5f), HY(-3.0f, -0.5f), HX(6.0f, -1.5f), HY(6.0f, -1.5f), 11.0f, 1.0f);   /* barrel */
+        g_disc(HX(-12.5f, -3.0f), HY(-12.5f, -3.0f), 2.7f, 1.0f);                              /* scut */
+        g_line(HX(7.0f, -3.5f), HY(7.0f, -3.5f), HX(hdx - 1.0f, hdy + 1.0f), HY(hdx - 1.0f, hdy + 1.0f), 6.0f, 1.0f);   /* neck */
+        g_disc(HX(hdx, hdy), HY(hdx, hdy), 4.7f, 1.0f);
+        g_disc(HX(hdx + 3.4f, hdy + 1.6f), HY(hdx + 3.4f, hdy + 1.6f), 2.7f, 1.0f);            /* muzzle */
+        /* the ears: laid back in the air, up at a sound, and one of them twitches when nothing is happening */
+        ea = 0.33f + 0.1f * air - 0.1f * ears - 0.05f * cr.head * 0.0f;
+        for (i = 0; i < 2; i++) {
+            f32 an = ea + (f32)i * 0.045f - (i ? tw * 0.05f : 0.0f) + 0.01f * sin_turns(t * 0.21f + (f32)i), L = 15.0f - (f32)i * 1.5f;
+            f32 rx = hdx - 1.5f + (f32)i * 1.6f, ry = hdy - 3.2f, mx = rx + cos_turns(an) * L * 0.55f, my = ry - sin_turns(an) * L * 0.55f, tx = rx + cos_turns(an + 0.02f) * L, ty = ry - sin_turns(an + 0.02f) * L;
+            g_line(HX(rx, ry), HY(rx, ry), HX(mx, my), HY(mx, my), 3.0f, 1.0f);
+            g_beam(HX(mx, my), HY(mx, my), HX(tx, ty), HY(tx, ty), 3.0f, 1.2f, 1.0f, 1.0f, 0.0f);
+        }
         g_mode(G_PAINT);
-        g_disc(x + 13.0f, by - 8.0f, 1.1f, 0.0f);
+        g_disc(HX(hdx + 1.2f, hdy - 1.0f), HY(hdx + 1.2f, hdy - 1.0f), 1.1f, 0.0f);            /* an eye */
+        g_arc(HX(-5.0f, 0.5f), HY(-5.0f, 0.5f), 5.2f, f > 0.0f ? 0.62f : 0.68f, f > 0.0f ? 0.82f : 0.88f, 1.0f, 0.0f);   /* the line of the thigh */
         g_mode(G_MAX);
+#undef HX
+#undef HY
     } else {                                     /* the wyrm: a line with opinions */
-        f32 xy[2 * 20], hx, hy;
+        f32 xy[2 * 20], hx, hy, k = cr.gait, lift = 9.0f * cr.rear, fl = maxf(0.0f, sin_turns(t * 0.9f)) * (0.3f + 0.7f * cr.rear) + ears;
         for (i = 0; i < 20; i++) {
             f32 u = (f32)i / 19.0f;
-            xy[2 * i] = x - 22.0f + 40.0f * u;
-            xy[2 * i + 1] = gy - 7.0f - 5.0f * sin_turns(u * 1.6f - t * 0.9f) * (0.4f + 0.6f * u) - hop * 0.2f;
+            xy[2 * i] = x + f * (-22.0f + 40.0f * u - 3.0f * cr.rear * u * u);
+            xy[2 * i + 1] = gy - 6.5f - 5.0f * cr.amp * sin_turns(u * 1.6f - k * 2.0f) * (0.4f + 0.6f * u) * (1.0f - 0.5f * cr.rear * u) - lift * u * u * u;
         }
+        g_beam(xy[0] - f * 7.0f, gy - 3.0f, xy[0], xy[1], 1.0f, 3.4f, 1.0f, 1.0f, 0.0f);       /* the tail comes to a point */
         g_poly(xy, 20, 0, 3.4f, 1.0f);
         hx = xy[38]; hy = xy[39];
-        leaf(hx - 2.0f, hy, 1.0f, -0.12f, 10.0f, 1.0f);
-        g_line(hx + 8.0f, hy - 1.0f, hx + 12.0f + 6.0f * ears, hy - 3.0f, 1.0f, 1.0f);       /* the tongue */
-        g_line(hx + 8.0f, hy - 1.0f, hx + 12.0f + 6.0f * ears, hy + 1.5f, 1.0f, 1.0f);
+        leaf(hx - f * 2.0f, hy, f, -0.12f - 0.2f * cr.rear, 10.0f, 1.0f);
+        g_line(hx + f * 8.0f, hy - 1.0f - 2.0f * cr.rear, hx + f * (10.0f + 7.0f * sat(fl)), hy - 3.0f - 2.0f * cr.rear, 1.0f, 1.0f);       /* the tongue */
+        g_line(hx + f * 8.0f, hy - 1.0f - 2.0f * cr.rear, hx + f * (10.0f + 7.0f * sat(fl)), hy + 1.5f - 2.0f * cr.rear, 1.0f, 1.0f);
         for (i = 4; i < 16; i += 4)              /* and a few spines */
-            g_line(xy[2 * i], xy[2 * i + 1] - 1.5f, xy[2 * i] - 2.0f, xy[2 * i + 1] - 6.5f, 1.2f, 0.9f);
+            g_line(xy[2 * i], xy[2 * i + 1] - 1.5f, xy[2 * i] - f * 2.0f, xy[2 * i + 1] - 6.5f, 1.2f, 0.9f);
         g_mode(G_PAINT);
-        g_disc(hx + 3.0f, hy - 0.5f, 0.9f, 0.0f);
+        g_disc(hx + f * 3.0f, hy - 0.5f - 0.6f * cr.rear, 0.9f, 0.0f);
         g_mode(G_MAX);
     }
 }
@@ -415,7 +571,7 @@ static void bard_draw(const Vis *vis)
         cur_staff = 0;
         cur_x = STAFF[0][0] + 8.0f;
         last_t = -9.0f;
-        hop = hopv = ears = 0.0f;
+        ears = 0.0f;
         pagel = 0.0f;
     }
     lev = sat(vis->level * 3.0f);
@@ -463,17 +619,13 @@ static void bard_draw(const Vis *vis)
             q->serial = v->serial;
             last_t = t;
             last_y = y;
-            hopv = -70.0f;
             ears = 1.0f;
         }
     }
     for (i = 0; i < 12; i++)
         bud[i] += (sat(want[i] * 1.6f) - bud[i]) * minf(1.0f, dt * (want[i] > bud[i] ? 16.0f : 2.5f));
-    hopv += 420.0f * dt;
-    hop -= hopv * dt;
-    if (hop < 0.0f) { hop = 0.0f; hopv = 0.0f; }
+    cr_update(algo % 3, vis, ears >= 1.0f);
     ears = maxf(0.0f, ears - dt * 2.2f);
-    crawl = fractf(crawl + dt * (0.012f + 0.0005f * (f32)st.glo[0]) * (algo % 3 == 1 ? 2.2f : 1.0f));
 
     g_dim(1.0f - 0.32f * age);
 
@@ -622,7 +774,7 @@ static void bard_draw(const Vis *vis)
 
     /* the bottom of the page: the ground is the drone, and somebody is walking on it */
     {
-        f32 xy[2 * 31], amp = drone_vis * (1.2f + 3.0f * pagel), cx = 34.0f + crawl * 124.0f;
+        f32 xy[2 * 31], amp = drone_vis * (1.2f + 3.0f * pagel);
         for (i = 0; i <= 30; i++) {
             f32 u = (f32)i / 30.0f;
             xy[2 * i] = 22.0f + 196.0f * u;
@@ -654,9 +806,7 @@ static void bard_draw(const Vis *vis)
             g_arc(201.0f, gy + 2.0f, 6.0f, 0.5f, 1.0f, 1.2f, 0.85f);
             g_line(195.0f, gy + 2.0f, 195.0f, gy - 1.0f, 1.2f, 0.85f); g_line(207.0f, gy + 2.0f, 207.0f, gy - 1.0f, 1.2f, 0.85f);
         }
-        g_dim((1.0f - 0.32f * age) * sat(crawl * 12.0f) * sat((1.0f - crawl) * 12.0f));
-        creature(algo % 3, cx, gy, vis, pagel);
-        g_dim(1.0f - 0.32f * age);
+        creature(algo % 3, gy, vis, pagel);
         for (i = 0; i < 5; i++) {                /* tufts */
             f32 tx = 30.0f + (f32)i * 44.0f + 9.0f * hsh((uint32_t)i + 77u);
             g_line(tx, gy + 1.0f, tx - 2.0f, gy - 4.0f, 1.0f, 0.6f);
