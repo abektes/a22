@@ -8,10 +8,12 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   gfx.c        anti-aliased lines, discs, rings, ellipses, filled polygons, a stroke font
   ui.c         what every control does, the name flash, the knob strip, the settings pages
   inst_*.c     one file per instrument: its sound and its picture, side by side
+  smp.c        plays the recordings BARD and TWANG are built on (smp_data.c, written by tools/samples)
+  str.h        the string those recordings' plucks are fed into
 port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the FM-1 browser simulator
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
 app/         the device, on fm1-base (base/, a submodule): built by ./build.sh
-tools/       build scripts
+tools/       build scripts, and samples/, which cuts the recordings down to what the firmware carries
 dist/        h1.rfm1, the build the simulator loads
 ```
 
@@ -145,6 +147,27 @@ screen reader a control's name and value. The simulator reaches both through the
 exports to
 show each control as a labelled slider, while its nudge buttons, the mouse wheel and the number
 keys still send real encoder detents.
+
+## The recordings
+
+BARD and TWANG are recordings of real instruments, all CC0 (`docs/SAMPLES.md` lists each one, where it
+came from and its licence). `tools/samples/build.py` fetches them, cuts them and writes
+`core/smp_data.c`: 162 KB of 8-bit mu-law at 22.05 kHz, 56 cuts in 16 banks. It needs ffmpeg, numpy and
+scipy, and only runs when a recording changes; the firmware build just compiles its output.
+
+A plucked instrument is not played back as a recording, which would cost a second or more of storage a
+note. The script fits the string model of `core/str.h` (a delay line with a loss filter in its loop) to
+each recorded note's decay, then runs the note's first tenth of a second through that loop backwards.
+What is left is what the string was fed: the pluck and the body's answer. The firmware feeds that to
+the same string, played faster or slower for the notes between two recordings, and the note comes out
+with the recording's attack and a decay the model makes. `tools/samples/dsp.py` holds the script's copy
+of the loop: change `str.h` and it has to change too.
+
+A held instrument (the bowed ones, the reeds, the organ, the drone) is a recorded start and a stretch
+that repeats, a whole number of periods long and crossfaded into itself.
+
+Every cut is stored with its highs lifted and the player (`smp_read`) lowers them again, which puts the
+8 bits' noise under the sound instead of over it.
 
 ## RAM and flash on the device
 
