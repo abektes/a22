@@ -151,6 +151,7 @@ void app_frame(void)
 {
     uint32_t t0, t1, t2;
     input();
+    h1_master((int)(plat_master() * 1000u / 4096u));        /* shown while it turns; the gain is app_render's */
     t0 = plat_ticks24();
     h1_frame(plat_ms());
     t1 = plat_ticks24();

@@ -45,7 +45,9 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
       sounds. Note any that stutter (KOI, URCHIN and BONK send the most pixels).
 - [ ] No crackle or dropouts with eight notes held on the heavy instruments (TWANG, BARD, KOI),
       with ECHO and SPACE turned up.
-- [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play.
+- [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play. The
+      bar on the right edge follows the knob and is gone a second after it stops; it does not
+      come up by itself with the knob at rest.
 - [ ] Loop: REC, play a take, REC again, it loops, overdub, hold REC clears. The white keys show
       the pattern and the place runs across.
 - [ ] Step: hold SEQ, REC, enter notes and a rest, PLAY. The white keys show the steps.

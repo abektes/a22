@@ -115,6 +115,8 @@ static void poke(int with_sound)
         for (k = 0; k < H1_NBTN; k++)
             if (btns_down >> k & 1u) h1_button(k, 0);
         keys_down = btns_down = 0;
+    } else if (r < 94) {                                     /* the volume knob, in range and out */
+        h1_master(below(1400) - 200);
     } else if (r < 96) {                                     /* nonsense from a port: ignored */
         h1_key(below(64) - 16, below(2));
         h1_button(below(64) - 16, below(2));

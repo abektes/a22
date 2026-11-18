@@ -24,6 +24,8 @@ void h1_key(int key, int down);                  /* key 0 = F3 */
 void h1_button(int btn, int down);
 void h1_encoder(int enc, int detents);           /* + = clockwise */
 void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);
+void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame: the core
+                                                  * only shows it (a slim bar while it turns); the port owns the gain */
 void h1_frame(uint32_t now_ms);                  /* advance the animation and draw the frame */
 
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */

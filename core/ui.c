@@ -94,6 +94,8 @@ static int active_col = 0;
 static f32 col_v[4], col_vv[4];                  /* the gauges, eased */
 static char toast_s[20];
 static f32 toast_t = 9.0f;
+static f32 vol_t = 9.0f, vol_x, vol_v;           /* the volume bar: seconds since MASTER last moved, and where it shows */
+static int vol_seen = -1;
 static int toast_pips = -1;
 
 static SeqInfo seq;                              /* the sequencer, as of this frame */
@@ -278,6 +280,24 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
         st.ip[st.inst].knob[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         knob_touch[d1 - 20] = 0.0f;
+    }
+}
+
+/* MASTER, as the port reads it. The knob is an analog reading and never quite still: the bar comes up
+ * for a real move (over 1.2 % of the travel) and then follows the small ones while it is up. */
+void h1_master(int level)
+{
+    int d;
+    level = iclamp(level, 0, 1000);
+    if (vol_seen < 0) {                          /* the first reading: where it stands, nothing to show */
+        vol_seen = level;
+        vol_x = (f32)level * 0.001f;
+        return;
+    }
+    d = level > vol_seen ? level - vol_seen : vol_seen - level;
+    if (d >= (vol_t < 1.2f ? 3 : 12)) {
+        vol_seen = level;
+        vol_t = 0.0f;
     }
 }
 
@@ -665,6 +685,22 @@ static void draw_toast(void)
     g_dim(1.0f);
 }
 
+/* The volume, while MASTER turns: a slim bar up the right edge, drawn like a knob's on the strip. */
+static void draw_volume(f32 dt)
+{
+    f32 a = 1.0f - smooth01((vol_t - 0.9f) / 0.5f), y0 = 176.0f, h = 112.0f, x = 234.0f;
+    spring(&vol_x, &vol_v, (f32)(vol_seen < 0 ? 0 : vol_seen) * 0.001f, 40.0f, dt);
+    if (a <= 0.01f)
+        return;
+    g_mode(G_PAINT);
+    g_rect(x - 6.0f, y0 - h - 7.0f, 12.0f, h + 14.0f, 0.0f);
+    g_mode(G_MAX);
+    g_dim(a);
+    g_line(x, y0, x, y0 - h, 2.0f, 0.3f);
+    g_line(x, y0, x, y0 - h * sat(vol_x), 4.0f, 1.0f);
+    g_dim(1.0f);
+}
+
 /* a tiny rounded square: the settings pages' map of the panel's buttons */
 static void rsquare(f32 x, f32 y, f32 sz, f32 a)
 {
@@ -818,6 +854,7 @@ void ui_frame(uint32_t now_ms)
     name_t += dt;
     page_t += dt;
     toast_t += dt;
+    vol_t += dt;
 
     build_palette();
     g_clear();
@@ -840,6 +877,7 @@ void ui_frame(uint32_t now_ms)
         draw_seq_mark();
         draw_toast();
     }
+    draw_volume(dt);
     vis.fresh = 0;
     vis.enter += dt;
 }

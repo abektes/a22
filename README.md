@@ -131,6 +131,7 @@ That is what the backup is for.
 | REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it. Step: REC turns step-write on and off, PLAY runs the pattern |
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
+| MASTER | Volume. A slim bar up the right edge of the screen shows it while it turns |
 | hold SEQ | Swap LOOP and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
 | hold REC | Clear the loop or the pattern |

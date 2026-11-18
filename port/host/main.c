@@ -7,6 +7,7 @@
  *   inst N        switch instrument        algo N        set algorithm (via detents)
  *   knob I V      set home knob I to V     enc E D       turn encoder E by D detents
  *   key K 1|0     press or release a key   btn B 1|0     press or release a button
+ *   master V      the volume knob, 0..1000
  *   run MS        advance MS milliseconds  shot NAME     write OUTDIR/NAME.ppm
  *   wav NAME      start writing audio      bytes         print the present() byte count stats
  */
@@ -92,6 +93,7 @@ int main(int argc, char **argv)
         else if (!strcmp(w, "knob")) { h1_midi(0xB0, (uint8_t)(20 + ARG(1)), (uint8_t)(ARG(2) * 127 / 100)); i += 3; }
         else if (!strcmp(w, "key")) { h1_key(ARG(1), ARG(2)); i += 3; }
         else if (!strcmp(w, "btn")) { h1_button(ARG(1), ARG(2)); i += 3; }
+        else if (!strcmp(w, "master")) { h1_master(ARG(1)); i += 2; }
         else if (!strcmp(w, "run")) { run((uint32_t)ARG(1)); i += 2; }
         else if (!strcmp(w, "shot")) { shot(argv[i + 1]); i += 2; }
         else if (!strcmp(w, "wav")) {
