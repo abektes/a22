@@ -23,11 +23,11 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **PIP** | chiptune | SHAPE, WOBBLE, ZAP, CRUNCH |
 | **BONK** | drum kit, a drum on every note of the octave | TUNE, DECAY, PUNCH, DIRT |
 | **URCHIN** | FM | RATIO, DEPTH, FUZZ, TAIL |
-| **TWANG** | plucked strings | DAMP, PICK, TONE, BUZZ |
+| **TWANG** | plucked strings, from recordings of real ones: harp, guitars, sitar, banjo, koto, bass, and a bowed cello | DAMP, PICK, TONE, BUZZ |
 | **LAVA** | wavefolder bass | FOLD, HEAT, LEAN, SUB |
 | **KNOT** | additive bells | BLOOM, RING, TWIST, WARP |
 | **INK** | gliding lead | SLIDE, SHAKE, PRESS, DRY |
-| **BARD** | medieval: lute, harp, gurdy, bagpipe, organ over a drone | DRONE, COURSE, BITE, AGE |
+| **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
 | **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
 
 <p>
@@ -204,7 +204,7 @@ fm1-browser-simulator, to the guide site.
 
 ## Licence
 
-h1 is [MIT](LICENSE).
+h1 is [MIT](LICENSE). The recordings BARD and TWANG are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
 
 The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by
 Charles Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from

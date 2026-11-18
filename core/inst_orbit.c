@@ -83,11 +83,11 @@ static void orbit_render(Voice *v, const Blk *b, f32 *out, int n)
         if (tick < v->s[7]) v->s[8] = rng_f(&v->u[0]);
         v->s[7] = tick;
         cut *= exp2fx(v->s[8] * 3.2f - 1.2f);
-        q = 7.0f;
+        q = 5.0f;
         amp = 0.55f + 0.45f * exp2fx(-tick * 6.0f);
         break;
     }
-    case 2: q = 26.0f; amp = sat(v->age * 2.5f); break;
+    case 2: q = 26.0f; amp = sat(v->age * 2.5f); break;         /* (levelled below, once the pitch is known) */
     case 3: cut *= 1.6f; break;
     case 4: idx = (0.15f + 0.9f * O.sweep) * (0.6f + 0.4f * O.lfo); break;
     case 5: {                                    /* RADIO: keyed like a number station */
@@ -102,11 +102,13 @@ static void orbit_render(Voice *v, const Blk *b, f32 *out, int n)
     case 7: amp = 0.25f + 0.75f * sat(v->age * 0.9f); cut *= 0.5f; break;
     }
     f = mtof(pitch);
+    if (algo == 2)                               /* NEBULA: a band of noise an octave down is half as wide: as loud all the same */
+        amp *= clampf(sqrtfx(330.0f / maxf(f, 20.0f)), 0.6f, 2.2f);
     d0 = minf(f * b->isr, 0.45f);
     d1 = minf(d0 * 1.0045f, 0.45f);
     d2 = minf(d0 * 2.0f, 0.45f);
     svf_set(&fl, clampf(cut, 40.0f, 15000.0f), q, b->isr);
-    svf_set(&f2, clampf(algo == 5 ? 1400.0f : f * 2.0f, 60.0f, 12000.0f), algo == 5 ? 2.0f : q, b->isr);
+    svf_set(&f2, clampf(algo == 5 ? 1400.0f * clampf(sqrtfx(f * (1.0f / 400.0f)), 0.5f, 2.0f) : f * 2.0f, 60.0f, 12000.0f), algo == 5 ? 2.0f : q, b->isr);   /* (RADIO: the set's band leans after the note, so low ones get through) */
     if (algo == 2)
         svf_set(&fl, clampf(f, 60.0f, 9000.0f), q, b->isr);
     if (algo == 6) {                             /* the riser: when it wraps, each saw hands its place to the one below */
