@@ -8,8 +8,10 @@
  *   FX SEL ENV LFO GLO ARP SEQ   open that page; again, or HOME, goes back
  *   SEQ held   swaps the sequencer between LOOP and STEP
  *   GLO held   the metronome: while recording, always, or off
- *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE and REC tap on release)
+ *              (a hold never does the tap as well: GLO, SEQ, HOME, SAVE, REC and EDIT tap on release)
  *   EDIT       pins the knob strip on the home screen (writing steps: a rest)
+ *   EDIT held  with SELECT: the volume of the instrument in hand, beside MASTER, which is everything's.
+ *              Either one shows as a ring in the middle of the screen, GLOBAL or INSTRUMENT.
  *   SAVE       saves now; held, resets the four knobs of the algorithm in hand; held on, this
  *              instrument (every algorithm's knobs and its pages); held four seconds, every
  *              instrument and the KEYS and GLOBAL pages (the sequencer and what it holds are left
@@ -96,8 +98,14 @@ static int active_col = 0;
 static f32 col_v[4], col_vv[4];                  /* the gauges, eased */
 static char toast_s[24];
 static f32 toast_t = 9.0f;
-static f32 vol_t = 9.0f, vol_x, vol_v;           /* the volume bar: seconds since MASTER last moved, and where it shows */
+static f32 vol_t = 9.0f;                         /* seconds since MASTER last moved */
 static int vol_seen = -1;
+/* The volume ring: MASTER's (GLOBAL) or that of the instrument in hand (INSTRUMENT), whichever moved last. */
+enum { RING_GLOBAL = 1, RING_INST };
+static int ring_kind;
+static f32 ring_t = 9.0f, ring_x, ring_v;        /* seconds since it was last touched, and where it shows */
+static f32 ring_up = 9.0f;                       /* seconds since it came up */
+#define RING_STAYS 0.9f                          /* seconds it stays after the last touch, then 0.4 s to go */
 static int toast_pips = -1;
 
 static SeqInfo seq;                              /* the sequencer, as of this frame */
@@ -225,6 +233,8 @@ static void set_instrument(int i)
     vis.algo = vis.algo_prev = st.ip[i].algo;
     vis.algo_t = 1.0f;
     toast_t = 9.0f;
+    if (ring_kind == RING_INST)
+        ring_t = 9.0f;                           /* (that was the last instrument's volume: the name first) */
     mark_dirty();
 }
 
@@ -290,22 +300,53 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     }
 }
 
-/* MASTER, as the port reads it. The knob is an analog reading and never quite still: the bar comes up
- * for a real move (over 1.2 % of the travel) and then follows the small ones while it is up. */
+static f32 ring_value(int kind)
+{
+    return kind == RING_INST ? (f32)INST_VOL(st.inst) * 0.01f : (f32)(vol_seen < 0 ? 0 : vol_seen) * 0.001f;
+}
+
+static void ring_show(int kind)
+{
+    if (kind != ring_kind || ring_t >= RING_STAYS + 0.4f) {   /* coming up, or the other volume: at its value, not swept there */
+        if (ring_t >= RING_STAYS + 0.4f)
+            ring_up = 0.0f;
+        ring_x = ring_value(kind);
+        ring_v = 0.0f;
+    }
+    ring_kind = kind;
+    ring_t = 0.0f;
+    name_t = maxf(name_t, 1.05f);                /* (the instrument's name, if it is still up, makes way) */
+}
+
+int h1_volume_ring(void) { return ring_t < RING_STAYS + 0.4f ? ring_kind : 0; }
+
+/* MASTER, as the port reads it. The knob is an analog reading and never quite still: the ring comes up
+ * for a real move (over 1.2 % of the travel) and then follows the small ones for a moment after. */
 void h1_master(int level)
 {
     int d;
     level = iclamp(level, 0, 1000);
     if (vol_seen < 0) {                          /* the first reading: where it stands, nothing to show */
         vol_seen = level;
-        vol_x = (f32)level * 0.001f;
         return;
     }
     d = level > vol_seen ? level - vol_seen : vol_seen - level;
     if (d >= (vol_t < 1.2f ? 3 : 12)) {
         vol_seen = level;
         vol_t = 0.0f;
+        ring_show(RING_GLOBAL);
     }
+}
+
+/* the volume of the instrument in hand: saved with it, and back at full when the instrument is reset */
+static void set_inst_vol(int v)
+{
+    v = iclamp(v, 0, 100);
+    if (v != INST_VOL(st.inst)) {
+        st.ip[st.inst].mix[IP_CUT] = (uint8_t)(100 - v);
+        mark_dirty();
+    }
+    ring_show(RING_INST);
 }
 
 static void octave(int d)
@@ -345,6 +386,14 @@ void h1_button(int btn, int down)
             dirty_ms = now - 5000u;
             toast("SAVED", 0, 0, 0, -1);
         }
+        if (btn == H1_BTN_EDIT) {
+            if (seq.mode == SEQ_STEP && seq.write && page == PG_HOME)
+                eng_post(EV_STEP_REST, 0);       /* writing steps: a rest */
+            else {
+                st.hud ^= 1;
+                mark_dirty();
+            }
+        }
         return;
     }
     btn_held |= 1u << btn;
@@ -370,14 +419,6 @@ void h1_button(int btn, int down)
     case H1_BTN_ENV: open_page(PG_ENV); break;
     case H1_BTN_LFO: open_page(PG_LFO); break;
     case H1_BTN_ARP: open_page(PG_ARP); break;
-    case H1_BTN_EDIT:
-        if (seq.mode == SEQ_STEP && seq.write && page == PG_HOME) {
-            eng_post(EV_STEP_REST, 0);           /* writing steps: a rest */
-            break;
-        }
-        st.hud ^= 1;
-        mark_dirty();
-        break;
     case H1_BTN_PLAY: eng_post(EV_PLAY, 0); break;
     case H1_BTN_OCTDN:
         octave((btn_held & (1u << H1_BTN_OCTUP)) ? 0 : -1);
@@ -393,9 +434,16 @@ void h1_button(int btn, int down)
 #define HOLD_RESET_ALGO 900u
 #define HOLD_RESET_INST 2200u
 #define HOLD_RESET_ALL 4000u
+#define HOLD_EDIT 350u                           /* EDIT held this long shows the instrument's volume, and is not a tap */
 
 static void holds(void)
 {
+    /* hold EDIT: the ring comes up with the volume of the instrument in hand, for SELECT to turn. (A
+     * turn of SELECT before that does the same at once: h1_encoder.) */
+    if ((btn_held & (1u << H1_BTN_EDIT)) && !btn_fired[H1_BTN_EDIT] && now - btn_ms[H1_BTN_EDIT] > HOLD_EDIT) {
+        btn_fired[H1_BTN_EDIT] = 1;
+        ring_show(RING_INST);
+    }
     /* hold REC: clear. With LAYERS on, first what was recorded on the instrument in hand, and held on to
      * three seconds, the lot (as SAVE resets a step further the longer it is held). */
     if ((btn_held & (1u << H1_BTN_REC)) && !btn_fired[H1_BTN_REC] && now - btn_ms[H1_BTN_REC] > 700u) {
@@ -546,7 +594,10 @@ void h1_encoder(int enc, int d)
         set_algo(st.ip[st.inst].algo + d);
         break;
     case H1_ENC_SELECT:
-        if (step_cursor_live())
+        if (btn_held & (1u << H1_BTN_EDIT)) {    /* EDIT held: the instrument's volume, on any page */
+            btn_fired[H1_BTN_EDIT] = 1;
+            set_inst_vol(INST_VOL(st.inst) + accel(enc, d));
+        } else if (step_cursor_live())
             eng_post(EV_STEP_MOVE, iclamp(d, -100, 100) + 128);
         else if (page == PG_HOME)
             set_tempo(st.glo[0] + accel(enc, d));
@@ -588,7 +639,10 @@ int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
         v = st.ip[st.inst].algo; b = NALGO - 1; nm = "ALGORITHM"; tx = insts[st.inst]->algo[v];
         break;
     case H1_ENC_SELECT:
-        if (step_cursor_live()) {
+        if ((btn_held & (1u << H1_BTN_EDIT)) && btn_fired[H1_BTN_EDIT]) {     /* (held, not on its way to a tap) */
+            v = INST_VOL(st.inst); b = 100; nm = "VOLUME";
+            put_i(d, v);
+        } else if (step_cursor_live()) {
             v = seq.cursor + 1; a = 1; b = seq.nsteps; nm = "STEP";
             put_i(d, v);
         } else if (page == PG_HOME) {
@@ -630,7 +684,11 @@ void h1_control_set(int enc, int v)
         break;
     case H1_ENC_ALGO: set_algo(iclamp(v, 0, NALGO - 1)); break;
     case H1_ENC_SELECT:
-        if (step_cursor_live()) {
+        if (btn_held & (1u << H1_BTN_EDIT)) {
+            btn_fired[H1_BTN_EDIT] = 1;
+            if (iclamp(v, 0, 100) != INST_VOL(st.inst))
+                set_inst_vol(v);
+        } else if (step_cursor_live()) {
             int dlt = iclamp(v, 1, seq.nsteps) - 1 - seq.cursor;
             if (dlt) {
                 eng_post(EV_STEP_MOVE, dlt + 128);
@@ -743,19 +801,69 @@ static void draw_toast(void)
     g_dim(1.0f);
 }
 
-/* The volume, while MASTER turns: a slim bar up the right edge, drawn like a knob's on the strip. */
+/* Everything drawn so far inside a disc, taken down to k (0..1): what is in front of it stands clear. */
+static void shade_disc(f32 cx, f32 cy, f32 r, f32 k)
+{
+    int k256 = (int)(sat(k) * 256.0f), y, x, y0 = imax(0, ifloor(cy - r)), y1 = imin(FB_H - 1, ifloor(cy + r) + 1);
+    if (k256 >= 256)
+        return;
+    for (y = y0; y <= y1; y++) {
+        f32 dy = (f32)y - cy, hw2 = r * r - dy * dy, hw;
+        int xa, xb;
+        uint8_t *row = &g_fb[y * FB_W];
+        if (hw2 <= 0.0f)
+            continue;
+        hw = sqrtfx(hw2);
+        xa = imax(0, ifloor(cx - hw + 0.5f));
+        xb = imin(FB_W - 1, ifloor(cx + hw + 0.5f));
+        for (x = xa; x <= xb; x++)
+            row[x] = (uint8_t)((row[x] * k256) >> 8);
+        if ((y & 15) == 0)
+            G_POLL();
+    }
+}
+
+/* The volume, while it is turned: a ring in the middle of the screen that fills the way a knob turns,
+ * from seven o'clock round to five, with the number inside it and whose volume it is under that:
+ * GLOBAL (MASTER) or INSTRUMENT (the one in hand: EDIT held, and SELECT). It stays up while EDIT is
+ * held. The picture behind it sits back while it is up. */
 static void draw_volume(f32 dt)
 {
-    f32 a = 1.0f - smooth01((vol_t - 0.9f) / 0.5f), y0 = 176.0f, h = 112.0f, x = 234.0f;
-    spring(&vol_x, &vol_v, (f32)(vol_seen < 0 ? 0 : vol_seen) * 0.001f, 40.0f, dt);
+    const char *label = ring_kind == RING_INST ? "INSTRUMENT" : "GLOBAL";
+    const f32 cx = 120.0f, cy = 120.0f, t0 = 0.375f, sweep = 0.75f, nsz = 30.0f, nw = 3.9f;
+    f32 a, r, x, te, lsz = 9.0f, lw;
+    char num[8];
+    if ((btn_held & (1u << H1_BTN_EDIT)) && btn_fired[H1_BTN_EDIT] && name_t >= 1.05f) {
+        /* EDIT is held: the instrument's ring stays, and comes back once another volume's ring or a
+         * new instrument's name has had its moment */
+        if (ring_t >= RING_STAYS + 0.4f)
+            ring_show(RING_INST);
+        else if (ring_kind == RING_INST)
+            ring_t = 0.0f;
+    }
+    if (!ring_kind || ring_t >= RING_STAYS + 0.4f)
+        return;
+    spring(&ring_x, &ring_v, ring_value(ring_kind), 40.0f, dt);
+    a = 1.0f - smooth01((ring_t - RING_STAYS) / 0.4f);
     if (a <= 0.01f)
         return;
-    g_mode(G_PAINT);
-    g_rect(x - 6.0f, y0 - h - 7.0f, 12.0f, h + 14.0f, 0.0f);
+    x = sat(ring_x);
+    te = t0 + sweep * x;
+    r = 60.0f - 5.0f * (1.0f - ease_out(ring_up / 0.14f));    /* it opens a little as it comes up */
+    put_i(num, (int)(ring_value(ring_kind) * 100.0f + 0.5f));
+    lw = g_text_w(label, lsz);
+    if (lw > 86.0f)
+        lsz *= 86.0f / lw;
+
+    shade_disc(cx, cy, r + 17.0f, 1.0f - 0.86f * a * sat(ring_up / 0.09f));
     g_mode(G_MAX);
     g_dim(a);
-    g_line(x, y0, x, y0 - h, 2.0f, 0.3f);
-    g_line(x, y0, x, y0 - h * sat(vol_x), 4.0f, 1.0f);
+    g_arc(cx, cy, r, t0, t0 + sweep, 2.0f, 0.3f);
+    if (x > 0.002f)
+        g_arc(cx, cy, r, t0, te, 8.0f, 1.0f);
+    g_disc(cx + r * cos_turns(te), cy + r * sin_turns(te), 6.5f, 1.0f);        /* where the knob stands */
+    g_text(cx, cy - 20.0f, num, nsz, nw, 1.0f, 1);
+    g_text(cx, cy + 19.0f, label, lsz, 1.3f, 0.8f, 1);
     g_dim(1.0f);
 }
 
@@ -938,6 +1046,8 @@ void ui_frame(uint32_t now_ms)
     page_t += dt;
     toast_t += dt;
     vol_t += dt;
+    ring_t += dt;
+    ring_up += dt;
 
     build_palette();
     g_clear();
@@ -976,6 +1086,8 @@ void ui_init(void)
     pal_key[4] = 0;
     dirty = 0;                                   /* what is in RAM is what was loaded: nothing to save */
     btn_held = 0;                                /* (and no button is down) */
+    ring_kind = 0;
+    ring_t = 9.0f;
 }
 
 /* ---- presenting: only what changed goes to the panel -----------------------------------------

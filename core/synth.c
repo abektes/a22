@@ -36,6 +36,7 @@ typedef struct IRun {
     int kmod_k;
     Lfo lf;                                      /* its own LFO, while it is not the one in hand */
     f32 vol, panmod;
+    f32 ig;                                      /* its own volume (INST_VOL) as a gain, eased: what the mix takes of it */
     f32 att, kd, sus, kr;
     f32 last_pitch;
     uint32_t at;                                 /* the control block b is for */
@@ -951,6 +952,13 @@ int eng_seq_leds(uint32_t *out, int page_open, int blink)
 }
 
 /* ---- the block ------------------------------------------------------------------------- */
+/* An instrument's own volume as a gain: a square, as MASTER's is. */
+static f32 inst_gain(int i)
+{
+    f32 v = (f32)INST_VOL(i) * 0.01f;
+    return v * v;
+}
+
 static void switch_instrument(int i)
 {
     int v, j;
@@ -1198,8 +1206,10 @@ static void block(f32 *L, f32 *R)
         if (imask >> inst & 1u)
             r->linger = LINGER;
         else if (!in_hand) {
-            if (!r->linger)
+            if (!r->linger) {
+                r->ig = inst_gain(inst);         /* (silent: its volume is where it stands when it next sounds) */
                 continue;
+            }
             fade = (f32)r->linger * (1.0f / (f32)LINGER);     /* its post rings out, then it is left alone */
             r->linger--;
         }
@@ -1276,16 +1286,28 @@ static void block(f32 *L, f32 *R)
             b = part_set(live);
         if (def->post)
             def->post(b, bl, br, CTRL);
-        if (fade < 1.0f)
-            for (n = 0; n < CTRL; n++) {
-                L[n] += bl[n] * fade;
-                R[n] += br[n] * fade;
-            }
-        else
-            for (n = 0; n < CTRL; n++) {
-                L[n] += bl[n];
-                R[n] += br[n];
-            }
+        {
+            /* Into the mix at the instrument's own volume, after its post: turned down it is the same
+             * sound, quieter. The gain eases (about 10 ms) and ramps across the block, so a turn of the
+             * knob does not zip. At full, and that is how every instrument comes, the samples go in
+             * untouched. */
+            f32 tg = inst_gain(inst), g0 = r->ig, g1 = g0 + (tg - g0) * 0.07f;
+            if (absf(tg - g1) < 0.0004f)
+                g1 = tg;
+            r->ig = g1;
+            if (fade < 1.0f || g0 != 1.0f || g1 != 1.0f) {
+                f32 g = g0 * fade, dg = (g1 - g0) * fade * (1.0f / (f32)CTRL);
+                for (n = 0; n < CTRL; n++) {
+                    L[n] += bl[n] * g;
+                    R[n] += br[n] * g;
+                    g += dg;
+                }
+            } else
+                for (n = 0; n < CTRL; n++) {
+                    L[n] += bl[n];
+                    R[n] += br[n];
+                }
+        }
     }
 
     {
@@ -1370,6 +1392,8 @@ void eng_init(uint32_t sample_rate)
         for (k = 0; k < sizeof ir; k++)
             p[k] = 0;
     }
+    for (i = 0; i < NINST; i++)
+        ir[i].ig = inst_gain(i);
     lay_was = layers();
     switch_instrument(st.inst < NINST ? st.inst : 0);
     for (i = 0; i < NVOICE; i++) {               /* nothing sounds and nothing runs: as the power coming on leaves it */

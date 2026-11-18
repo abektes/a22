@@ -1,8 +1,9 @@
 #!/bin/sh
 # h1's tests: the device app in fm1-base's host simulator (the platform simulated, the same app.c
 # and core as the firmware), then LAYERS (tests/layers.c), each algorithm's own knobs, the resets and a
-# step's eight notes (tests/knobs.c), two cores (tests/cores.c) and the line drawing (tests/lines.c) on the
-# core alone. The release workflow runs this after the build; a failure stops it.
+# step's eight notes (tests/knobs.c), each instrument's own volume and the volume ring (tests/volume.c),
+# two cores (tests/cores.c) and the line drawing (tests/lines.c) on the core alone. The release workflow
+# runs this after the build; a failure stops it.
 set -eu
 cd "$(dirname "$0")/.."
 ./build.sh --host
@@ -20,6 +21,9 @@ ASAN_OPTIONS=detect_leaks=0 build/h1layers
 "${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/knobs.c -o build/h1knobs -lm
 ASAN_OPTIONS=detect_leaks=0 build/h1knobs
+"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
+    core/*.c tests/volume.c -o build/h1volume -lm
+ASAN_OPTIONS=detect_leaks=0 build/h1volume
 # two cores sound the same as one, to the bit (tests/cores.c: the second core is a thread)
 "${CC:-cc}" -std=c11 -O2 -ffp-contract=off -w core/*.c tests/cores.c -o build/h1cores -lm -lpthread
 build/h1cores > build/cores1.txt

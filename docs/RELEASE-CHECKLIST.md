@@ -46,8 +46,14 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
 - [ ] No crackle or dropouts with eight notes held on the heavy instruments (TWANG, BARD, KOI),
       with ECHO and SPACE turned up.
 - [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play. The
-      bar on the right edge follows the knob and is gone a second after it stops; it does not
-      come up by itself with the knob at rest.
+      ring in the middle of the screen, marked GLOBAL, follows the knob and is gone a second after
+      it stops; it does not come up by itself with the knob at rest.
+- [ ] Hold EDIT: the ring comes up marked INSTRUMENT and stays while EDIT is down. Turn SELECT
+      with it held: that instrument gets quieter without clicks, down to silence, and MASTER
+      still works on top. Let go: the knob strip is not pinned. A quick tap of EDIT still pins
+      it. With LAYERS on, a loop recorded on one instrument follows that instrument's volume
+      while another is in hand. The volume is still there after a restart, and hold SAVE for two
+      seconds puts it back to full.
 - [ ] Loop: REC, play a take, REC again, it loops, overdub, hold REC clears. The white keys show
       the pattern and the place runs across.
 - [ ] Step: hold SEQ, REC, enter notes and a rest, PLAY. The white keys show the steps.

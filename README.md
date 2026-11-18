@@ -132,7 +132,8 @@ That is what the backup is for.
 | REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it. Step: REC turns step-write on and off, PLAY runs the pattern |
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
-| MASTER | Volume. A slim bar up the right edge of the screen shows it while it turns |
+| MASTER | Volume of everything. A ring in the middle of the screen shows it while it turns, marked GLOBAL |
+| hold EDIT, turn SELECT | Volume of the instrument in hand. The same ring, marked INSTRUMENT. Holding EDIT alone shows where it stands |
 | hold SEQ | Swap LOOP and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
 | SEQ + REC | LAYERS on and off: with it on, what you record keeps the instrument and algorithm it was played on |
@@ -142,19 +143,23 @@ That is what the backup is for.
 | hold SAVE for two seconds | Reset this instrument: every algorithm's knobs, and its FX, ENV, LFO and ARP pages |
 | hold SAVE for four seconds | Reset every instrument, and the KEYS and GLOBAL pages. The sequencer and what it holds are left alone |
 
-A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page.
+A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page, and
+holding EDIT never pins the strip.
 While the sequencer runs, the sixteen white keys light as the pattern, left to right: lit where
 there are notes, with the playing step flipped. Up to sixteen steps each key is a step, up to
 thirty-two each key is two. A step holds up to eight notes.
 
 The four knobs belong to the algorithm. Turn ALGORITHM and they stand where you last left them on
-that algorithm, not where they were on the one before. The settings pages belong to the instrument.
+that algorithm, not where they were on the one before. The settings pages and the instrument's
+volume belong to the instrument: the volume is saved with it, and resetting the instrument puts it
+back to full.
 
 **LAYERS** (press SEQ and REC together) gives the sequencer more than one instrument. With it on,
 every note in the loop or the step pattern goes on sounding on the instrument and algorithm it was
 recorded with: record a bass line on TWANG, turn PRESETS to KOI, and play or record over it. A
 take started over a stopped loop joins it, and nothing is erased until you hold REC. An
-instrument's knobs, ENV and LFO stay its own, so turning them changes its layer; the effects are
+instrument's knobs, ENV, LFO and volume stay its own, so turning them changes its layer (hold EDIT
+and turn SELECT to sit one layer under another); the effects are
 those of the instrument in hand; the eight voices are shared by all the layers, and a step holds
 eight notes in all. With the ARP on, the loop records the notes the arpeggiator played. The
 picture is the instrument in hand. With LAYERS off, everything recorded plays on the instrument in
