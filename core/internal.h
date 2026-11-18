@@ -60,8 +60,11 @@ typedef struct InstParams {
     uint8_t lfo[4];              /* shape, rate, depth, target */
     uint8_t fx[4];               /* echo, time, space, tone */
     uint8_t arp[4];              /* mode, rate, range, gate */
-    uint8_t rsv[3];
+    uint8_t mix[3];              /* [IP_CUT] 0..100: how far the instrument is turned down. Its volume is 100 less
+                                  * that, kept this way round so a state saved before there was one (a zero here)
+                                  * is at full. The other two: spare, zero. */
 } InstParams;
+#define IP_CUT 0
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
 #define H1_VERSION 6u
@@ -93,6 +96,9 @@ typedef struct H1State {
 #define KNOBS(inst, algo) (st.knob[inst][(algo) < NALGO ? (algo) : 0])
 #define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
 void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs as new; algo < 0: all of the instrument's */
+
+/* an instrument's own volume, 0..100 (EDIT held, and SELECT): what the mix takes of it, beside MASTER */
+#define INST_VOL(inst) (100 - (st.ip[inst].mix[IP_CUT] <= 100 ? st.ip[inst].mix[IP_CUT] : 0))
 
 /* A part: an instrument and one of its algorithms, in a byte. What a recorded note remembers, so that
  * with LAYERS on it goes on sounding as it was played when another instrument is in hand. */

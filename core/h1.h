@@ -25,7 +25,7 @@ void h1_button(int btn, int down);
 void h1_encoder(int enc, int detents);           /* + = clockwise */
 void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);
 void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame: the core
-                                                  * only shows it (a slim bar while it turns); the port owns the gain */
+                                                  * only shows it (a ring while it turns); the port owns the gain */
 void h1_frame(uint32_t now_ms);                  /* advance the animation and draw the frame */
 
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */
@@ -75,6 +75,8 @@ int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current instrument, 0..7 */
 int h1_page(void);                               /* 0 = home, else a settings page */
 int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
+int h1_instrument_volume(int inst);              /* 0..100: the instrument's own volume (EDIT held, and SELECT) */
+int h1_volume_ring(void);                        /* the volume ring: 0 not up, 1 GLOBAL (MASTER), 2 INSTRUMENT */
 int h1_instrument_count(void);
 const char *h1_instrument_name(int i);
 const char *h1_knob_name(int inst, int k);       /* the four home-screen modulations */

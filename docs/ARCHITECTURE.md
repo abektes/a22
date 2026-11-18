@@ -112,6 +112,15 @@ its voices follows the algorithm in hand: its `post`, and a clock in `block` who
 (ORBIT's spin). `tests/knobs.c` holds all of it, and the three resets on SAVE.
 `post` runs once per instrument, on that instrument's own mix.
 
+Every instrument has a volume of its own beside MASTER (EDIT held, and SELECT): `INST_VOL`, 0 to
+100, kept in `InstParams.mix[IP_CUT]` as how far it is turned down, so the zero that a state from
+before it holds there is full. The engine takes an instrument's mix into the sum at that volume
+after its `post`, as a square like MASTER's, eased over about ten milliseconds and ramped across
+the block. At full the samples go in untouched, so nothing sounds different until one is turned.
+It is the instrument's: saved with it, back at full on the instrument's reset, left alone by the
+algorithm's. The ring that shows either volume is `draw_volume` in `ui.c`. `tests/volume.c` holds
+all of it.
+
 ## The sequencer
 
 Time is 96 ticks per quarter note. A bar is 384, 288, 480, 288 or 336 ticks for 4/4, 3/4, 5/4,
@@ -137,7 +146,8 @@ shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (
 `h1_state_load` takes all three, straight from the bytes: a version 4 state comes up with LAYERS
 off and no parts kept, and in both older ones every algorithm starts from where the instrument's
 knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
-to whichever instrument is in hand.
+to whichever instrument is in hand. An instrument's volume took a spare byte of version 6, so a
+v0.1.0 state loads as it is, at full, and a v0.1.0 firmware reads a newer state without minding.
 
 ## Controls as values
 
@@ -171,15 +181,16 @@ Every cut is stored with its highs lifted and the player (`smp_read`) lowers the
 
 ## RAM and flash on the device
 
-Measured by the first device build (CI, JieLi toolchain 20260730.1, fm1-base c8e0599):
+As the build prints them (CI's one-core build of what became v0.2.0; v0.1.0's image was 304,848 bytes,
+and the recordings are 162,048 of the difference):
 
 | | Bytes | Of |
 |---|---|---|
-| App image | 304,848 | the 581,564-byte app slot |
+| App image | 526,284 | the 581,564-byte app slot, with 55,280 free |
 | RAM code | 5,100 | |
-| `.data` + `.bss` | 45,556 | |
-| Pool | 347,492 | |
-| SRAM in all | 398,152 | 475,136, with 76,984 free (the build keeps 8,192 spare) |
+| `.data` + `.bss` | 55,944 | |
+| Pool | 355,172 | |
+| SRAM in all | 416,220 | 475,136, with 58,916 free (the build keeps 8,192 spare) |
 
 `app/fm1.toml` sets `ram_layout = "packed"`: RAM code, `.data`/`.bss` and the pool share one
 budget. fm1-base's default map gives the pool a fixed 336 KB, which h1 overflows. `app/app.h`

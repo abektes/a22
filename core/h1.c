@@ -111,6 +111,7 @@ int h1_state_load(const void *blob, uint32_t size)
                 if (st.knob[i][a][j] > 100) st.knob[i][a][j] = 100;
         }
         if (st.ip[i].algo >= NALGO) st.ip[i].algo = 0;
+        if (st.ip[i].mix[IP_CUT] > 100) st.ip[i].mix[IP_CUT] = 0;           /* (not a volume: full, rather than an instrument gone quiet) */
         for (pg = 1; pg < NPAGE; pg++)
             for (j = 0; j < 4; j++) {
                 uint8_t *v = page_value(pg, j);
@@ -136,6 +137,7 @@ const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->n
 int h1_algorithm(void) { return st.ip[st.inst].algo; }
 int h1_page(void) { return ui_page(); }
 int h1_layers(void) { return st.seq[6] == 1; }
+int h1_instrument_volume(int inst) { return inst >= 0 && inst < NINST ? INST_VOL(inst) : 0; }
 void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
 int h1_instrument_count(void) { return NINST; }
 const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }

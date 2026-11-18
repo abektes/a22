@@ -46,8 +46,14 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
 - [ ] No crackle or dropouts with eight notes held on the heavy instruments (TWANG, BARD, KOI),
       with ECHO and SPACE turned up.
 - [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play. The
-      bar on the right edge follows the knob and is gone a second after it stops; it does not
-      come up by itself with the knob at rest.
+      ring in the middle of the screen, marked GLOBAL, follows the knob and is gone a second after
+      it stops; it does not come up by itself with the knob at rest.
+- [ ] Hold EDIT: the ring comes up marked INSTRUMENT and stays while EDIT is down. Turn SELECT
+      with it held: that instrument gets quieter without clicks, down to silence, and MASTER
+      still works on top. Let go: the knob strip is not pinned. A quick tap of EDIT still pins
+      it. With LAYERS on, a loop recorded on one instrument follows that instrument's volume
+      while another is in hand. The volume is still there after a restart, and hold SAVE for two
+      seconds puts it back to full.
 - [ ] Loop: REC, play a take, REC again, it loops, overdub, hold REC clears. The white keys show
       the pattern and the place runs across.
 - [ ] Step: hold SEQ, REC, enter notes and a rest, PLAY. The white keys show the steps.
@@ -101,7 +107,8 @@ P25Q80 (`0x856014`). A firmware that only knows the Puya can't save or update on
 - [ ] Remove the "Status: no release yet" note from the README's Install section.
 - [ ] Add the repository topics: `m-vave`, `fm-1`, `firmware`, `synthesizer`.
 - [ ] Merge to `main`. `fmhub.json` has to be in the root of the default branch.
-- [ ] Tag: `git tag v0.1.0 && git push origin v0.1.0`. The workflow builds `h1-0.1.0.fwsc`
-      (identity `FM-1_481000100`), tests, attests and publishes the release.
-- [ ] Install the released `h1-0.1.0.fwsc` once on the FM-1, as a last check of the exact file.
+- [ ] Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow builds `h1-X.Y.Z.fwsc`
+      (identity `FM-1_481XXYYZZ`: v0.2.0 is `FM-1_481000200`), tests, attests and publishes the
+      release.
+- [ ] Install the released `h1-X.Y.Z.fwsc` once on the FM-1, as a last check of the exact file.
 - [ ] Submit at [thefirmwarehub.com/submit](https://thefirmwarehub.com/submit/).
