@@ -173,6 +173,7 @@ void eng_post(int type, int a);                  /* main loop -> audio, lock-fre
 void eng_render(int32_t *lr, uint32_t n);
 void eng_snapshot(Vis *vis);                     /* main loop: copy what the picture needs */
 uint32_t eng_sounding_lo(void);                  /* notes sounding, as key bits for the LEDs */
+int eng_seq_leds(uint32_t *out, int page_open, int blink);   /* the pattern on the white keys; 0: not showing */
 uint32_t eng_voices(void);
 extern Voice voices[NVOICE];
 extern f32 ks_line[NVOICE][2][KS_LEN];
