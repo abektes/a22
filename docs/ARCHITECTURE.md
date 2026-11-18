@@ -112,13 +112,16 @@ its voices follows the algorithm in hand: its `post`, and a clock in `block` who
 (ORBIT's spin). `tests/knobs.c` holds all of it, and the three resets on SAVE.
 `post` runs once per instrument, on that instrument's own mix.
 
-Every instrument has a volume of its own beside MASTER (EDIT held, and SELECT): `INST_VOL`, 0 to
+Every instrument has a volume of its own beside MASTER (EDIT held, and SELECT or MASTER): `INST_VOL`, 0 to
 100, kept in `InstParams.mix[IP_CUT]` as how far it is turned down, so the zero that a state from
 before it holds there is full. The engine takes an instrument's mix into the sum at that volume
 after its `post`, as a square like MASTER's, eased over about ten milliseconds and ramped across
 the block. At full the samples go in untouched, so nothing sounds different until one is turned.
 It is the instrument's: saved with it, back at full on the instrument's reset, left alone by the
-algorithm's. The ring that shows either volume is `draw_volume` in `ui.c`. `tests/volume.c` holds
+algorithm's. The ring that shows either volume is `draw_volume` in `ui.c`. MASTER's gain is the port's, as
+it was, but the port asks `h1_global_volume()` first: once the knob has been the instrument's
+(turned with EDIT held) the volume of everything is held where it was, and the port uses that
+until the knob, turned without EDIT, comes back through it. `tests/volume.c` holds
 all of it.
 
 ## The sequencer

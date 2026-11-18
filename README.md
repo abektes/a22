@@ -43,7 +43,7 @@ same C code that goes on the device, and can play other FM-1 firmwares too.
 ## Install
 
 > **h1 is new.** Its releases have been installed and played on one FM-1, a unit bought in
-> November 2026: v0.1.0 from the stock firmware, v0.2.0 over v0.1.0. Going back to stock from h1,
+> November 2026: v0.1.0 from the stock firmware, each later one over the one before. Going back to stock from h1,
 > installing h1 from another custom firmware, and a unit with the older flash chip have not been
 > tried yet:
 > [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has. h1 is not on The Firmware
@@ -134,7 +134,7 @@ That is what the backup is for.
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
 | MASTER | Volume of everything. A ring in the middle of the screen shows it while it turns, marked GLOBAL |
-| hold EDIT, turn SELECT | Volume of the instrument in hand. The same ring, marked INSTRUMENT. Holding EDIT alone shows where it stands |
+| hold EDIT, turn MASTER or SELECT | Volume of the instrument in hand. The same ring, marked INSTRUMENT. MASTER sets it to where the knob stands, SELECT moves it a step a click. Holding EDIT alone shows where it stands |
 | hold SEQ | Swap LOOP and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
 | SEQ + REC | LAYERS on and off: with it on, what you record keeps the instrument and algorithm it was played on |
@@ -146,6 +146,12 @@ That is what the backup is for.
 
 A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page, and
 holding EDIT never pins the strip.
+
+MASTER is one knob for two volumes, and it can only say where it stands. After you have turned it
+with EDIT held it is no longer where the volume of everything was left, so that volume stays put
+until you turn MASTER, without EDIT, back through it. Until then the ring shows the volume that is
+held, and a small dot outside the ring shows where the knob is.
+
 While the sequencer runs, the sixteen white keys light as the pattern, left to right: lit where
 there are notes, with the playing step flipped. Up to sixteen steps each key is a step, up to
 thirty-two each key is two. A step holds up to eight notes.
@@ -160,7 +166,7 @@ every note in the loop or the step pattern goes on sounding on the instrument an
 recorded with: record a bass line on TWANG, turn PRESETS to KOI, and play or record over it. A
 take started over a stopped loop joins it, and nothing is erased until you hold REC. An
 instrument's knobs, ENV, LFO and volume stay its own, so turning them changes its layer (hold EDIT
-and turn SELECT to sit one layer under another); the effects are
+and turn MASTER or SELECT to sit one layer under another); the effects are
 those of the instrument in hand; the eight voices are shared by all the layers, and a step holds
 eight notes in all. With the ARP on, the loop records the notes the arpeggiator played. The
 picture is the instrument in hand. With LAYERS off, everything recorded plays on the instrument in

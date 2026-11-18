@@ -54,6 +54,11 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
       it. With LAYERS on, a loop recorded on one instrument follows that instrument's volume
       while another is in hand. The volume is still there after a restart, and hold SAVE for two
       seconds puts it back to full.
+- [ ] Hold EDIT and turn MASTER: the ring is marked INSTRUMENT, the instrument follows the knob
+      from silence to full, and everything else stays as loud as it was. Let go and turn MASTER
+      away from where it was: nothing gets louder or quieter, and the ring shows the held volume
+      with a dot for the knob. Turn it back through that volume: it follows the knob again,
+      without a jump.
 - [ ] Loop: REC, play a take, REC again, it loops, overdub, hold REC clears. The white keys show
       the pattern and the place runs across.
 - [ ] Step: hold SEQ, REC, enter notes and a rest, PLAY. The white keys show the steps.
