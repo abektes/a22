@@ -1051,12 +1051,67 @@ static const Blk *part_set(int part)
 }
 
 
+/* ---- a part's voices, on one core or two ------------------------------------------------------
+ * A voice's control block (its envelope, its glide, the instrument's render) touches the voice and
+ * its own buffer and nothing else, so the voices of a part can be made in any order, or half of them
+ * on a second core at the same time. They are mixed afterwards, in voice order, so the sound is the
+ * same to the bit whichever core made which. */
+static f32 vt[NVOICE][CTRL];                     /* each voice's block before it is mixed */
+static struct {                                  /* what a voice's block needs: set before any job is handed over */
+    const InstDef *def;
+    const Blk *b;
+    f32 att, kd, sus, kr, kg, dt;
+} vj;
+static int (*c2_run)(void (*fn)(uint32_t), uint32_t arg);
+static int (*c2_wait)(void);
+
+void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void))
+{
+    c2_run = run;
+    c2_wait = wait;
+}
+
+static void voice_block(int i)
+{
+    Voice *v = &voices[i];
+    f32 e0 = v->env;
+    switch (v->stage) {
+    case 1:
+        v->env += vj.att;
+        if (v->env >= 1.0f) {
+            v->env = 1.0f;
+            v->stage = 2;
+        }
+        break;
+    case 2:
+    case 3:
+        v->env += (vj.sus - v->env) * vj.kd;
+        break;
+    default:
+        v->env -= v->env * vj.kr + 0.00002f;
+        if (v->env <= 0.0003f)
+            v->env = 0.0f;
+        break;
+    }
+    v->env_prev = e0;
+    v->pitch += (v->target - v->pitch) * vj.kg;
+    vj.def->render(v, vj.b, vt[i], CTRL);
+    v->age += vj.dt;
+}
+
+static void voices_job(uint32_t mask)            /* (this is what the second core is handed) */
+{
+    int i;
+    for (i = 0; i < NVOICE; i++)
+        if (mask >> i & 1u)
+            voice_block(i);
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 bl[CTRL], br[CTRL];               /* one instrument's voices, before its post */
     const InstParams *ip;
     const Blk *b;
-    f32 tmp[CTRL];
     f32 dt = (f32)CTRL * ISR, bpm, dticks, kg, peak = 0.0f;
     uint32_t imask = 0;
     int i, n, inst, lay = layers(), live;
@@ -1150,37 +1205,41 @@ static void block(f32 *L, f32 *R)
             bl[n] = br[n] = 0.0f;
         b = &r->b;
         for (p = 0; p < np; p++) {
+            uint32_t mine = 0, other = 0;
+            int nv = 0;
             b = part_set(parts[p]);
             kr = pending_i >= 0 ? 0.3f : r->kr;
+            for (i = 0; i < NVOICE; i++)         /* every other voice of the part to the second core, if there is one */
+                if (voices[i].stage && voices[i].part == parts[p]) {
+                    if (c2_run && (nv & 1))
+                        other |= 1u << i;
+                    else
+                        mine |= 1u << i;
+                    nv++;
+                }
+            vj.def = def;
+            vj.b = b;
+            vj.att = r->att;
+            vj.kd = r->kd;
+            vj.sus = r->sus;
+            vj.kr = kr;
+            vj.kg = kg;
+            vj.dt = dt;
+            if (other) {
+                int on2 = c2_run(voices_job, other);
+                voices_job(mine);
+                if (!on2 || c2_wait() != 0)      /* it did not take them, or it dropped them: here, then */
+                    voices_job(other);
+            } else
+                voices_job(mine);
             for (i = 0; i < NVOICE; i++) {
                 Voice *v = &voices[i];
+                const f32 *tmp = vt[i];
                 f32 e0, e1, g, gl, gr, de, pan;
-                if (!v->stage || v->part != parts[p])
+                if (!((mine | other) >> i & 1u))
                     continue;
-                e0 = v->env;
-                switch (v->stage) {
-                case 1:
-                    v->env += r->att;
-                    if (v->env >= 1.0f) {
-                        v->env = 1.0f;
-                        v->stage = 2;
-                    }
-                    break;
-                case 2:
-                case 3:
-                    v->env += (r->sus - v->env) * r->kd;
-                    break;
-                default:
-                    v->env -= v->env * kr + 0.00002f;
-                    if (v->env <= 0.0003f)
-                        v->env = 0.0f;
-                    break;
-                }
+                e0 = v->env_prev;
                 e1 = v->env;
-                v->env_prev = e0;
-                v->pitch += (v->target - v->pitch) * kg;
-                def->render(v, b, tmp, CTRL);
-                v->age += dt;
                 g = def->gain * r->vol;
                 pan = clampf(v->pan + r->panmod, -1.0f, 1.0f);
                 gl = g * (1.0f - maxf(0.0f, pan) * 0.8f);

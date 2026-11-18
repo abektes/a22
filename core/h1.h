@@ -31,6 +31,13 @@ void h1_frame(uint32_t now_ms);                  /* advance the animation and dr
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */
 void h1_render(int32_t *lr, uint32_t n);
 
+/* A second core, where a port has one. run hands it fn(arg) and returns 1, or returns 0 (then the core
+ * that asked does the work); wait returns 0 when the job is back, anything else if it was dropped (then
+ * too). h1_render gives it every other voice and does the rest meanwhile, so run and wait are called
+ * from wherever h1_render is. The sound is the same to the bit with or without. Call it before the
+ * audio starts; never is fine. */
+void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
+
 /* the picture: 240 x 240 intensities, and the ink ramp that colours them (RGB565, 256 entries) */
 const uint8_t *h1_framebuffer(void);
 const uint16_t *h1_palette(void);

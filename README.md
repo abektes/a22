@@ -168,14 +168,16 @@ core/    the whole firmware: portable C99, no libc, no malloc
 app/     the device: fm1-base's app, a thin pass-through to core/
 base/    fm1-base (a git submodule, with felucca-bsp inside it)
 port/    other builds of the same core: host (pictures, WAVs), rfm1 (the browser simulator)
-tests/   the device app in fm1-base's host simulator, LAYERS on the core alone, and the crash hunt
+tests/   the device app in fm1-base's host simulator, LAYERS and two cores on the core alone, and the crash hunt
 ```
 
 - `./build.sh` builds `app/build/h1.fwsc`, a development build with identity `FM-1_48100`. It
   needs JieLi's toolchain and the AC79 SDK (see `base/README.md`). `./build.sh --release X.Y.Z`
   builds the release package.
 - `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`, then
-  runs `tests/layers.c` on the core alone. It needs only a C compiler and Pillow.
+  runs `tests/layers.c` and `tests/cores.c` on the core alone. It needs only a C compiler and Pillow.
+- `FM1B_CPU2=1 ./build.sh` builds the firmware with the chip's second core rendering half the
+  voices. It is not the default: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - `sh tests/run_fuzz.sh` is the crash hunt: the core under the compiler's address and
   undefined-behaviour checkers, fed any saved state and any panel input.
 - `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes

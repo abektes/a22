@@ -158,6 +158,18 @@ static int last_start_failed(void)
 static int last_start_failed(void) { return bootguard.failed != 0; }
 #endif
 
+/* The second core, in a build that has it (fm1.toml cpu2 = true, or FM1B_CPU2=1 in the build's environment):
+ * the core's render hands it every other voice. Where it does not start, or once it has been given up, the
+ * first core does all of them, as in a build without it. The sound is the same either way. */
+#ifndef FM1B_CPU2
+#define FM1B_CPU2 0
+#endif
+#define TWO_CORES FM1B_CPU2
+#if TWO_CORES
+static int core2_run(void (*fn)(uint32_t), uint32_t arg) { return plat_cpu2_on() && plat_cpu2_run(fn, arg); }
+static int core2_wait(void) { return plat_cpu2_wait(); }
+#endif
+
 void app_init(void)
 {
     static uint32_t blob[1024 / 4];                         /* words: the store fills it, the core reads it */
@@ -165,6 +177,10 @@ void app_init(void)
     int n;
     h1_init(44100);
     h1_while_drawing(send_some);
+#if TWO_CORES
+    if (plat_cpu2_set(1) == 0)                              /* (app_init is the one moment it can start) */
+        h1_two_cores(core2_run, core2_wait);
+#endif
     if (last_start_failed())
         return;
     h1_state(&size);
@@ -287,8 +303,14 @@ static void say_perf(void)
         d = say_cat(d, end, ". STACK ");                    /* bytes never used since the start */
         d = say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_MAIN));
         d = say_cat(d, end, " ");
-        say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_IRQ));
+        d = say_num(d, end, (uint32_t)plat_stack_left(PLAT_STK_IRQ));
     }
+#if TWO_CORES
+    /* the cores making the sound, then: with two, how deep the second's stack has gone; with one, why
+     * (plat_cpu2_gave_up) */
+    d = say_cat(d, end, plat_cpu2_on() ? ". CORES 2 " : ". CORES 1 ");
+    say_num(d, end, plat_cpu2_on() ? plat_cpu2_stack() : (uint32_t)plat_cpu2_gave_up());
+#endif
     ann_say(t, 0, ANN_NOW);
     pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = 0;
     pf.since_ms = plat_ms();

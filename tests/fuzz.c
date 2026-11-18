@@ -16,11 +16,15 @@
  *   3. two threads: the same, while a second thread renders the sound without waiting its turn,
  *      as the audio interrupt does on the device.
  *
+ * A quarter of all of it runs with a second core (a thread) taking every other voice, as
+ * h1_two_cores has it on an FM-1 built with one.
+ *
  * It checks what the checkers cannot see: every rectangle sent to the panel is inside the screen
  * and no taller than a band (20 rows), after any state the values a picture and a sound index
  * with are in range, and a frame sent the way the device sends it (in pieces, while the next one is
  * drawn) leaves the panel showing exactly that frame. */
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -170,9 +174,51 @@ static void poke(int with_sound)
     }
 }
 
+/* a second core, as a thread: it sleeps until it is handed a job, and the sound waits for it */
+static sem_t job_go, job_done;
+static void (*job_fn)(uint32_t);
+static uint32_t job_arg;
+static void *core_two(void *x)
+{
+    (void)x;
+    for (;;) {
+        sem_wait(&job_go);
+        job_fn(job_arg);
+        sem_post(&job_done);
+    }
+    return 0;
+}
+static int run_two(void (*fn)(uint32_t), uint32_t arg)
+{
+    job_fn = fn;
+    job_arg = arg;
+    sem_post(&job_go);
+    return 1;
+}
+static int wait_two(void)
+{
+    sem_wait(&job_done);
+    return 0;
+}
+static int no_two(void (*fn)(uint32_t), uint32_t arg) { (void)fn; (void)arg; return 0; }   /* (it takes nothing) */
+
 static void fresh(uint32_t t0)
 {
+    static int started;
+    static pthread_t th;
+    if (!started) {
+        started = 1;
+        sem_init(&job_go, 0, 0);
+        sem_init(&job_done, 0, 0);
+        if (pthread_create(&th, 0, core_two, 0))
+            die("no thread for the second core", 0, 0, 0, 0);
+    }
     h1_init(44100);
+    switch (rnd() & 3u) {                        /* one core mostly; two; or a second core that takes no job */
+    case 0: h1_two_cores(run_two, wait_two); break;
+    case 1: h1_two_cores(no_two, wait_two); break;
+    default: h1_two_cores(0, 0); break;
+    }
     h1_while_drawing(pipe_poll);
     have_want = 0;
     piped = (int)(rnd() & 1u);                   /* half the time as the device sends, half all at once */

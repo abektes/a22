@@ -99,6 +99,7 @@ const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->n
 int h1_algorithm(void) { return st.ip[st.inst].algo; }
 int h1_page(void) { return ui_page(); }
 int h1_layers(void) { return st.seq[6] == 1; }
+void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
 int h1_instrument_count(void) { return NINST; }
 const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
 const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }

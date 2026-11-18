@@ -28,6 +28,27 @@ audio frames, LED bits and changed screen rectangles out.
 single-writer event queue; the engine publishes a snapshot (voice envelopes, levels, a scope
 buffer) that the picture reads.
 
+## Two cores
+
+The FM-1's chip has a second core, and fm1-base can hand it one job at a time from the audio
+interrupt (`base/docs/SECOND-CORE.md`). `h1_two_cores(run, wait)` tells the core a port has one.
+The engine then renders a part's voices half on each: a voice's control block (`voice_block`: its
+envelope, its glide, the instrument's `render`) touches the voice and its own buffer in `vt` and
+nothing else, so the second core takes every other voice while the first does the rest, and the
+first mixes them afterwards in voice order. The sound is the same to the bit as on one core.
+`tests/cores.c` plays everything on one core and on two (a real thread) and compares.
+
+What that asks of an instrument: `render` may write the voice it is given and its output, and read
+anything `block` and `note` set up. It must not write memory another voice's `render` reads. (COZY
+and BARD each set a `sounding` flag from `render`; both cores only ever set it, and `post` reads it
+after they are done.)
+
+The second core is not in the default build. `FM1B_CPU2=1 ./build.sh` makes the build that has it,
+and CI keeps both packages. Some FM-1s misread memory on the second core. fm1-base checks each job
+it hands over, and `app/fm1.toml` sets `cpu2_fallback`, so an FM-1 that fails a check goes on with
+one core until it is switched off. A misread inside a job's own data is not checked. The timing
+readout ends with `CORES 2` and how deep the second core's stack has gone, or `CORES 1` and why.
+
 ## The picture
 
 Instruments draw into a 240 x 240 buffer of 8-bit ink levels: 0 is the bezel's black, 255 is
@@ -126,9 +147,10 @@ What h1 puts in the pool, about 321 KB:
 
 These are link-time numbers. Stack depth has not been measured on hardware. Frame and audio time
 can be: send MIDI CC 119 to the FM-1 while a screen reader is listening (`base/tools/fm1_remote.py
-listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. STACK main
-interrupt`, the times in milliseconds a frame, the audio as a percentage of each block, both since it was
-last asked, and the bytes of each stack never used since the start. If RAM gets tight again, the first things to shrink are the string lines and the reverb
+listen`) and it says `PERF. FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. KB n RECTS n.
+STACK main interrupt`: the times in milliseconds a frame, the audio as a percentage of each block, the
+kilobytes and rectangles sent to the panel a frame, all since it was last asked, and the bytes of each
+stack never used since the start. A build with the second core adds `CORES 2 n` or `CORES 1 why`. If RAM gets tight again, the first things to shrink are the string lines and the reverb
 (16-bit samples halve both).
 
 ## What the FM-1 does not forgive

@@ -188,6 +188,7 @@ void eng_snapshot(Vis *vis);                     /* main loop: copy what the pic
 uint32_t eng_sounding_lo(void);                  /* notes sounding, as key bits for the LEDs */
 int eng_seq_leds(uint32_t *out, int page_open, int blink);   /* the pattern on the white keys; 0: not showing */
 uint32_t eng_voices(void);
+void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 int eng_seq_has(int inst);                       /* main loop: something recorded was played on this instrument */
 extern Voice voices[NVOICE];
 extern f32 ks_line[NVOICE][2][KS_LEN];
