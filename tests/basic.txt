@@ -63,7 +63,7 @@ leds
 shot loop.png
 tap PLAY
 wait 100
-# SEQ and REC together: LAYERS, and the reader says so (on from the start since 0.3.0: off, then on
+# SEQ and REC together: LAYERS, and the reader says so (on from the start since 0.2.2: off, then on
 # again). With it on, what was recorded keeps its instrument: the loop sounds on with another instrument
 # in hand and no key down
 press SEQ

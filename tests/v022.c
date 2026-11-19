@@ -1,4 +1,4 @@
-/* What 0.3.0 adds, on the core alone, its panel worked as a hand would. Run by tests/run_tests.sh.
+/* What 0.2.2 adds, on the core alone, its panel worked as a hand would. Run by tests/run_tests.sh.
  *
  *   the limiter     a chord on every algorithm of every instrument never goes past the limiter's ceiling,
  *                   and a note at an ordinary level goes through untouched
@@ -9,7 +9,7 @@
  *   the loop saved  h1_loop / h1_loop_load bring a loop back, layers and velocities with it, and the loop
  *                   asks to be saved only when it is stopped
  *   MIDI out        keys, the arpeggiator and the loop go out, CC 20-23 with the knobs, nothing that came in
- *   version 6       a 0.2.x state loads, with LAYERS on
+ *   version 6       a 0.2.1 state loads, with LAYERS on
  *
  * Each sound to compare is made in a process of its own: h1_init does not wind the engine's clocks and
  * random numbers back, so two takes in one process never sound the same. */
@@ -323,9 +323,9 @@ int main(void)
     CHECK(mo_count(0x90, -1) == mo_count(0x80, -1), "each with its note-off");
     h1_midi_out(0);
 
-    /* ---- a 0.2.x state (version 6): it loads, LAYERS on, its steps at full and on no layer ---- */
+    /* ---- a 0.2.1 state (version 6): it loads, LAYERS on, its steps at full and on no layer ---- */
     h1_init(44100);
-    pair();                                      /* LAYERS off, as a 0.2.x FM-1 has it */
+    pair();                                      /* LAYERS off, as a 0.2.1 FM-1 has it */
     h1_control_set(H1_ENC_PRESET, 3);
     p = (const uint8_t *)h1_state(&size);
     memset(v6, 0xAA, sizeof v6);
@@ -340,6 +340,6 @@ int main(void)
         n += st.layer[i].part != 0;
     CHECK(n == 0 && st.step_vel[0][0] == 0 && st.step_lay[0][0] == 0, "and nothing past it but zeros");
 
-    printf("v030: %d checks, %d failed\n", checks, fails);
+    printf("v022: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

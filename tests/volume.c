@@ -126,7 +126,7 @@ static Heard take(int kind, int i, int v)
         h1_key(5, 0); h1_key(9, 0); h1_key(12, 0);
     } else {                                     /* LAYERS: a loop on instrument i at volume v, then another in hand */
         int other = (i + 5) % NINST < 2 ? 4 : (i + 5) % NINST;   /* (one that is silent with no key down) */
-        if (!h1_layers())                    /* (on from the start since 0.3.0) */
+        if (!h1_layers())                    /* (on from the start since 0.2.2) */
             pair();
         tap(H1_BTN_REC);
         note(5, 200);

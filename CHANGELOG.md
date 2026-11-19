@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.3.0 (not released yet)
+## 0.2.2
 
-Identity `FM-1_481000300`. From the first round of feedback after the launch.
+Identity `FM-1_481000202`. From the first round of feedback after the launch.
 
 **Sound**
 - No more crackle or fuzz on loud chords. Six keys at once on most instruments came to two to five
@@ -41,8 +41,8 @@ Identity `FM-1_481000300`. From the first round of feedback after the launch.
   only, so there is no MIDI out there.)
 
 **Under the hood**
-- Saved state version 8. A 0.2.x state (version 6) loads as it was, with LAYERS turned on. A 0.2.x
-  firmware does not read a version 8 state: going back loses the settings.
+- Saved state version 8. A 0.2.0 or 0.2.1 state (version 6) loads as it was, with LAYERS turned on. A
+  0.2.1 or older firmware does not read a version 8 state: going back loses the settings.
 
 ## 0.2.1
 

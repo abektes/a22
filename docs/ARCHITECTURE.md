@@ -146,13 +146,13 @@ settings from the instrument in hand. An instrument that is not in hand and has 
 its `post` running for a third of a second, fading, so its tail is not cut. The snapshot for the picture
 leaves out the voices of other instruments.
 
-Since 0.3.0 LAYERS is on by default, and each take is a layer of its own (`st.layer`, sixteen of them):
+Since 0.2.2 LAYERS is on by default, and each take is a layer of its own (`st.layer`, sixteen of them):
 the part, and that part's four knobs, ENV and LFO, copied when the take ends (REC, the loop coming
 round from its first take, PLAY, another instrument, step-write off). A loop event and a step note
 keep their layer. While the take goes on the layer sounds as the instrument does; once it is closed
 its voices are a group of their own in `block()` (key: the part, with the layer above it), on their
 own LFO, envelope rates and knobs (`lay_set`). A layer no note is on any more is let go when a new one
-needs its slot. Notes with no layer (recorded before 0.3.0) follow their part as it stands, as before.
+needs its slot. Notes with no layer (recorded before 0.2.2) follow their part as it stands, as before.
 
 Every note carries a velocity: the panel's keys 127, MIDI what it was sent with. A voice turns it into
 a gain (about 20 dB from 1 to 127) and a two-pole low-pass in the mix (open at 127), so the keys sound
@@ -173,7 +173,7 @@ loads with its steps at full velocity on no layer, and LAYERS on. Versions 4 and
 a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
 shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.
 `h1_state_load` takes all of them, straight from the bytes: a version 4 state comes up with LAYERS
-on (since 0.3.0) and no parts kept, and in both older ones every algorithm starts from where the instrument's
+on (since 0.2.2) and no parts kept, and in both older ones every algorithm starts from where the instrument's
 knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
 to whichever instrument is in hand. An instrument's volume took a spare byte of version 6, so a
 v0.1.0 state loads as it is, at full, and a v0.1.0 firmware reads a newer state without minding.

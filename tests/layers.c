@@ -99,7 +99,7 @@ int main(void)
     h1_encoder(H1_ENC_ALGO, 2);
     go(100);
     A = part_now();
-    CHECK(h1_layers(), "LAYERS is on on a new h1 (since 0.3.0)");
+    CHECK(h1_layers(), "LAYERS is on on a new h1 (since 0.2.2)");
     pair();
     CHECK(!h1_layers(), "SEQ and REC together turn it off");
     pair();
@@ -224,7 +224,7 @@ int main(void)
     }
     h1_init(44100);
     CHECK(h1_state_load(blob4 + 0, (uint32_t)H1_VERSION_4_SIZE) == 0, "a version 4 state loads");
-    CHECK(h1_layers(), "a version 4 state comes up with LAYERS on (0.3.0 turns it on)");
+    CHECK(h1_layers(), "a version 4 state comes up with LAYERS on (0.2.2 turns it on)");
     CHECK(h1_state_load(blob4, (uint32_t)H1_VERSION_4_SIZE - 1u) != 0, "a state of the wrong size is refused");
     go(200);
     tap(H1_BTN_PLAY);
