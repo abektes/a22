@@ -1,15 +1,15 @@
 /* h1 - VIBE: a drum machine of recordings. Twelve hits, one on every note of the octave as on BONK (the
  * octave you play it in tunes it), each a real thing struck once (vibe_data.c, docs/SAMPLES.md). The
- * picture is a gamelan left out in the rain at night: a note is a fat drop landing on one of its twelve
- * pieces, which rings, throws a crown of water and swings. The algorithm is the kit, and it changes the
- * weather.
+ * picture is one steel tongue drum left out in a small garden in the rain: a note is a fat drop landing
+ * on one of its twelve tongues, which lights, throws a crown of water and sends rings over the steel.
+ * The algorithm is the kit, and it changes the weather.
  *
  *   C kick  C# rim  D snare  D# clap  E low tom  F mid tom  F# hat  G high tom
  *   G# shaker  A bell  A# open hat  B crash
  *
- *   K1 TUNE    every hit up or down                    the bronze shrinks or grows
- *   K2 DECAY   how long they ring                      how far the rings on the water go, how long a piece glows
- *   K3 WIND    each hit a little off its pitch, and    the rain slants, the gongs sway on their cords
+ *   K1 TUNE    every hit up or down                    the drum shrinks or grows
+ *   K2 DECAY   how long they ring                      how far the rings go, how long a tongue glows
+ *   K3 WIND    each hit a little off its pitch, and    the rain slants, the garden leans
  *              wavering; further apart, left to right
  *   K4 STORM   every hit lands with a splash, harder   more rain, bigger crowns, and at the top lightning
  */
@@ -168,25 +168,6 @@ static void vibe_render(Voice *v, const Blk *b, f32 *out, int n)
 }
 
 /* ---- picture ---------------------------------------------------------------------------- */
-enum { GONG, POT, BAR, DRUM };
-typedef struct Piece { uint8_t kind, x, y, r; } Piece;
-
-/* by drum: the two hanging gongs, five pots on their rack, four bars on their trough, the drum */
-static const Piece PIECES[NDRUM] = {
-    {DRUM, 196, 190, 20},      /* kick */
-    {BAR, 24, 184, 9},         /* rim */
-    {BAR, 46, 186, 10},        /* snare */
-    {BAR, 70, 188, 11},        /* clap */
-    {POT, 138, 142, 13},       /* low tom */
-    {POT, 164, 138, 11},       /* mid tom */
-    {BAR, 96, 190, 12},        /* hat */
-    {POT, 187, 135, 10},       /* high tom */
-    {POT, 207, 132, 8},        /* shaker */
-    {POT, 224, 130, 7},        /* bell */
-    {GONG, 104, 88, 19},       /* open hat */
-    {GONG, 50, 96, 32},        /* crash */
-};
-
 typedef struct Sky {
     uint8_t n, len;                              /* streaks, and how long each is */
     int16_t speed;                               /* pixels a second; negative: it rains upward */
@@ -194,21 +175,23 @@ typedef struct Sky {
     uint8_t flake, moon, bolt;                   /* snow instead; 1 a full moon, 2 a thin one; lightning */
 } Sky;
 static const Sky SKIES[NALGO] = {
-    {46, 13, 300, 12, 0, 1, 0},                  /* WORLD: steady rain under a full moon */
-    {26, 6, 210, -8, 0, 2, 0},                   /* HANDS: a drizzle */
-    {84, 22, 430, 4, 0, 0, 1},                   /* HALL: a downpour */
-    {56, 9, 340, 55, 0, 0, 0},                   /* SHOP: sleet, sideways */
-    {50, 1, 46, 6, 1, 2, 0},                     /* CHIME: snow */
-    {30, 30, 120, 10, 0, 1, 0},                  /* TAPE: slowed down */
-    {96, 3, 250, 16, 0, 2, 0},                   /* TINY: a mist */
-    {44, 12, -260, -14, 0, 1, 1},                /* DICE: it rains upward */
+    {40, 13, 300, 12, 0, 1, 0},                  /* WORLD: steady rain under a full moon */
+    {24, 6, 210, -8, 0, 2, 0},                   /* HANDS: a drizzle */
+    {76, 22, 430, 4, 0, 0, 1},                   /* HALL: a downpour */
+    {50, 9, 340, 55, 0, 0, 0},                   /* SHOP: sleet, sideways */
+    {46, 1, 46, 6, 1, 2, 0},                     /* CHIME: snow */
+    {28, 30, 120, 10, 0, 1, 0},                  /* TAPE: slowed down */
+    {90, 3, 250, 16, 0, 2, 0},                   /* TINY: a mist */
+    {40, 12, -260, -14, 0, 1, 1},                /* DICE: it rains upward */
 };
 
 #define NDROP 36
 #define NRING 10
+#define CX 122.0f
+#define CY 150.0f
 static struct { f32 x, y, vx, vy, life; } drop[NDROP];
-static struct { f32 x, y, t, w; } ring[NRING];
-static f32 glow[NDRUM], swing[NDRUM], swing_v[NDRUM], bolt_t;
+static struct { f32 x, y, t; } ring[NRING];
+static f32 glow[NDRUM], dip, dip_v, nod[3], nod_v[3], bolt_t;
 static uint32_t seen_serial[NVOICE], bolt_seed;
 static int next_drop, next_ring;
 
@@ -219,69 +202,43 @@ static f32 hashf(uint32_t i)
     return (f32)((i ^ (i >> 22)) >> 8) * (1.0f / 16777216.0f);
 }
 
-/* one piece, r across, lit by e. It leaves where its top is in *sx, *sy: where the rain lands. */
-static void piece(int i, f32 x, f32 y, f32 r, f32 e, f32 sw, f32 *sx, f32 *sy)
+/* a leaf or a stem: from its foot, len long, leaning by lean (turns from straight up), bending over as it
+ * goes, in seg pieces; thick at the foot and a point at the tip. Leaves where the tip is. */
+static void blade(f32 x, f32 y, f32 len, f32 lean, f32 bend, f32 w, f32 a, int seg, f32 *tx, f32 *ty)
 {
-    f32 a = 0.62f + 0.38f * sat(e * 2.5f), w = 1.4f + 1.6f * e, xy[8];
-    switch (PIECES[i].kind) {
-    case GONG: {                                 /* hung by two cords from the beam, and swinging */
-        f32 top = 40.0f, gx = x + sw * (y - top) * 0.5f, gy = y - absf(sw) * 3.0f;
-        g_line(x - r * 0.5f, top, gx - r * 0.55f, gy - r * 0.82f, 1.0f, 0.4f);
-        g_line(x + r * 0.5f, top, gx + r * 0.55f, gy - r * 0.82f, 1.0f, 0.4f);
-        if (e > 0.02f) g_glow(gx, gy, r * (1.2f + 0.6f * e), e * 0.6f);
-        g_ring(gx, gy, r, w + 0.6f, a);
-        g_ring(gx, gy, r * 0.62f, 1.0f, a * 0.55f);
-        g_disc(gx, gy, r * (0.2f + 0.08f * e), a);
-        *sx = gx; *sy = gy - r;
-        break;
+    int i;
+    f32 step = len / (f32)seg, taper = 0.88f / (f32)seg;
+    for (i = 0; i < seg; i++) {
+        f32 an = -0.25f + lean + bend * (f32)i * 4.0f / (f32)seg, nx = x + cos_turns(an) * step, ny = y + sin_turns(an) * step;
+        g_beam(x, y, nx, ny, w * (1.0f - taper * (f32)i), w * (1.0f - taper * (f32)(i + 1)), a, a * 0.85f, 0.0f);
+        x = nx; y = ny;
     }
-    case POT:                                    /* a kettle on the rack: a dome with a boss */
-        g_arc(x, y, r, 0.5f, 1.0f, w, a);
-        g_line(x - r - 2.0f, y, x + r + 2.0f, y, w, a);
-        g_disc(x, y - r - 1.0f, r * 0.26f + 1.0f + 1.5f * e, a);
-        if (e > 0.02f) g_glow(x, y - r * 0.4f, r * (1.0f + e), e * 0.7f);
-        *sx = x; *sy = y - r - 3.0f;
-        break;
-    case BAR:                                    /* a bar on the trough */
-        xy[0] = x - 8.0f; xy[1] = y - r * 0.5f - e * 2.0f;
-        xy[2] = x + 8.0f; xy[3] = y - r * 0.5f + 2.0f - e * 2.0f;
-        xy[4] = x + 8.0f; xy[5] = y + r + 2.0f;
-        xy[6] = x - 8.0f; xy[7] = y + r;
-        if (e > 0.02f) g_fill(xy, 4, e * 0.8f);
-        g_poly(xy, 4, 1, w * 0.8f, a);
-        *sx = x; *sy = y - r * 0.5f;
-        break;
-    default:                                     /* the drum, on its side */
-        g_ellipse(x - r, y, r * 0.3f, r * 0.62f, w, a);
-        g_ellipse(x + r, y, r * 0.24f, r * 0.5f, w, a * 0.8f);
-        g_line(x - r, y - r * 0.62f, x + r, y - r * 0.5f, w, a);
-        g_line(x - r, y + r * 0.62f, x + r, y + r * 0.5f, w, a);
-        if (e > 0.02f) g_ellipse(x - r, y, r * 0.3f * e, r * 0.62f * e, 0.0f, e * 0.8f);
-        g_line(x - r * 0.5f, y + r * 0.6f, x - r * 0.8f, 204.0f, 1.0f, 0.4f);
-        g_line(x + r * 0.5f, y + r * 0.55f, x + r * 0.8f, 204.0f, 1.0f, 0.4f);
-        *sx = x; *sy = y - r * 0.56f;
-        break;
-    }
+    if (tx) { *tx = x; *ty = y; }
 }
 
 static void vibe_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, tune = vis->k[0], decay = vis->k[1], wind = vis->k[2], storm = vis->k[3];
-    int algo = vis->algo & 7, i, n, flip = algo & 1;
+    int algo = vis->algo & 7, i, n, half;
     const Sky *sky = &SKIES[algo];
-    f32 scale = 1.25f - 0.5f * tune, slant = (f32)sky->slant * 0.01f + (wind - 0.2f) * 0.9f;
+    f32 scale = 1.18f - 0.36f * tune, slant = (f32)sky->slant * 0.01f + (wind - 0.2f) * 0.9f;
     f32 gust = sin_turns(t * 0.11f) * 0.6f + sin_turns(t * 0.29f) * 0.4f, flash = 0.0f;
-    f32 sx[NDRUM], sy[NDRUM];
+    f32 sway = gust * (0.012f + 0.07f * wind) + slant * 0.03f;
+    f32 rx = 64.0f * scale, ry = 27.0f * scale, cy, depth = 26.0f * scale, xy[24], sx[NDRUM], sy[NDRUM];
 
     if (vis->fresh) {
         for (i = 0; i < NDROP; i++) drop[i].life = 0.0f;
         for (i = 0; i < NRING; i++) ring[i].t = 1.0f;
-        for (i = 0; i < NDRUM; i++) glow[i] = swing[i] = swing_v[i] = 0.0f;
+        for (i = 0; i < NDRUM; i++) glow[i] = 0.0f;
+        for (i = 0; i < 3; i++) nod[i] = nod_v[i] = 0.0f;
         for (i = 0; i < NVOICE; i++) seen_serial[i] = vis->v[i].serial;
+        dip = dip_v = 0.0f;
         bolt_t = 1.0f;
     }
+    spring_z(&dip, &dip_v, 0.0f, 16.0f, 0.3f, dt);
+    cy = CY + clampf(dip, -4.0f, 6.0f);
 
-    /* lightning, when the storm is up (and always now and then where the sky has it) */
+    /* lightning, when the storm is up (and now and then where the sky has it) */
     bolt_t += dt * 2.6f;
     if (bolt_t >= 1.0f && storm + (sky->bolt ? 0.35f : 0.0f) > 0.62f && rng_f(vis->rng) < dt * (0.25f + 1.2f * storm)) {
         bolt_t = 0.0f;
@@ -290,63 +247,114 @@ static void vibe_draw(const Vis *vis)
     if (bolt_t < 1.0f) {
         f32 bx = 30.0f + hashf(bolt_seed) * 180.0f, by = 0.0f;
         flash = (1.0f - bolt_t) * (1.0f - bolt_t);
-        for (i = 0; i < 7 && flash > 0.15f; i++) {
-            f32 nx = bx + (hashf(bolt_seed + (uint32_t)i * 7u + 1u) - 0.5f) * 44.0f, ny = by + 9.0f + hashf(bolt_seed + (uint32_t)i * 7u + 2u) * 16.0f;
+        for (i = 0; i < 6 && flash > 0.15f; i++) {
+            f32 nx = bx + (hashf(bolt_seed + (uint32_t)i * 7u + 1u) - 0.5f) * 44.0f, ny = by + 8.0f + hashf(bolt_seed + (uint32_t)i * 7u + 2u) * 13.0f;
             g_line(bx, by, nx, ny, 1.0f + 2.0f * flash, flash);
             bx = nx; by = ny;
         }
     }
 
-    /* the moon, behind the rain */
+    /* the moon, behind everything */
     if (sky->moon) {
-        f32 mx = flip ? 52.0f : 196.0f, my = 40.0f;
-        g_glow(mx, my, 34.0f, 0.22f * (1.0f - 0.7f * storm));
-        g_disc(mx, my, 13.0f, 0.75f - 0.45f * storm);
+        g_glow(190.0f, 38.0f, 36.0f, 0.24f * (1.0f - 0.7f * storm));
+        g_disc(190.0f, 38.0f, 13.0f, 0.8f - 0.45f * storm);
         if (sky->moon == 2) {
             g_mode(G_PAINT);
-            g_disc(mx + 6.0f, my - 3.0f, 12.0f, 0.0f);
+            g_disc(196.0f, 35.0f, 12.0f, 0.0f);
             g_mode(G_MAX);
         }
     }
 
-    /* the stand the gongs hang from, the pots' rack, the bars' trough, the ground */
-    g_origin(0.0f, 0.0f);
-    {
-        f32 m = flip ? -1.0f : 1.0f, o = flip ? 240.0f : 0.0f;
-        g_line(o + m * 6.0f, 40.0f, o + m * 132.0f, 40.0f, 2.2f, 0.6f + 0.4f * flash);
-        g_arc(o + m * 6.0f, 34.0f, 6.0f, flip ? 0.0f : 0.25f, flip ? 0.25f : 0.5f, 2.0f, 0.6f);
-        g_arc(o + m * 132.0f, 34.0f, 6.0f, flip ? 0.25f : 0.0f, flip ? 0.5f : 0.25f, 2.0f, 0.6f);
-        g_line(o + m * 12.0f, 40.0f, o + m * 12.0f, 204.0f, 1.6f, 0.5f);
-        g_line(o + m * 126.0f, 40.0f, o + m * 126.0f, 204.0f, 1.6f, 0.5f);
-        g_line(o + m * 122.0f, 150.0f, o + m * 236.0f, 136.0f, 1.4f, 0.45f);
-        g_line(o + m * 130.0f, 150.0f, o + m * 130.0f, 204.0f, 1.2f, 0.4f);
-        g_line(o + m * 232.0f, 137.0f, o + m * 232.0f, 204.0f, 1.2f, 0.4f);
-        g_line(o + m * 14.0f, 199.0f, o + m * 112.0f, 206.0f, 1.4f, 0.45f);
+    /* the garden behind the drum: a hedge, a tall plant to the left, three flowers to the right */
+    for (i = 0; i < 6; i += 1 + (i & 1))
+        g_disc(-6.0f + (f32)i * 52.0f + 20.0f * hashf((uint32_t)i + 5u), 198.0f, 20.0f + 12.0f * hashf((uint32_t)i + 17u), 0.085f + 0.1f * flash);
+    for (i = 0; i < 7; i++) {
+        f32 h = hashf((uint32_t)i + 11u), lean = ((f32)i - 3.0f) * 0.04f + sway * (0.6f + h);
+        blade(20.0f + (f32)i * 1.5f, 216.0f, 48.0f + 46.0f * h, lean, ((f32)i - 3.0f) * 0.012f + sway * 0.5f, 6.0f, 0.4f + 0.3f * h + 0.2f * flash, 4, 0, 0);
     }
-    g_line(0.0f, 205.0f, 240.0f, 205.0f, 1.0f, 0.3f + 0.5f * flash);
+    for (i = 0; i < 3; i++) {
+        static const uint8_t FX[3] = {196, 212, 226}, FL[3] = {78, 50, 66};
+        f32 fx = (f32)FX[i], tx, ty, r = 7.0f - (f32)i;
+        int p;
+        spring_z(&nod[i], &nod_v[i], 0.0f, 7.0f, 0.2f, dt);
+        blade(fx, 218.0f, (f32)FL[i], -0.015f * (f32)i + sway * 1.4f + nod[i] * 0.04f, -0.006f + sway * 0.8f + nod[i] * 0.03f, 2.2f, 0.5f, 4, &tx, &ty);
+        blade(fx, 204.0f, 15.0f, (i & 1 ? 0.14f : -0.14f) + sway, i & 1 ? 0.05f : -0.05f, 4.5f, 0.45f, 2, 0, 0);
+        for (p = 0; p < 5; p++) {
+            f32 an = (f32)p * 0.2f + t * 0.02f + nod[i] * 0.1f;
+            g_disc(tx + cos_turns(an) * r, ty + sin_turns(an) * r * 0.85f, r * 0.62f, 0.62f + 0.25f * flash);
+        }
+        g_mode(G_PAINT);
+        g_disc(tx, ty, r * 0.5f, 0.0f);
+        g_mode(G_MAX);
+        g_disc(tx, ty, r * 0.3f, 1.0f);
+    }
 
-    /* a note: the rain lands on its piece */
-    for (i = 0; i < NDRUM; i++) {
-        const Piece *p = &PIECES[i];
-        f32 x = flip ? 240.0f - (f32)p->x : (f32)p->x, r = (f32)p->r * (p->kind == BAR ? 1.0f : scale);
-        f32 sway = p->kind == GONG ? gust * (0.02f + 0.12f * wind) : 0.0f;
-        spring_z(&swing[i], &swing_v[i], sway, 5.0f, 0.12f + 0.2f * (1.0f - decay), dt);
-        glow[i] = maxf(0.0f, glow[i] - dt * (0.3f + glow[i]) / (0.15f + 1.1f * decay * decay));
-        piece(i, x, (f32)p->y, r, glow[i], clampf(swing[i], -0.5f, 0.5f), &sx[i], &sy[i]);
+    /* the drum: a round steel shell sat on a flat stone, its top face seen from above the rim */
+    g_ellipse(CX, cy + depth + ry * 0.75f, rx * 1.12f, ry * 0.5f, 0.0f, 0.24f + 0.2f * flash);
+    g_glow(CX, cy + depth + ry * 0.7f, rx * 0.9f, 0.14f * sat(vis->level * 3.0f));        /* (the wet stone, lit) */
+    for (half = 0; half < 4; half++) {                    /* its side, round under the rim, in two halves (a fill takes eight corners): first cleared, then inked */
+        n = half & 1 ? 1 : -1;
+        xy[0] = CX + (f32)n * rx; xy[1] = cy;
+        xy[2] = CX - (f32)n; xy[3] = cy;
+        xy[4] = CX - (f32)n; xy[5] = cy + ry + depth;
+        for (i = 1; i < 6; i++) {
+            f32 an = (f32)i * (0.25f / 6.0f);
+            xy[16 - 2 * i] = CX + (f32)n * cos_turns(an) * rx;
+            xy[17 - 2 * i] = cy + sin_turns(an) * (ry + depth);
+        }
+        g_mode(half < 2 ? G_PAINT : G_MAX);
+        if (half < 2)
+            g_fill(xy, 8, 0.0f);
+        else
+            g_fillv(xy, 8, cy, 0.62f + 0.3f * flash, cy + ry + depth, 0.14f);
     }
+    g_mode(G_PAINT);
+    g_ellipse(CX, cy, rx, ry, 0.0f, 0.0f);
+    g_mode(G_MAX);
+    g_ellipse(CX, cy, rx, ry, 0.0f, 0.2f + 0.14f * flash);
+    g_ellipse(CX, cy, rx, ry, 2.0f, 0.95f);
+
+    /* its twelve tongues: one in the middle, eleven round it, each cut out of the steel on three sides with
+     * its round tip toward the middle */
+    for (i = 0; i < NDRUM; i++) {
+        static const int8_t TA[6] = {-10, -10, -5, 5, 10, 10}, TR[6] = {84, 50, 36, 36, 50, 84};
+        f32 an = ((f32)i - 0.5f) * (1.0f / 11.0f) + 0.02f, e;
+        int j;
+        e = glow[i] = maxf(0.0f, glow[i] - dt * (0.3f + glow[i]) / (0.15f + 1.1f * decay * decay));
+        if (i == KICK) {
+            sx[i] = CX; sy[i] = cy;
+            g_ellipse(CX, cy, rx * 0.22f, ry * 0.22f, e > 0.02f ? 0.0f : 1.4f, 0.55f + 0.45f * e);
+            g_ellipse(CX, cy, rx * 0.22f, ry * 0.22f, 1.4f, 0.6f + 0.4f * e);
+            continue;
+        }
+        sx[i] = CX + cos_turns(an) * rx * 0.6f;
+        sy[i] = cy + sin_turns(an) * ry * 0.6f;
+        for (j = 0; j < 6; j++) {
+            f32 pa = an + (f32)TA[j] * 0.003f, pr = (f32)TR[j] * 0.01f;
+            xy[2 * j] = CX + cos_turns(pa) * rx * pr;
+            xy[2 * j + 1] = cy + sin_turns(pa) * ry * pr;
+        }
+        if (e > 0.03f) {
+            g_fill(xy + 2, 4, e * 0.7f);
+            g_glow(sx[i], sy[i], 9.0f + 12.0f * e, e * 0.8f);
+        }
+        g_poly(xy, 6, 0, 1.2f + 1.2f * e, 0.55f + 0.45f * sat(e * 2.5f));
+    }
+
+    /* a note: the rain lands on its tongue */
     for (i = 0; i < NVOICE; i++)
         if (vis->v[i].serial != seen_serial[i]) {
             int ty = vis->v[i].note % 12, k, crown = 4 + (int)(storm * 5.0f);
             seen_serial[i] = vis->v[i].serial;
             glow[ty] = 1.0f;
-            swing_v[ty] += (hashf(vis->v[i].serial) - 0.5f) * 5.0f + 1.6f;
+            dip_v += 26.0f;
+            nod_v[vis->v[i].serial % 3u] += 3.0f;
             ring[next_ring].x = sx[ty];
             ring[next_ring].y = sy[ty];
             ring[next_ring].t = 0.0f;
-            ring[next_ring].w = (f32)PIECES[ty].r;
             next_ring = (next_ring + 1) % NRING;
             for (k = 0; k < crown; k++) {        /* the crown of water it throws */
-                f32 an = 0.5f + ((f32)k + 0.5f) / (f32)crown * 0.5f, sp = 55.0f + 70.0f * storm + 30.0f * rng_f(vis->rng);
+                f32 an = 0.5f + ((f32)k + 0.5f) / (f32)crown * 0.5f, sp = 60.0f + 70.0f * storm + 30.0f * rng_f(vis->rng);
                 drop[next_drop].x = sx[ty];
                 drop[next_drop].y = sy[ty];
                 drop[next_drop].vx = cos_turns(an) * sp * 0.7f + slant * 30.0f;
@@ -356,18 +364,19 @@ static void vibe_draw(const Vis *vis)
             }
         }
 
-    /* the rings going out from where it landed, the drop that made them, the crown */
+    /* the rings going out over the steel from where it landed, the drop that made them, the crown */
     for (i = 0; i < NRING; i++) {
-        f32 u, reach;
+        f32 u, reach, er;
         if (ring[i].t >= 1.0f)
             continue;
         u = ring[i].t;
-        reach = ring[i].w * (0.8f + 1.6f * decay) + 8.0f;
+        reach = 10.0f + 30.0f * decay;
+        er = ease_out(u);
         if (u < 0.2f)
-            g_beam(ring[i].x - slant * 46.0f, ring[i].y - 46.0f, ring[i].x, ring[i].y, 1.0f, 3.2f, 0.0f, 1.0f - u * 5.0f, 0.0f);
-        g_ellipse(ring[i].x, ring[i].y, 3.0f + reach * ease_out(u), 1.0f + reach * 0.3f * ease_out(u), 1.6f * (1.0f - u) + 0.4f, 1.0f - u);
+            g_beam(ring[i].x - slant * 60.0f, ring[i].y - 60.0f, ring[i].x, ring[i].y, 1.0f, 3.4f, 0.0f, 1.0f - u * 5.0f, 0.0f);
+        g_ellipse(ring[i].x, ring[i].y, 3.0f + reach * er, 1.0f + reach * 0.4f * er, 1.6f * (1.0f - u) + 0.4f, 1.0f - u);
         if (u > 0.25f)
-            g_ellipse(ring[i].x, ring[i].y, 3.0f + reach * ease_out(u - 0.25f), 1.0f + reach * 0.3f * ease_out(u - 0.25f), 1.0f, 0.6f * (1.0f - u));
+            g_ellipse(ring[i].x, ring[i].y, 3.0f + reach * ease_out(u - 0.25f), 1.0f + reach * 0.4f * ease_out(u - 0.25f), 1.0f, 0.6f * (1.0f - u));
         ring[i].t = u + dt / (0.35f + 0.9f * decay);
     }
     for (i = 0; i < NDROP; i++) {
@@ -377,31 +386,39 @@ static void vibe_draw(const Vis *vis)
         drop[i].x += drop[i].vx * dt;
         drop[i].y += drop[i].vy * dt;
         drop[i].life -= dt * 1.8f;
-        if (drop[i].y > 206.0f)
+        if (drop[i].y > 216.0f)
             drop[i].life = 0.0f;
         else
             g_disc(drop[i].x, drop[i].y, 0.8f + 1.4f * drop[i].life, sat(drop[i].life * 1.6f));
     }
 
-    /* the weather */
-    n = (int)((f32)sky->n * (0.45f + 1.3f * storm));
-    if (n > 150)
-        n = 150;
-    for (i = 0; i < n; i++) {
-        f32 h = hashf((uint32_t)i * 3u + 1u), sp = (f32)sky->speed * (0.75f + 0.5f * hashf((uint32_t)i * 3u + 2u));
-        f32 ph = fractf(h * 7.0f + t * sp * (1.0f / 250.0f)), y = ph * 250.0f - 20.0f, len = (f32)sky->len * (0.6f + 0.8f * h);
-        f32 x = fractf(hashf((uint32_t)i * 3u + 3u) + ph * slant + (f32)ifloor(h * 7.0f + t * sp * (1.0f / 250.0f)) * 0.37f) * 260.0f - 10.0f;
-        f32 a = 0.22f + 0.4f * h + 0.3f * flash;
+    /* two stepping stones and the grass in front */
+    g_ellipse(40.0f, 231.0f, 20.0f, 5.0f, 0.0f, 0.2f + 0.2f * flash);
+    g_ellipse(196.0f, 233.0f, 24.0f, 5.5f, 0.0f, 0.18f + 0.2f * flash);
+    for (i = 0; i < 30; i++) {
+        f32 h = hashf((uint32_t)i + 60u), gx = (f32)i * 8.3f + h * 5.0f - 2.0f, gy, len;
         if ((i & 7) == 0)
             G_POLL();
-        if (sky->flake) {
-            x += sin_turns(t * 0.3f + h * 9.0f) * 6.0f;
-            if (y < 204.0f)
-                g_disc(x, y, 0.8f + 1.1f * h, a + 0.2f);
-        } else if (y < 204.0f || sky->speed < 0)
+        gy = 240.0f - h * 16.0f;
+        len = 12.0f + 20.0f * hashf((uint32_t)i + 90u);
+        g_line(gx, gy, gx + ((h - 0.5f) * 0.9f + sway * 2.5f * (1.0f + h)) * len, gy - len, 1.6f, 0.3f + 0.35f * h);
+    }
+
+    /* the weather */
+    n = (int)((f32)sky->n * (0.45f + 1.3f * storm));
+    if (n > 140)
+        n = 140;
+    for (i = 0; i < n; i++) {
+        f32 h = hashf((uint32_t)i * 3u + 1u), sp = (f32)sky->speed * (0.75f + 0.5f * hashf((uint32_t)i * 3u + 2u));
+        f32 turn = h * 7.0f + t * sp * (1.0f / 250.0f), ph = fractf(turn), y = ph * 250.0f - 10.0f, len = (f32)sky->len * (0.6f + 0.8f * h);
+        f32 x = fractf(hashf((uint32_t)i * 3u + 3u) + ph * slant + (f32)ifloor(turn) * 0.37f) * 260.0f - 10.0f;
+        f32 a = 0.2f + 0.4f * h + 0.3f * flash;
+        if ((i & 7) == 0)
+            G_POLL();
+        if (sky->flake)
+            g_disc(x + sin_turns(t * 0.3f + h * 9.0f) * 6.0f, y, 0.8f + 1.1f * h, a + 0.2f);
+        else
             g_line(x - slant * len, y - len, x, y, 1.0f, a);
-        else if (y < 216.0f)                     /* where it meets the ground: a small ring */
-            g_ellipse(x, 208.0f + h * 22.0f, (y - 204.0f) * (0.6f + h), (y - 204.0f) * 0.2f, 1.0f, 0.5f * (1.0f - (y - 204.0f) / 12.0f));
     }
 }
 

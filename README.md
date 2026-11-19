@@ -37,7 +37,7 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
 | **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
 | **PLINK** | electronic drum kits on a pin board, 8-bit first; every hit drops down it in time | TUNE, DECAY, BOUNCE, BITS |
-| **VIBE** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a gamelan in the rain | TUNE, DECAY, WIND, STORM |
+| **VIBE** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a steel tongue drum in a garden in the rain | TUNE, DECAY, WIND, STORM |
 
 <p>
 <img src="docs/img/page.png" width="200" alt="A settings page: four columns, one per knob"> <img src="docs/img/step.png" width="200" alt="A step pattern, the notches along the bottom"> <img src="docs/img/hud.png" width="200" alt="TIDE with the knob strip pinned">
