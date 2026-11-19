@@ -37,8 +37,8 @@ Identity `FM-1_481000202`. From the first round of feedback after the launch.
 - The FM-1 is a USB audio input beside its USB MIDI: a computer or a phone records it straight off the
   cable, at MASTER.
 - MIDI out over USB: the keys, the arpeggiator and the sequencer's notes on channel 1, and CC 20-23 as
-  the four knobs turn. Notes that came in over MIDI are not sent back. (The FM-1's TRS jack is an input
-  only, so there is no MIDI out there.)
+  the four knobs turn. Notes and an all-notes-off (CC 123) that came in over MIDI are not sent back.
+  (The FM-1's TRS jack is an input only, so there is no MIDI out there.)
 
 **Under the hood**
 - Saved state version 8. A 0.2.0 or 0.2.1 state (version 6) loads as it was, with LAYERS turned on. A

@@ -172,11 +172,15 @@ static int core2_wait(void) { return plat_cpu2_wait(); }
 
 /* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes from the render,
  * its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and nothing
- * is queued. */
+ * is queued. A note-on or a knob goes only while there is room to spare, so the queue never fills with them
+ * and leaves a note-off out (a note the computer would then hold for ever). */
+#define MIDI_SPARE 16u
 static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     uint32_t pkt = (uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24;
-    if (plat_midi_out_room(TO_USB))
+    uint32_t room = plat_midi_out_room(TO_USB);
+    int off = (status & 0xF0u) == 0x80u || (status == 0xB0u && d1 == 123u);
+    if (off ? room > 0u : room > MIDI_SPARE)
         plat_midi_send(pkt, TO_USB);
 }
 
