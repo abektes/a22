@@ -118,6 +118,7 @@ static int toast_pips = -1;
 
 static SeqInfo seq;                              /* the sequencer, as of this frame */
 static int seq_write_was;
+static int layer_rec_was, layers_n;              /* a take going into a layer, and how many layers there are */
 static uint32_t enc_ms[H1_NENC];
 static uint8_t key_note[H1_NKEYS];
 static uint8_t key_down[H1_NKEYS];
@@ -232,6 +233,7 @@ static int accel(int enc, int d)
 
 static void set_instrument(int i)
 {
+    int hint = seq.mode == SEQ_LOOP && (seq.loop_state == LOOP_PLAY || seq.loop_state == LOOP_IDLE);
     st.inst = (uint8_t)i;
     eng_post(EV_INST, i);
     name_t = 0.0f;
@@ -243,6 +245,9 @@ static void set_instrument(int i)
     toast_t = 9.0f;
     if (ring_kind == RING_INST)
         ring_t = 9.0f;                           /* (that was the last instrument's volume: the name first) */
+    /* a loop is there: say how to play this instrument over it (under the name, where the toasts go) */
+    if (hint)
+        toast(st.seq[6] ? "REC: NEW LAYER" : "SEQ + REC: LAYERS", 0, 0, 0, -1);
     mark_dirty();
 }
 
@@ -297,9 +302,9 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
 {
     uint8_t type = status & 0xF0u;
     if (type == 0x90u && d2)
-        eng_post(EV_NOTE_ON, d1 & 127);
+        eng_post_note(1, d1 & 127, d2 & 127, 1);             /* with its velocity */
     else if (type == 0x80u || type == 0x90u)
-        eng_post(EV_NOTE_OFF, d1 & 127);
+        eng_post_note(0, d1 & 127, 0, 1);
     else if (type == 0xB0u && d1 == 123)
         eng_post(EV_PANIC, 0);
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
@@ -586,9 +591,12 @@ static void goto_page(int pg)
 
 static void set_knob(int i, int v)
 {
-    KNOBS_NOW(st.inst)[i] = (uint8_t)iclamp(v, 0, 100);
+    uint8_t *k = &KNOBS_NOW(st.inst)[i], was = *k;
+    *k = (uint8_t)iclamp(v, 0, 100);
     knob_touch[i] = 0.0f;
     mark_dirty();
+    if (*k != was && eng_midi_fn)                /* out as CC 20-23, as they come in */
+        eng_midi_fn(0xB0u, (uint8_t)(20 + i), (uint8_t)((*k * 127 + 50) / 100));
 }
 
 static void set_param(int i, int v)
@@ -925,6 +933,11 @@ static void draw_seq_mark(void)
         g_line(0.0f, 238.5f, 240.0f * seq.loop_pos, 238.5f, 2.0f, s == LOOP_PLAY ? 0.6f : 1.0f);
         if (s != LOOP_PLAY)
             g_disc(228.0f, 228.0f, 4.0f, 1.0f);
+        if (st.seq[6])                           /* LAYERS: a dot a layer, the one being recorded blinking */
+            for (i = 0; i < layers_n && i < NLAYER; i++) {
+                int rec = layer_rec_was && i == layers_n - 1;
+                g_disc(8.0f + (f32)i * 7.0f, 230.0f, 2.2f, rec ? (fractf(tsec * 2.0f) < 0.5f ? 1.0f : 0.3f) : 0.75f);
+            }
         return;
     }
     n = seq.nsteps;
@@ -977,20 +990,22 @@ static void draw_page(void)
     if (page == PG_SEQ) {
         /* The sequencer's buttons do three things held or paired, more than the line holds: they go by
          * as a marquee, still for a moment when the page opens, then round and round. */
-        const char *hint[3];
-        f32 wd[3], total = 0.0f, off, x;
+        const char *hint[4];
+        f32 wd[4], total = 0.0f, off, x;
+        int nh = st.seq[6] ? 4 : 3;
         hint[0] = "HOLD SEQ: LOOP / STEP";
         hint[1] = st.seq[6] ? "SEQ + REC: LAYERS ON" : "SEQ + REC: LAYERS OFF";
         hint[2] = st.seq[6] ? "HOLD REC: CLEAR PART, THEN ALL" : "HOLD REC: CLEAR";
-        for (i = 0; i < 3; i++) {
+        hint[3] = "NEW INSTRUMENT, REC: A NEW LAYER";
+        for (i = 0; i < nh; i++) {
             wd[i] = g_text_w(hint[i], 8.0f) + 22.0f;
             total += wd[i];
         }
         off = maxf(0.0f, page_t - 1.4f) * 26.0f;
         off -= total * (f32)ifloor(off / total);
         x = 13.0f - off;
-        for (j = 0; j < 6; j++) {                /* twice round: the line never shows its end */
-            i = j % 3;
+        for (j = 0; j < 2 * nh; j++) {           /* twice round: the line never shows its end */
+            i = j % nh;
             if (x + wd[i] > 0.0f && x < 240.0f) {
                 g_text(x, 43.0f, hint[i], 8.0f, 1.0f, 0.5f * intro, 0);
                 g_disc(x + wd[i] - 11.0f, 47.0f, 1.2f, 0.35f * intro);
@@ -1060,6 +1075,14 @@ void ui_frame(uint32_t now_ms)
     if (seq.write != seq_write_was) {
         seq_write_was = seq.write;
         toast(seq.write ? "WRITE" : "WRITE OFF", 0, 0, 0, -1);
+    }
+    if (st.seq[6] && ((frame_n & 7u) == 0 || layer_rec_was != eng_layer_rec()))
+        layers_n = eng_layer_count();
+    {
+        int lr = st.seq[6] ? eng_layer_rec() : 0;   /* LAYERS: a take has begun on a new layer */
+        if (lr && !layer_rec_was)
+            toast("LAYER ", layers_n, 1, 0, -1);
+        layer_rec_was = lr;
     }
     for (i = 0; i < 4; i++) {
         if (vis.fresh) {

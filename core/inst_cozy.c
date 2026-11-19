@@ -154,7 +154,8 @@ static void cozy_post(const Blk *b, f32 *l, f32 *r, int n)
         pop_lp += (pop_e - pop_lp) * 0.35f;
         pop_e *= 0.9f;
         hiss_lp += (nz - hiss_lp) * 0.3f;
-        x = (pop_lp * 0.5f + hiss_lp * 0.02f * (0.4f + C.dust)) * C.dust * act;
+        /* (the pops were 0.5 of full scale: on top of a chord they were the loudest thing in the mix) */
+        x = (pop_lp * 0.25f + hiss_lp * 0.02f * (0.4f + C.dust)) * C.dust * act;
         if (radio) {                             /* RADIO: a small speaker, and the mains under it */
             f32 m = (l[i] + r[i]) * 0.5f;
             SVF_TICK(rf, radio_s, m, lo, bp);

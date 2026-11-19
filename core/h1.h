@@ -23,7 +23,13 @@ void h1_init(uint32_t sample_rate);
 void h1_key(int key, int down);                  /* key 0 = F3 */
 void h1_button(int btn, int down);
 void h1_encoder(int enc, int detents);           /* + = clockwise */
-void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);
+void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);   /* MIDI in: notes with their velocity, CC 20-23 the
+                                                  * knobs, CC 123 all notes off */
+/* MIDI out: fn is called with each message h1 sends, on channel 1: the notes played on the keys, by the
+ * arpeggiator and by the sequencer (note-on with its velocity, note-off), CC 20-23 as the four home knobs
+ * turn, and CC 123 on a hush. Never what came in over MIDI. The notes are sent from inside h1_render, the
+ * knobs from h1_encoder (the main loop): fn must be safe from both. NULL: nothing is sent (the default). */
+void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2));
 void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame. The
                                                   * core shows it (a ring while it turns) and, with EDIT held,
                                                   * takes it as the volume of the instrument in hand */
@@ -74,6 +80,14 @@ const void *h1_state(uint32_t *size);
 int h1_state_load(const void *blob, uint32_t size);   /* 0 = taken */
 int h1_state_dirty(void);
 void h1_state_saved(void);
+/* The loop recorder's loop, as a blob of its own (at most 3,084 bytes), so that what was recorded is there
+ * after a power-off. Load it after h1_state_load (which empties the loop). dirty() is 1 when it changed
+ * and nothing is recording or playing; then h1_loop gives it, and saved() takes the dirt off what was given. */
+const void *h1_loop(uint32_t *size);
+int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else leaves the loop empty */
+int h1_loop_dirty(void);
+void h1_loop_saved(void);
+#define H1_LOOP_MAX 3084u
 
 /* introspection for the simulator and tests */
 int h1_instrument(void);

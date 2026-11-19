@@ -170,13 +170,24 @@ static int core2_run(void (*fn)(uint32_t), uint32_t arg) { return plat_cpu2_on()
 static int core2_wait(void) { return plat_cpu2_wait(); }
 #endif
 
+/* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes from the render,
+ * its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and nothing
+ * is queued. */
+static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
+{
+    uint32_t pkt = (uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24;
+    if (plat_midi_out_room(TO_USB))
+        plat_midi_send(pkt, TO_USB);
+}
+
 void app_init(void)
 {
-    static uint32_t blob[2048 / 4];                         /* words: the store fills it, the core reads it */
+    static uint32_t blob[PLAT_STORE_MAX / 4];               /* words: the store fills it, the core reads it */
     uint32_t size;
     int n;
     h1_init(44100);
     h1_while_drawing(send_some);
+    h1_midi_out(midi_send);
 #if TWO_CORES
     if (plat_cpu2_set(1) == 0)                              /* (app_init is the one moment it can start) */
         h1_two_cores(core2_run, core2_wait);
@@ -186,7 +197,10 @@ void app_init(void)
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n > 0)
-        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one of the two before */
+        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one it knows */
+    n = plat_store_load(OBJ_LOOP, blob, sizeof blob);       /* then the loop (the state's load empties it) */
+    if (n > 0)
+        h1_loop_load(blob, (uint32_t)n);
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -238,12 +252,18 @@ void app_frame(void)
     plat_glow(1);
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
-    /* saving erases flash, which stalls the sound for a moment: only when nothing is sounding */
+    /* saving erases flash, which stalls the sound for a moment: only when nothing is sounding, and one object a
+     * frame. The loop only once it has stopped (h1_loop_dirty): stop it with PLAY and it is kept. */
     if (h1_state_dirty() && !h1_voices_active()) {
         uint32_t size;
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)
             h1_state_saved();
+    } else if (h1_loop_dirty() && !h1_voices_active()) {
+        uint32_t size;
+        const void *p = h1_loop(&size);
+        if (size && plat_store_save(OBJ_LOOP, p, size) == 0)
+            h1_loop_saved();
     }
 }
 

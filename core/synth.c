@@ -48,15 +48,18 @@ static Blk blk;                                  /* the numbers of the instrumen
  * other instruments go on sounding beside the one in hand, so every one of them needs its own eased
  * knobs, LFO and envelope rates. */
 typedef struct Lfo { f32 ph, sh, drift; } Lfo;
+typedef struct Mod {                             /* what the LFO and ENV pages make of a control block */
+    f32 kmod;                                    /* what the LFO adds to a knob, and which (-1: none) */
+    int kmod_k;
+    f32 vol, panmod, bend, lfo;
+    f32 att, kd, sus, kr;                        /* the envelope's rates */
+} Mod;
 typedef struct IRun {
     Blk b;                                       /* its numbers for this control block */
     f32 knob_s[4];                               /* the knobs of the algorithm in hand, eased */
-    f32 kmod;                                    /* what the LFO adds to a knob, and which (-1: none) */
-    int kmod_k;
+    Mod m;
     Lfo lf;                                      /* its own LFO, while it is not the one in hand */
-    f32 vol, panmod;
     f32 ig;                                      /* its own volume (INST_VOL) as a gain, eased: what the mix takes of it */
-    f32 att, kd, sus, kr;
     f32 last_pitch;
     uint32_t at;                                 /* the control block b is for */
     uint32_t adv;                                /* the control block its own clocks last moved in */
@@ -65,6 +68,9 @@ typedef struct IRun {
 } IRun;
 #define LINGER 400                               /* 0.3 s */
 static IRun ir[NINST];
+/* a closed layer's numbers: its own LFO, envelope and knobs, as they were left (lay_set) */
+typedef struct LRun { Blk b; Mod m; Lfo lf; uint32_t at; } LRun;
+static LRun lrun[NLAYER];
 static uint32_t blkno = 16;
 static Lfo lfo_live;                             /* the LFO of the instrument in hand: one clock across instruments */
 static uint32_t lfo_rng = 0x1F0C1F0Cu;
@@ -84,13 +90,30 @@ static volatile uint32_t scope_w;
 static volatile uint32_t evq[64];
 static volatile uint32_t ev_w, ev_r;
 
-void eng_post(int type, int a)
+static void post(uint32_t e)
 {
     uint32_t w = ev_w, nx = (w + 1u) & 63u;
     if (nx == ev_r)
         return;                                  /* full: drop (64 events inside one block) */
-    evq[w] = ((uint32_t)type << 8) | ((uint32_t)a & 255u);
+    evq[w] = e;
     ev_w = nx;
+}
+void eng_post(int type, int a) { post(((uint32_t)type << 8) | ((uint32_t)a & 255u)); }
+/* bits 16..22 the velocity, bit 23 "it came in over MIDI" */
+void eng_post_note(int on, int note, int vel, int from_midi)
+{
+    post(((uint32_t)(on ? EV_NOTE_ON : EV_NOTE_OFF) << 8) | ((uint32_t)note & 127u) |
+         ((uint32_t)iclamp(vel, 1, 127) << 16) | (from_midi ? 1u << 23 : 0u));
+}
+
+/* ---- MIDI out: what is played on the keys, the arpeggiator and the sequencer, on channel 1. Not what came
+ * in over MIDI (a computer that sends a note in would hear it echoed back). -------------------------- */
+void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
+static void mout(int on, int note, int vel)
+{
+    void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    if (fn && note >= 0 && note < 128)
+        fn(on ? 0x90u : 0x80u, (uint8_t)note, (uint8_t)(on ? iclamp(vel, 1, 127) : 0));
 }
 
 void dsp_init(void)
@@ -129,12 +152,33 @@ static int layers(void) { return st.seq[6] == 1; }
 static uint8_t live_part(void) { return PART(cur_i, st.ip[cur_i].algo < NALGO ? st.ip[cur_i].algo : 0); }
 static const Blk *part_set(int part);
 
+/* Velocity: louder, and brighter. The gain is a curve with about 20 dB between the softest note and the
+ * hardest; the brightness is a low-pass on the voice (two poles, 12 dB an octave), wide open at 127, near
+ * 6 kHz at 100, 2 kHz at 64 and 400 Hz at 1. The panel's keys play at 127, so they sound as they always
+ * have, to the bit. */
+static void vel_set(Voice *v, int vel)
+{
+    f32 x, fc;
+    vel = iclamp(vel, 1, 127);
+    v->vel = (uint8_t)vel;
+    if (vel >= 127) {
+        v->vamp = 1.0f;
+        v->vk = 1.0f;
+        return;
+    }
+    x = (f32)vel * (1.0f / 127.0f);
+    v->vamp = 0.1f + 0.9f * x * x;
+    fc = 12000.0f * exp2fx((x - 1.0f) * 5.0f);
+    v->vk = 1.0f - exp2fx(-H1_TAU * fc * ISR * 1.442695f);
+}
+
 /* A note starts, on a part: an instrument and one of its algorithms. A voice that last sounded another
  * instrument is emptied first: what an instrument keeps in a voice means nothing to the next. */
-static void voice_on_part(int note, int part, int seq)
+static void voice_on_part(int note, int part, int seq, int lay, int vel)
 {
     Voice *v = 0;
     const Blk *b;
+    f32 was;
     int i, j, inst = PART_INST(part);
     if (note < 0 || note > 127)
         return;
@@ -160,6 +204,10 @@ static void voice_on_part(int note, int part, int seq)
                 v = &voices[i];
             }
     }
+    /* Taken over while it still sounds: what it was last putting out is kept, and the new note starts from
+     * there and lets go of the difference over a millisecond or two (the mix, in block()). Without that a
+     * stolen voice jumps, and a fast run on eight voices crackles. */
+    was = v->stage ? v->last : 0.0f;
     if (v->part && PART_INST(v->part) != inst) {
         uint32_t serial = v->serial;
         uint8_t idx = v->idx, *p = (uint8_t *)v;
@@ -170,8 +218,12 @@ static void voice_on_part(int note, int part, int seq)
         for (j = 0; j < KS_LEN; j++)
             ks_line[idx][0][j] = ks_line[idx][1][j] = 0.0f;
     }
+    v->last = was;
+    v->declick = was != 0.0f;
     v->part = (uint8_t)part;
     v->seq = (uint8_t)seq;
+    v->lay = (uint8_t)lay;
+    vel_set(v, vel);
     v->target = (f32)note;
     if (inst == cur_i) {
         v->pitch = st.keys[2] ? last_pitch : (f32)note;
@@ -194,17 +246,18 @@ static void voice_on_part(int note, int part, int seq)
         note_count++;                            /* (the picture's count: the notes of the instrument it shows) */
 }
 
-static void voice_off_part(int note, int part)   /* the sequencer lets go of a note it started */
+static void voice_off_part(int note, int part, int lay)   /* the sequencer lets go of a note it started */
 {
     int i;
     for (i = 0; i < NVOICE; i++)
-        if (voices[i].stage && voices[i].gate && voices[i].seq && voices[i].note == note && voices[i].part == part) {
+        if (voices[i].stage && voices[i].gate && voices[i].seq && voices[i].note == note && voices[i].part == part &&
+            voices[i].lay == lay) {
             voices[i].gate = 0;
             voices[i].stage = 4;
         }
 }
 
-static void voice_on(int note) { voice_on_part(note, live_part(), 0); }
+static void voice_on(int note, int vel) { voice_on_part(note, live_part(), 0, 0, vel); }
 
 /* a note played by hand, or by the arpeggiator, ends: whatever algorithm it began on */
 static void voice_off(int note)
@@ -228,7 +281,7 @@ static void voices_release_all(void)
 }
 
 /* ---- arpeggiator ---------------------------------------------------------------------- */
-static uint8_t held[16];
+static uint8_t held[16], held_vel[16];
 static int nheld;
 static int arp_i, arp_stepn;
 static f32 arp_acc = 1e9f, arp_off;
@@ -237,45 +290,56 @@ static int arp_ncur;
 static int arp_was;
 static const f32 RATE_TICKS[6] = {96.0f, 48.0f, 32.0f, 24.0f, 16.0f, 12.0f};
 
-static void arp_take(int note, int on);          /* (the loop recorder, below) */
+static void arp_take(int note, int on, int vel);  /* (the loop recorder, below) */
 
 static void arp_release(void)
 {
     int i;
     for (i = 0; i < arp_ncur; i++) {
         voice_off(arp_cur[i]);
-        arp_take(arp_cur[i], 0);
+        mout(0, arp_cur[i], 0);
+        arp_take(arp_cur[i], 0, 0);
     }
     arp_ncur = 0;
 }
 
+static void arp_play(int note, int vel)
+{
+    voice_on(note, vel);
+    mout(1, note, vel);
+    arp_take(note, 1, vel);
+    arp_cur[arp_ncur++] = (uint8_t)note;
+}
+
 static void arp_fire(const InstParams *ip, f32 len)
 {
-    uint8_t s[16];
+    uint8_t s[16], sv[16];
     int n = nheld, i, j, range = iclamp(ip->arp[2], 1, 4), total, idx = 0, mode = ip->arp[0];
     f32 gate = (f32)ip->arp[3] * 0.01f;
     arp_release();
     if (!n)
         return;
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
         s[i] = held[i];
+        sv[i] = held_vel[i];
+    }
     if (mode != 5)
         for (i = 1; i < n; i++) {                /* sort ascending */
-            uint8_t x = s[i];
-            for (j = i; j > 0 && s[j - 1] > x; j--)
+            uint8_t x = s[i], xv = sv[i];
+            for (j = i; j > 0 && s[j - 1] > x; j--) {
                 s[j] = s[j - 1];
+                sv[j] = sv[j - 1];
+            }
             s[j] = x;
+            sv[j] = xv;
         }
     total = n * range;
     if (mode == 6) {                             /* CHORD: everything held, octave walking */
         int oct = arp_i % range;
         for (i = 0; i < n; i++) {
             int note = s[i] + 12 * oct;
-            if (note <= 127) {
-                voice_on(note);
-                arp_take(note, 1);
-                arp_cur[arp_ncur++] = (uint8_t)note;
-            }
+            if (note <= 127)
+                arp_play(note, sv[i]);
         }
         arp_i++;
     } else {
@@ -292,11 +356,8 @@ static void arp_fire(const InstParams *ip, f32 len)
         }
         arp_i++;
         note = s[idx % n] + 12 * (idx / n);
-        if (note <= 127) {
-            voice_on(note);
-            arp_take(note, 1);
-            arp_cur[arp_ncur++] = (uint8_t)note;
-        }
+        if (note <= 127)
+            arp_play(note, sv[idx % n]);
     }
     arp_off = gate >= 0.995f ? 1e9f : len * maxf(0.06f, gate);
 }
@@ -338,26 +399,35 @@ static void arp_tick(const InstParams *ip, f32 dticks)
     }
 }
 
-/* a note after the latch and the loop: to the arpeggiator when it runs, else to a voice */
-static void route(int note, int on)
+/* a note after the latch and the loop: to the arpeggiator when it runs, else to a voice (and out, unless
+ * it came in over MIDI) */
+static void route(int note, int on, int vel, int from_midi)
 {
     int i;
     if (st.ip[cur_i].arp[0] == 0) {
-        if (on) voice_on(note);
+        if (on) voice_on(note, vel);
         else voice_off(note);
+        if (!from_midi)
+            mout(on, note, vel);
         return;
     }
     if (on) {
         for (i = 0; i < nheld; i++)
-            if (held[i] == note)
+            if (held[i] == note) {
+                held_vel[i] = (uint8_t)vel;
                 return;
-        if (nheld < 16)
+            }
+        if (nheld < 16) {
+            held_vel[nheld] = (uint8_t)vel;
             held[nheld++] = (uint8_t)note;
+        }
     } else {
         for (i = 0; i < nheld; i++)
             if (held[i] == note) {
-                for (; i + 1 < nheld; i++)
+                for (; i + 1 < nheld; i++) {
                     held[i] = held[i + 1];
+                    held_vel[i] = held_vel[i + 1];
+                }
                 nheld--;
                 break;
             }
@@ -393,10 +463,79 @@ static int step_bars(void)
 static int step_count(void) { return imin(NSTEP, step_bars() * step_per_bar()); }
 
 /* ---- loop recorder -------------------------------------------------------------------- */
-typedef struct LEv { uint16_t tick; uint8_t note; uint8_t on; uint8_t part, rsv; } LEv;   /* on: bit 0 = on, bit 7 = recorded this pass; part: what it was played on */
+/* on: bit 0 = on, bit 7 = recorded this pass; part: what it was played on; lay: the layer (0 none); vel: 1..127 */
+typedef struct LEv { uint16_t tick; uint8_t note; uint8_t on; uint8_t part, lay, vel, rsv; } LEv;
 #define NLEV 384
 static LEv lev[NLEV];
 static int nlev;
+static volatile uint32_t loop_gen;               /* changes with what is recorded: the loop is saved when it moves */
+static uint8_t rec_part[128], rec_lay[128];      /* where each note held in a take went in, for its note-off */
+
+/* ---- layers ----------------------------------------------------------------------------------
+ * With LAYERS on, every take on a part is a layer of its own (st.layer): the part, and once the take is over
+ * that part's knobs, ENV and LFO as they were. So a bass and a pad can both be COZY on the same algorithm,
+ * each with its own envelope. Notes keep the layer they went in on (LEv.lay, st.step_lay). */
+static void layer_snap(Layer *l)
+{
+    int inst = PART_INST(l->part), a = PART_ALGO(l->part), k;
+    for (k = 0; k < 4; k++) {
+        l->knob[k] = KNOBS(inst, a)[k];
+        l->env[k] = st.ip[inst].env[k];
+        l->lfo[k] = st.ip[inst].lfo[k];
+    }
+}
+
+/* every open take ends: its layers keep the settings they have now */
+static void layers_close(void)
+{
+    int i;
+    for (i = 0; i < NLAYER; i++)
+        if (st.layer[i].open) {
+            layer_snap(&st.layer[i]);
+            st.layer[i].open = 0;
+        }
+}
+
+/* the layer what is played now goes into: the open one of the part in hand, or a new one. 0 when there is no
+ * room (then the notes follow their part as it is, as they did before layers had settings) */
+static int layer_take(void)
+{
+    uint8_t used[NLAYER];
+    int part = live_part(), i, j;
+    for (i = 0; i < NLAYER; i++)
+        if (st.layer[i].part == part && st.layer[i].open)
+            return i + 1;
+    for (i = 0; i < NLAYER && st.layer[i].part; i++)
+        ;
+    if (i == NLAYER) {                           /* full: the layers no recorded note is on any more are let go */
+        for (i = 0; i < NLAYER; i++)
+            used[i] = 0;
+        for (i = 0; i < nlev; i++)
+            if (lev[i].lay)
+                used[(lev[i].lay - 1) & (NLAYER - 1)] = 1;
+        for (i = 0; i < NSTEP; i++)
+            for (j = 0; j < NSNOTE; j++)
+                if (st.steps[i][j] && st.step_lay[i][j])
+                    used[(st.step_lay[i][j] - 1) & (NLAYER - 1)] = 1;
+        for (i = 0; i < NLAYER; i++)
+            if (!used[i] && !st.layer[i].open)
+                st.layer[i].part = 0;
+        for (i = 0; i < NLAYER && st.layer[i].part; i++)
+            ;
+        if (i == NLAYER)
+            return 0;
+    }
+    st.layer[i].part = (uint8_t)part;
+    st.layer[i].open = 1;
+    layer_snap(&st.layer[i]);
+    return i + 1;
+}
+
+/* a recorded note's layer, if it is still the layer of that part */
+static int layer_of(int lay, int part)
+{
+    return lay >= 1 && lay <= NLAYER && st.layer[lay - 1].part == part ? lay : 0;
+}
 static volatile int loop_state = LOOP_EMPTY;
 static volatile f32 loop_pos, loop_len = 768.0f;
 static uint32_t loop_held[4];
@@ -430,12 +569,13 @@ static void loop_release(void)
     int n;
     for (n = 0; n < 128; n++)
         if (loop_held[n >> 5] & (1u << (n & 31)))
-            route(n, 0);
+            route(n, 0, 0, 0);
     loop_held[0] = loop_held[1] = loop_held[2] = loop_held[3] = 0;
     for (n = 0; n < NVOICE; n++)                 /* and with LAYERS, the voices it started itself */
         if (voices[n].stage && voices[n].gate && voices[n].seq) {
             voices[n].gate = 0;
             voices[n].stage = 4;
+            mout(0, voices[n].note, 0);
         }
 }
 
@@ -445,19 +585,22 @@ static void loop_play_range(f32 a, f32 b)
     for (i = 0; i < nlev; i++) {
         f32 t = (f32)lev[i].tick;
         if (t >= a && t < b && !(lev[i].on & 0x80)) {
-            int n = lev[i].note;
+            int n = lev[i].note, vel = lev[i].vel ? lev[i].vel : 127;
             if (layers()) {                      /* each note on the part it was played on, past the arpeggiator */
-                int part = lev[i].part ? lev[i].part : live_part();
-                if (lev[i].on & 1)
-                    voice_on_part(n, part, 1);
-                else
-                    voice_off_part(n, part);
+                int part = lev[i].part ? lev[i].part : live_part(), lay = layer_of(lev[i].lay, part);
+                if (lev[i].on & 1) {
+                    voice_on_part(n, part, 1, lay, vel);
+                    mout(1, n, vel);
+                } else {
+                    voice_off_part(n, part, lay);
+                    mout(0, n, 0);
+                }
             } else if (lev[i].on & 1) {
                 loop_held[n >> 5] |= 1u << (n & 31);
-                route(n, 1);
+                route(n, 1, vel, 0);
             } else if (loop_held[n >> 5] & (1u << (n & 31))) {
                 loop_held[n >> 5] &= ~(1u << (n & 31));
-                route(n, 0);
+                route(n, 0, 0, 0);
             }
         }
     }
@@ -479,20 +622,33 @@ static void loop_tick(f32 dticks)
         loop_release();
         for (i = 0; i < nlev; i++)
             lev[i].on &= 0x7F;
-        if (s == LOOP_REC)
+        if (s == LOOP_REC) {
             loop_state = LOOP_PLAY;
+            layers_close();
+        }
         click_at = -1;
         loop_play_range(0.0f, b);
     }
     loop_pos = b;
 }
 
-static void loop_record(int note, int on)
+static void loop_record(int note, int on, int vel)
 {
     static const f32 Q[3] = {0.0f, 24.0f, 48.0f};
     f32 t = loop_pos, q = Q[st.seq[3] < 3 ? st.seq[3] : 0];
+    int part, lay;
     if (nlev >= NLEV)
         return;
+    note &= 127;
+    if (on) {                                    /* (its note-off goes in where it did, whatever is in hand by then) */
+        part = live_part();
+        lay = layers() ? layer_take() : 0;
+        rec_part[note] = (uint8_t)part;
+        rec_lay[note] = (uint8_t)lay;
+    } else {
+        part = rec_part[note] ? rec_part[note] : live_part();
+        lay = rec_lay[note];
+    }
     if (on && q > 0.0f) {
         t = (f32)ifloor(t / q + 0.5f) * q;
         if (t >= loop_len)
@@ -501,18 +657,21 @@ static void loop_record(int note, int on)
     lev[nlev].tick = (uint16_t)t;
     lev[nlev].note = (uint8_t)note;
     lev[nlev].on = (uint8_t)((on ? 1 : 0) | 0x80);
-    lev[nlev].part = live_part();
+    lev[nlev].part = (uint8_t)part;
+    lev[nlev].lay = (uint8_t)lay;
+    lev[nlev].vel = (uint8_t)(on ? iclamp(vel, 1, 127) : 0);
     lev[nlev].rsv = 0;
     nlev++;
+    loop_gen++;
 }
 
 /* With LAYERS a take is played back note for note, past the arpeggiator, so what goes into it is what
  * the arpeggiator played, not the keys that were held. */
 static int arp_recorded(void) { return layers() && st.ip[cur_i].arp[0] != 0; }
-static void arp_take(int note, int on)
+static void arp_take(int note, int on, int vel)
 {
     if (arp_recorded() && st.seq[0] != SEQ_STEP && (loop_state == LOOP_REC || loop_state == LOOP_DUB))
-        loop_record(note, on);
+        loop_record(note, on, vel);
 }
 
 static void loop_stop(void)
@@ -520,6 +679,7 @@ static void loop_stop(void)
     loop_release();
     loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY;
     loop_pos = 0.0f;
+    layers_close();
 }
 
 /* ---- step sequencer -------------------------------------------------------------------------
@@ -528,17 +688,19 @@ static void loop_stop(void)
  * WRITE on, what is played lands on the nearest step. */
 static volatile int step_playing, step_write, step_cursor, step_at;
 static f32 step_acc, step_off;
-static uint8_t step_snd[NSNOTE], step_sp[NSNOTE];         /* the notes the step holds, and the part of each (0: through route) */
+static uint8_t step_snd[NSNOTE], step_sp[NSNOTE], step_sl[NSNOTE];   /* the notes the step holds, the part of each (0:
+                                                                         * through route) and its layer */
 static int step_nsnd, step_gesture;
 
 static void step_release(void)
 {
     int i;
     for (i = 0; i < step_nsnd; i++) {
-        if (step_sp[i])
-            voice_off_part(step_snd[i], step_sp[i]);
-        else
-            route(step_snd[i], 0);
+        if (step_sp[i]) {
+            voice_off_part(step_snd[i], step_sp[i], step_sl[i]);
+            mout(0, step_snd[i], 0);
+        } else
+            route(step_snd[i], 0, 0, 0);
     }
     step_nsnd = 0;
 }
@@ -549,13 +711,16 @@ static void step_fire(int i, f32 len)
     step_release();
     for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j]) {
-            int n = st.steps[i][j] - 1, part = 0;
+            int n = st.steps[i][j] - 1, part = 0, lay = 0, vel = st.step_vel[i][j] ? st.step_vel[i][j] : 127;
             if (layers()) {
                 part = st.step_part[i][j] & 0x80 ? st.step_part[i][j] : live_part();
-                voice_on_part(n, part, 1);
+                lay = layer_of(st.step_lay[i][j], part);
+                voice_on_part(n, part, 1, lay, vel);
+                mout(1, n, vel);
             } else
-                route(n, 1);
+                route(n, 1, vel, 0);
             step_snd[step_nsnd] = (uint8_t)n;
+            step_sl[step_nsnd] = (uint8_t)lay;
             step_sp[step_nsnd++] = (uint8_t)part;
         }
     step_off = len;
@@ -632,23 +797,27 @@ static void free_tick(f32 dticks)
     click_run(free_pos, 1);
 }
 
-static void step_put(int i, int note)
+static void step_put(int i, int note, int vel)
 {
     int j, part = live_part();
     for (j = 0; j < NSNOTE; j++)
-        if (st.steps[i][j] == note + 1 && (!layers() || st.step_part[i][j] == part))
+        if (st.steps[i][j] == note + 1 && (!layers() || st.step_part[i][j] == part)) {
+            st.step_vel[i][j] = (uint8_t)iclamp(vel, 1, 127);
             return;
+        }
     for (j = 0; j < NSNOTE - 1 && st.steps[i][j]; j++)
         ;
     st.steps[i][j] = (uint8_t)(note + 1);
     st.step_part[i][j] = (uint8_t)part;
+    st.step_vel[i][j] = (uint8_t)iclamp(vel, 1, 127);
+    st.step_lay[i][j] = (uint8_t)(layers() ? layer_take() : 0);
 }
 
 static void step_clear(int i)
 {
     int j;
     for (j = 0; j < NSNOTE; j++)
-        st.steps[i][j] = st.step_part[i][j] = 0;
+        st.steps[i][j] = st.step_part[i][j] = st.step_vel[i][j] = st.step_lay[i][j] = 0;
 }
 
 /* a note's instrument: the one it was played on, or with none kept, the one in hand */
@@ -662,10 +831,12 @@ static void step_clear_inst(int i, int inst)
         if (st.steps[i][j] && tag_inst(st.step_part[i][j]) != inst) {
             st.steps[i][k] = st.steps[i][j];
             st.step_part[i][k] = st.step_part[i][j];
+            st.step_vel[i][k] = st.step_vel[i][j];
+            st.step_lay[i][k] = st.step_lay[i][j];
             k++;
         }
     for (; k < NSNOTE; k++)
-        st.steps[i][k] = st.step_part[i][k] = 0;
+        st.steps[i][k] = st.step_part[i][k] = st.step_vel[i][k] = st.step_lay[i][k] = 0;
 }
 
 /* a new chord on a step, or a rest: with LAYERS only the instrument in hand gives up its place there */
@@ -677,7 +848,7 @@ static void step_empty(int i)
         step_clear(i);
 }
 
-static void step_record(int note, int on)
+static void step_record(int note, int on, int vel)
 {
     int n = step_count();
     if (step_playing) {
@@ -685,14 +856,14 @@ static void step_record(int note, int on)
             int i = step_at;
             if (step_acc > step_len(i) * 0.5f)
                 i = i + 1 >= n ? 0 : i + 1;
-            step_put(i, note);
+            step_put(i, note, vel);
         }
         return;
     }
     if (on) {
         if (step_gesture++ == 0)
             step_empty(step_cursor);
-        step_put(step_cursor, note);
+        step_put(step_cursor, note, vel);
     } else if (step_gesture > 0 && --step_gesture == 0)
         step_cursor = step_cursor + 1 >= n ? 0 : step_cursor + 1;
 }
@@ -701,12 +872,12 @@ static void step_record(int note, int on)
 static uint32_t latched[4];
 static int phys_down;
 
-static void eff_note(int note, int on)
+static void eff_note(int note, int on, int vel, int from_midi)
 {
     if (st.seq[0] == SEQ_STEP) {
         if (step_write)
-            step_record(note, on);
-        route(note, on);
+            step_record(note, on, vel);
+        route(note, on, vel, from_midi);
         return;
     }
     if (on && loop_state == LOOP_ARMED && loop_fresh && nlev && layers()) {
@@ -719,8 +890,10 @@ static void eff_note(int note, int on)
         arp_acc = 1e9f;
     }
     if (on && loop_state == LOOP_ARMED) {
-        if (loop_fresh)
+        if (loop_fresh) {
             nlev = 0;
+            loop_gen++;
+        }
         loop_len = (f32)((1 << (st.seq[1] & 3)) * seq_bar_ticks());
         loop_pos = 0.0f;
         click_at = -1;
@@ -732,23 +905,25 @@ static void eff_note(int note, int on)
         arp_acc = 1e9f;
     }
     if ((loop_state == LOOP_REC || loop_state == LOOP_DUB) && !arp_recorded())
-        loop_record(note, on);
-    route(note, on);
+        loop_record(note, on, vel);
+    route(note, on, vel, from_midi);
 }
 
+static uint32_t latched_midi[4];                 /* (which latched notes came in over MIDI: their note-off is not sent) */
 static void unlatch(void)
 {
     int n;
     for (n = 0; n < 128; n++)
         if (latched[n >> 5] & (1u << (n & 31)))
-            eff_note(n, 0);
+            eff_note(n, 0, 0, (int)(latched_midi[n >> 5] >> (n & 31) & 1u));
     latched[0] = latched[1] = latched[2] = latched[3] = 0;
+    latched_midi[0] = latched_midi[1] = latched_midi[2] = latched_midi[3] = 0;
 }
 
-static void live_note(int note, int on)
+static void live_note(int note, int on, int vel, int from_midi)
 {
     if (!st.keys[3]) {
-        eff_note(note, on);
+        eff_note(note, on, vel, from_midi);
         return;
     }
     if (on) {
@@ -757,7 +932,9 @@ static void live_note(int note, int on)
         phys_down++;
         if (!(latched[note >> 5] & (1u << (note & 31)))) {
             latched[note >> 5] |= 1u << (note & 31);
-            eff_note(note, 1);
+            if (from_midi)
+                latched_midi[note >> 5] |= 1u << (note & 31);
+            eff_note(note, 1, vel, from_midi);
         }
     } else if (phys_down > 0)
         phys_down--;
@@ -766,6 +943,8 @@ static void live_note(int note, int on)
 static void panic(void)
 {
     int i;
+    if (eng_midi_fn)
+        eng_midi_fn(0xB0u, 123u, 0u);            /* (all notes off, out too) */
     unlatch();
     loop_release();
     step_release();
@@ -782,10 +961,10 @@ static void panic(void)
 
 static void handle(uint32_t e)
 {
-    int type = (int)(e >> 8), a = (int)(e & 255u);
+    int type = (int)(e >> 8 & 255u), a = (int)(e & 255u), vel = (int)(e >> 16 & 127u), midi = (int)(e >> 23 & 1u);
     switch (type) {
-    case EV_NOTE_ON: live_note(a & 127, 1); break;
-    case EV_NOTE_OFF: live_note(a & 127, 0); break;
+    case EV_NOTE_ON: live_note(a & 127, 1, vel ? vel : 127, midi); break;
+    case EV_NOTE_OFF: live_note(a & 127, 0, 0, midi); break;
     case EV_PANIC: panic(); break;
     case EV_UNLATCH: unlatch(); phys_down = 0; break;
     case EV_INST:
@@ -793,6 +972,7 @@ static void handle(uint32_t e)
             unlatch();
             nheld = 0;
             arp_release();
+            layers_close();                      /* (what is played on the next instrument is a layer of its own) */
             if (layers()) {                      /* at once: what sounds keeps its own instrument, and a take goes on */
                 int i;
                 for (i = 0; i < NVOICE; i++)
@@ -814,6 +994,7 @@ static void handle(uint32_t e)
         step_stop();
         step_write = 0;
         step_gesture = 0;
+        layers_close();
         break;
     case EV_STEP_MOVE: {
         int n = step_count(), c = ((step_cursor + a - 128) % n + n) % n;
@@ -836,6 +1017,8 @@ static void handle(uint32_t e)
         if (st.seq[0] == SEQ_STEP) {
             step_write = !step_write;
             step_gesture = 0;
+            if (!step_write)
+                layers_close();
             break;
         }
         switch (loop_state) {
@@ -845,9 +1028,9 @@ static void handle(uint32_t e)
             loop_state = LOOP_ARMED;
             break;
         case LOOP_ARMED: loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY; break;
-        case LOOP_REC: loop_state = LOOP_PLAY; break;
+        case LOOP_REC: loop_state = LOOP_PLAY; layers_close(); break;
         case LOOP_PLAY: loop_state = LOOP_DUB; break;
-        default: loop_state = LOOP_PLAY; break;
+        default: loop_state = LOOP_PLAY; layers_close(); break;
         }
         break;
     case EV_PLAY:
@@ -893,6 +1076,7 @@ static void handle(uint32_t e)
                 if (tag_inst(lev[i].part) != inst)
                     lev[k++] = lev[i];
             nlev = k;
+            loop_gen++;
             if (!nlev) {
                 loop_pos = 0.0f;
                 loop_state = LOOP_EMPTY;
@@ -909,6 +1093,7 @@ static void handle(uint32_t e)
         }
         loop_release();
         nlev = 0;
+        loop_gen++;
         loop_pos = 0.0f;
         loop_state = LOOP_EMPTY;
         break;
@@ -1006,29 +1191,21 @@ static void switch_instrument(int i)
  * ones a hand can turn, and they ease across a change of algorithm too. A part that goes on sounding on
  * another algorithm takes its knobs as they stand: part_knobs.) */
 static f32 blk_time;
-static void inst_touch(int i)
-{
-    IRun *r = &ir[i];
-    const InstParams *ip = &st.ip[i];
-    const uint8_t *kn = KNOBS_NOW(i);
-    Lfo *lf = i == cur_i ? &lfo_live : &r->lf;
-    f32 dt = (f32)CTRL * ISR, brate = SR / (f32)CTRL, lfo, depth, f;
-    int k, target;
-    if (r->at == blkno)
-        return;
-    if (r->at != blkno - 1u)                     /* it was silent: the knobs where they stand */
-        for (k = 0; k < 4; k++)
-            r->knob_s[k] = (f32)kn[k] * 0.01f;
-    r->at = blkno;
 
-    f = 0.05f * exp2fx((f32)ip->lfo[1] * 0.09f);
+/* An LFO moved on a control block and put on its target, and the envelope's rates: from an LFO page and an
+ * ENV page (an instrument's, or a layer's as it was left) */
+static void mod_run(Mod *m, const uint8_t *lfo_p, const uint8_t *env_p, Lfo *lf, uint32_t *rng, int live)
+{
+    f32 dt = (f32)CTRL * ISR, brate = SR / (f32)CTRL, lfo, depth, f;
+    int target;
+    f = 0.05f * exp2fx((f32)lfo_p[1] * 0.09f);
     lf->ph += f * dt;
     if (lf->ph >= 1.0f) {
         lf->ph -= (f32)ifloor(lf->ph);
-        lf->sh = rng_s(i == cur_i ? &eng_rng : &lfo_rng);
+        lf->sh = rng_s(rng);
     }
     lf->drift += (lf->sh - lf->drift) * minf(1.0f, f * dt * 3.0f);
-    switch (ip->lfo[0]) {
+    switch (lfo_p[0]) {
     case 1: lfo = 4.0f * absf(lf->ph - 0.5f) - 1.0f; break;
     case 2: lfo = 1.0f - 2.0f * lf->ph; break;
     case 3: lfo = lf->ph < 0.5f ? 1.0f : -1.0f; break;
@@ -1036,37 +1213,53 @@ static void inst_touch(int i)
     case 5: lfo = clampf(lf->drift * 1.6f, -1.0f, 1.0f); break;
     default: lfo = tsin(lf->ph); break;
     }
-    depth = (f32)ip->lfo[2] * 0.01f;
-    target = ip->lfo[3];
-    if (i == cur_i)
+    depth = (f32)lfo_p[2] * 0.01f;
+    target = lfo_p[3];
+    if (live)
         lfo_out = lfo * depth;
-
-    for (k = 0; k < 4; k++)
-        r->knob_s[k] += ((f32)kn[k] * 0.01f - r->knob_s[k]) * 0.06f;
-    r->vol = 1.0f;
-    r->panmod = 0.0f;
-    r->kmod_k = -1;
-    r->b.bend = ((f32)st.glo[2] - 50.0f) * 0.01f;
+    m->vol = 1.0f;
+    m->panmod = 0.0f;
+    m->kmod_k = -1;
+    m->kmod = 0.0f;
+    m->lfo = lfo;
+    m->bend = ((f32)st.glo[2] - 50.0f) * 0.01f;
     if (target == 0)
-        r->b.bend += lfo * depth * depth * 12.0f;
+        m->bend += lfo * depth * depth * 12.0f;
     else if (target <= 4) {
-        r->kmod_k = target - 1;
-        r->kmod = lfo * depth * 0.5f;
+        m->kmod_k = target - 1;
+        m->kmod = lfo * depth * 0.5f;
     }
     else if (target == 5)
-        r->vol = 1.0f - depth * (0.5f + 0.5f * lfo);
+        m->vol = 1.0f - depth * (0.5f + 0.5f * lfo);
     else
-        r->panmod = lfo * depth;
+        m->panmod = lfo * depth;
+    m->att = dt / (0.0015f * exp2fx((f32)env_p[0] * 0.114f));
+    m->kd = onepole_k(0.02f * exp2fx((f32)env_p[1] * 0.08f), brate);
+    m->sus = (f32)env_p[2] * 0.01f;
+    m->kr = onepole_k(0.015f * exp2fx((f32)env_p[3] * 0.084f), brate);
+}
+
+static void inst_touch(int i)
+{
+    IRun *r = &ir[i];
+    const InstParams *ip = &st.ip[i];
+    const uint8_t *kn = KNOBS_NOW(i);
+    int k;
+    if (r->at == blkno)
+        return;
+    if (r->at != blkno - 1u)                     /* it was silent: the knobs where they stand */
+        for (k = 0; k < 4; k++)
+            r->knob_s[k] = (f32)kn[k] * 0.01f;
+    r->at = blkno;
+    mod_run(&r->m, ip->lfo, ip->env, i == cur_i ? &lfo_live : &r->lf, i == cur_i ? &eng_rng : &lfo_rng, i == cur_i);
+    for (k = 0; k < 4; k++)
+        r->knob_s[k] += ((f32)kn[k] * 0.01f - r->knob_s[k]) * 0.06f;
+    r->b.bend = r->m.bend;
     r->b.sr = SR;
     r->b.isr = ISR;
-    r->b.lfo = lfo;
+    r->b.lfo = r->m.lfo;
     r->b.time = blk_time;
     r->b.bpm = (f32)iclamp(st.glo[0], 40, 240);
-
-    r->att = dt / (0.0015f * exp2fx((f32)ip->env[0] * 0.114f));
-    r->kd = onepole_k(0.02f * exp2fx((f32)ip->env[1] * 0.08f), brate);
-    r->sus = (f32)ip->env[2] * 0.01f;
-    r->kr = onepole_k(0.015f * exp2fx((f32)ip->env[3] * 0.084f), brate);
 }
 
 /* The instrument's block() for a part, if what the instrument holds is another part's numbers or its
@@ -1087,13 +1280,45 @@ static const Blk *part_set(int part)
     else
         for (k = 0; k < 4; k++)
             r->b.k[k] = (f32)KNOBS(i, PART_ALGO(part))[k] * 0.01f;
-    if (r->kmod_k >= 0)
-        r->b.k[r->kmod_k] = sat(r->b.k[r->kmod_k] + r->kmod);
+    if (r->m.kmod_k >= 0)
+        r->b.k[r->m.kmod_k] = sat(r->b.k[r->m.kmod_k] + r->m.kmod);
     r->b.step = r->adv == blkno ? 0.0f : (f32)CTRL * ISR;
     r->adv = blkno;
     r->owner = (uint8_t)part;
     insts[i]->block(&r->b);
     return &r->b;
+}
+
+/* The instrument's block() for a closed layer: the layer's own knobs, LFO and envelope, as it was left */
+static const Blk *lay_set(int part, int lay)
+{
+    int i = PART_INST(part), k;
+    IRun *r = &ir[i];
+    LRun *l = &lrun[(lay - 1) & (NLAYER - 1)];
+    const Layer *ly = &st.layer[(lay - 1) & (NLAYER - 1)];
+    if (l->at != blkno) {
+        if (l->at != blkno - 1u) {               /* (it was silent: its LFO starts where the instrument's stands) */
+            l->lf = i == cur_i ? lfo_live : r->lf;
+        }
+        l->at = blkno;
+        mod_run(&l->m, ly->lfo, ly->env, &l->lf, &lfo_rng, 0);
+    }
+    l->b.algo = PART_ALGO(part);
+    for (k = 0; k < 4; k++)
+        l->b.k[k] = (f32)ly->knob[k] * 0.01f;
+    if (l->m.kmod_k >= 0)
+        l->b.k[l->m.kmod_k] = sat(l->b.k[l->m.kmod_k] + l->m.kmod);
+    l->b.bend = l->m.bend;
+    l->b.sr = SR;
+    l->b.isr = ISR;
+    l->b.lfo = l->m.lfo;
+    l->b.time = blk_time;
+    l->b.bpm = (f32)iclamp(st.glo[0], 40, 240);
+    l->b.step = r->adv == blkno ? 0.0f : (f32)CTRL * ISR;
+    r->adv = blkno;
+    r->owner = 0;                                /* (what the instrument holds is no part's now) */
+    insts[i]->block(&l->b);
+    return &l->b;
 }
 
 
@@ -1153,6 +1378,16 @@ static void voices_job(uint32_t mask)            /* (this is what the second cor
             voice_block(i);
 }
 
+/* the group a voice sounds in: its part, and above it its layer while that is closed (a layer still being
+ * recorded sounds as the instrument does) */
+static int voice_key(const Voice *v)
+{
+    int l = v->lay;
+    if (l && l <= NLAYER && !st.layer[l - 1].open && st.layer[l - 1].part == v->part)
+        return v->part | l << 8;
+    return v->part;
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 bl[CTRL], br[CTRL];               /* one instrument's voices, before its post */
@@ -1166,6 +1401,7 @@ static void block(f32 *L, f32 *R)
     if (lay != lay_was) {                        /* LAYERS switched: what the sequencer holds, it held the other way */
         lay_was = lay;
         seq_release_all();
+        layers_close();
     }
     if (pending_i >= 0) {                        /* an instrument change: fade, then swap */
         int any = 0;
@@ -1180,8 +1416,10 @@ static void block(f32 *L, f32 *R)
     live = live_part();
     if (!lay)                                    /* without LAYERS a sounding note follows the algorithm in hand */
         for (i = 0; i < NVOICE; i++)
-            if (voices[i].stage && PART_INST(voices[i].part) == cur_i)
+            if (voices[i].stage && PART_INST(voices[i].part) == cur_i) {
                 voices[i].part = (uint8_t)live;
+                voices[i].lay = 0;
+            }
     bpm = (f32)iclamp(st.glo[0], 40, 240);
     dticks = bpm * (96.0f / 60.0f) * dt;
     beat_out = fractf(beat_out + dticks * (1.0f / 96.0f));
@@ -1217,11 +1455,12 @@ static void block(f32 *L, f32 *R)
     /* Instrument by instrument: each part's voices into the instrument's own pair of buffers, then the
      * instrument's post over the lot. An instrument holds one part's numbers at a time, so its block()
      * runs again before each part, and the part in hand goes last: its numbers are what the post and
-     * the next note find. */
+     * the next note find. A closed layer is a group of its own (key: the part, and the layer above it),
+     * on its own settings. */
     for (inst = 0; inst < NINST; inst++) {
         IRun *r = &ir[inst];
         const InstDef *def = insts[inst];
-        uint8_t parts[NVOICE + 1];
+        uint16_t parts[NVOICE + 1];
         f32 fade = 1.0f, kr;
         int np = 0, p, j, in_hand = inst == cur_i, has_live = 0;
         if (imask >> inst & 1u)
@@ -1235,30 +1474,32 @@ static void block(f32 *L, f32 *R)
             r->linger--;
         }
         for (i = 0; i < NVOICE; i++) {
-            int pt = voices[i].part;
+            int pt = voices[i].part, key;
             if (!voices[i].stage || PART_INST(pt) != inst)
                 continue;
-            if (in_hand && pt == live) {
+            key = voice_key(&voices[i]);
+            if (in_hand && key == live) {
                 has_live = 1;
                 continue;
             }
-            for (j = 0; j < np && parts[j] != pt; j++)
+            for (j = 0; j < np && parts[j] != key; j++)
                 ;
             if (j == np)
-                parts[np++] = (uint8_t)pt;
+                parts[np++] = (uint16_t)key;
         }
         if (has_live)
-            parts[np++] = (uint8_t)live;
+            parts[np++] = (uint16_t)live;
         for (n = 0; n < CTRL; n++)
             bl[n] = br[n] = 0.0f;
         b = &r->b;
         for (p = 0; p < np; p++) {
             uint32_t mine = 0, other = 0;
-            int nv = 0;
-            b = part_set(parts[p]);
-            kr = pending_i >= 0 ? 0.3f : r->kr;
+            int nv = 0, gl_lay = parts[p] >> 8;
+            const Mod *m = gl_lay ? &lrun[(gl_lay - 1) & (NLAYER - 1)].m : &r->m;
+            b = gl_lay ? lay_set(parts[p] & 255, gl_lay) : part_set(parts[p]);
+            kr = pending_i >= 0 ? 0.3f : m->kr;
             for (i = 0; i < NVOICE; i++)         /* every other voice of the part to the second core, if there is one */
-                if (voices[i].stage && voices[i].part == parts[p]) {
+                if (voices[i].stage && voice_key(&voices[i]) == parts[p]) {
                     if (c2_run && (nv & 1))
                         other |= 1u << i;
                     else
@@ -1267,9 +1508,9 @@ static void block(f32 *L, f32 *R)
                 }
             vj.def = def;
             vj.b = b;
-            vj.att = r->att;
-            vj.kd = r->kd;
-            vj.sus = r->sus;
+            vj.att = m->att;
+            vj.kd = m->kd;
+            vj.sus = m->sus;
             vj.kr = kr;
             vj.kg = kg;
             vj.dt = dt;
@@ -1283,24 +1524,62 @@ static void block(f32 *L, f32 *R)
             for (i = 0; i < NVOICE; i++) {
                 Voice *v = &voices[i];
                 const f32 *tmp = vt[i];
-                f32 e0, e1, g, gl, gr, de, pan;
+                f32 e0, e1, g, gl, gr, de, pan, pl, pr, s = 0.0f, tail, vk, y;
                 if (!((mine | other) >> i & 1u))
                     continue;
                 e0 = v->env_prev;
                 e1 = v->env;
-                g = def->gain * r->vol * algo_gain[inst][PART_ALGO(parts[p])];
-                pan = clampf(v->pan + r->panmod, -1.0f, 1.0f);
-                gl = g * (1.0f - maxf(0.0f, pan) * 0.8f);
-                gr = g * (1.0f + minf(0.0f, pan) * 0.8f);
+                g = def->gain * m->vol * algo_gain[inst][PART_ALGO(parts[p])] * v->vamp;
+                pan = clampf(v->pan + m->panmod, -1.0f, 1.0f);
+                pl = 1.0f - maxf(0.0f, pan) * 0.8f;
+                pr = 1.0f + minf(0.0f, pan) * 0.8f;
+                gl = g * pl;
+                gr = g * pr;
                 de = (e1 - e0) * (1.0f / (f32)CTRL);
-                for (n = 0; n < CTRL; n++) {
-                    f32 s = tmp[n] * e0;
-                    e0 += de;
-                    bl[n] += s * gl;
-                    br[n] += s * gr;
+                vk = v->vk;
+                if (v->declick) {                /* taken over: the new note starts where the old one was */
+                    f32 s0 = tmp[0] * e0;
+                    if (vk < 1.0f) {
+                        f32 q = v->vlp[0] + (s0 - v->vlp[0]) * vk;
+                        s0 = v->vlp[1] + (q - v->vlp[1]) * vk;
+                    }
+                    v->tail = v->last - s0 * g;
+                    v->declick = 0;
                 }
-                if (v->stage == 4 && v->env <= 0.0f)
+                tail = v->tail;
+                if (vk >= 1.0f && tail == 0.0f)
+                    for (n = 0; n < CTRL; n++) {
+                        s = tmp[n] * e0;
+                        e0 += de;
+                        bl[n] += s * gl;
+                        br[n] += s * gr;
+                    }
+                else {
+                    f32 lp = v->vlp[0], lp2 = v->vlp[1];
+                    for (n = 0; n < CTRL; n++) {
+                        s = tmp[n] * e0;
+                        e0 += de;
+                        if (vk < 1.0f) {
+                            lp += (s - lp) * vk;
+                            lp2 += (lp - lp2) * vk;
+                            s = lp2;
+                        }
+                        y = tail;
+                        tail *= 0.985f;          /* (about 1.5 ms) */
+                        bl[n] += s * gl + y * pl;
+                        br[n] += s * gr + y * pr;
+                    }
+                    v->vlp[0] = lp;
+                    v->vlp[1] = lp2;
+                    if (absf(tail) < 1.0e-6f)
+                        tail = 0.0f;
+                    v->tail = tail;
+                }
+                v->last = s * g + tail;
+                if (v->stage == 4 && v->env <= 0.0f) {
                     v->stage = 0;
+                    v->last = v->tail = v->vlp[0] = v->vlp[1] = 0.0f;
+                }
             }
         }
         if (in_hand && !has_live)
@@ -1395,6 +1674,55 @@ static inline f32 limit(f32 x)
     return x < 0.0f ? -a : a;
 }
 
+/* The limiter. Eight voices of most instruments, a chord with the echo up, come to two or three times full
+ * scale, and the soft clip at the end then bends every peak: the crackle and the fuzz on loud chords. So the
+ * mix is turned down for as long as it is too loud, and the soft clip only ever sees what is under LIM_T.
+ * It looks one control block (0.7 ms) ahead: the gain that block needs is reached by the time it is heard,
+ * in a straight line across the block before it, so no sample passes LIM_T and the gain never jumps. It
+ * comes back up in about 100 ms. Under LIM_T (a note or two at an ordinary level) it does nothing at all. */
+#define LIM_T 0.7f
+#define LIM_REL 0.0072f                          /* a control block's step back towards 1 (about 100 ms) */
+static f32 lim_g = 1.0f, lim_need = 1.0f;
+
+static f32 lim_peak(const f32 *l, const f32 *r)
+{
+    f32 p = 0.0f;
+    int i;
+    for (i = 0; i < CTRL; i++) {
+        f32 a = absf(l[i]), b = absf(r[i]);
+        if (a > p) p = a;
+        if (b > p) p = b;
+    }
+    return p > LIM_T ? LIM_T / p : 1.0f;         /* (not a number: 1, and limit() makes it silence) */
+}
+
+static void lim_block(f32 *L, f32 *R)
+{
+    static f32 NL[CTRL], NR[CTRL];               /* the next block: the one the gain looks at */
+    f32 need_now = lim_need, g0 = lim_g, g1, dg;
+    int i;
+    for (i = 0; i < CTRL; i++) {
+        L[i] = NL[i];
+        R[i] = NR[i];
+    }
+    block(NL, NR);
+    lim_need = lim_peak(NL, NR);
+    g1 = g0 + (1.0f - g0) * LIM_REL;
+    if (g1 > need_now) g1 = need_now;            /* this block's own peaks, and the next's */
+    if (g1 > lim_need) g1 = lim_need;
+    if (g1 > 0.99999f && g0 > 0.99999f) {
+        lim_g = 1.0f;
+        return;
+    }
+    dg = (g1 - g0) * (1.0f / (f32)CTRL);
+    for (i = 0; i < CTRL; i++) {
+        g0 += dg;
+        L[i] *= g0;
+        R[i] *= g0;
+    }
+    lim_g = g1;
+}
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
@@ -1402,7 +1730,7 @@ void eng_render(int32_t *lr, uint32_t n)
     while (n) {
         uint32_t take, i;
         if (!have) {
-            block(L, R);
+            lim_block(L, R);
             have = CTRL;
             pos = 0;
         }
@@ -1439,6 +1767,20 @@ void eng_init(uint32_t sample_rate)
     }
     for (i = 0; i < NINST; i++)
         ir[i].ig = inst_gain(i);
+    {
+        uint8_t *p = (uint8_t *)lrun;
+        uint32_t k;
+        for (k = 0; k < sizeof lrun; k++)
+            p[k] = 0;
+    }
+    for (i = 0; i < 128; i++)
+        rec_part[i] = rec_lay[i] = 0;
+    for (i = 0; i < NLAYER; i++)                 /* (no take is going on) */
+        if (st.layer[i].open) {
+            layer_snap(&st.layer[i]);
+            st.layer[i].open = 0;
+        }
+    lim_g = lim_need = 1.0f;
     lay_was = layers();
     switch_instrument(st.inst < NINST ? st.inst : 0);
     for (i = 0; i < NVOICE; i++) {               /* nothing sounds and nothing runs: as the power coming on leaves it */
@@ -1452,6 +1794,7 @@ void eng_init(uint32_t sample_rate)
     loop_pos = 0.0f;
     loop_held[0] = loop_held[1] = loop_held[2] = loop_held[3] = 0;
     latched[0] = latched[1] = latched[2] = latched[3] = 0;
+    latched_midi[0] = latched_midi[1] = latched_midi[2] = latched_midi[3] = 0;
     phys_down = nheld = arp_ncur = 0;
     arp_acc = 1e9f;
     step_playing = step_write = step_cursor = step_at = 0;
@@ -1530,4 +1873,111 @@ uint32_t eng_voices(void)
     for (i = 0; i < NVOICE; i++)
         n += voices[i].stage != 0;
     return n;
+}
+
+/* ---- the loop, kept across a power-off (h1_loop) ----------------------------------------------
+ * "H1LP", a version byte, the loop's length in ticks and its events, eight bytes each, written and read a
+ * byte at a time (the blob may sit at any address). The layers the events name are in the state. */
+#define LOOP_MAGIC 0x504C3148u                   /* "H1LP" */
+#define LOOP_HEAD 12u
+
+static void put16(uint8_t *d, uint32_t v) { d[0] = (uint8_t)v; d[1] = (uint8_t)(v >> 8); }
+static uint32_t get16(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
+
+uint32_t eng_loop_save(uint8_t *dst, uint32_t max)
+{
+    int i, ne = nlev;
+    uint32_t n = LOOP_HEAD + (uint32_t)ne * 8u;
+    if (ne < 0 || ne > NLEV || n > max)
+        return 0;
+    put16(dst, LOOP_MAGIC & 0xFFFFu);
+    put16(dst + 2, LOOP_MAGIC >> 16);
+    dst[4] = 1;                                  /* the version */
+    dst[5] = 0;
+    put16(dst + 6, (uint32_t)ne);
+    put16(dst + 8, (uint32_t)loop_len);
+    put16(dst + 10, 0);
+    for (i = 0; i < ne; i++) {
+        uint8_t *e = dst + LOOP_HEAD + (uint32_t)i * 8u;
+        put16(e, lev[i].tick);
+        e[2] = lev[i].note;
+        e[3] = lev[i].on & 1u;
+        e[4] = lev[i].part;
+        e[5] = lev[i].lay;
+        e[6] = lev[i].vel;
+        e[7] = 0;
+    }
+    return n;
+}
+
+/* After the state (h1_state_load), before the audio starts. Anything that does not read as a loop is refused
+ * and the loop stays empty; every value is brought into range. */
+int eng_loop_load(const uint8_t *b, uint32_t n)
+{
+    uint32_t ne, len, i, k = 0;
+    if (!b || n < LOOP_HEAD || get16(b) != (LOOP_MAGIC & 0xFFFFu) || get16(b + 2) != (LOOP_MAGIC >> 16) || b[4] != 1)
+        return -1;
+    ne = get16(b + 6);
+    len = get16(b + 8);
+    if (ne > NLEV || n < LOOP_HEAD + ne * 8u || len < 24u || len > 8u * 480u)
+        return -1;
+    for (i = 0; i < ne; i++) {
+        const uint8_t *e = b + LOOP_HEAD + i * 8u;
+        uint32_t tick = get16(e);
+        if (tick >= len)
+            continue;
+        lev[k].tick = (uint16_t)tick;
+        lev[k].note = e[2] & 127u;
+        lev[k].on = e[3] & 1u;
+        lev[k].part = (e[4] & 0x80u) && ((e[4] >> 3) & 15u) < (uint32_t)NINST ? e[4] : 0u;
+        lev[k].lay = (uint8_t)layer_of(e[5], lev[k].part);
+        lev[k].vel = e[6] & 127u;
+        lev[k].rsv = 0;
+        k++;
+    }
+    nlev = (int)k;
+    loop_len = (f32)len;
+    loop_pos = 0.0f;
+    loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY;
+    loop_gen++;
+    return 0;
+}
+
+uint32_t eng_loop_gen(void) { return loop_gen; }
+
+int eng_loop_quiet(void)
+{
+    int s = loop_state;
+    return s == LOOP_EMPTY || s == LOOP_IDLE;
+}
+
+/* main loop: the layers notes are on (in the loop or the steps, whichever is showing) */
+int eng_layer_count(void)
+{
+    uint8_t used[NLAYER];
+    int i, j, n = 0, ne = nlev;
+    for (i = 0; i < NLAYER; i++)
+        used[i] = 0;
+    if (st.seq[0] == SEQ_STEP) {
+        for (i = 0; i < NSTEP; i++)
+            for (j = 0; j < NSNOTE; j++)
+                if (st.steps[i][j] && st.step_lay[i][j] && st.step_lay[i][j] <= NLAYER)
+                    used[st.step_lay[i][j] - 1] = 1;
+    } else
+        for (i = 0; i < ne && i < NLEV; i++)
+            if (lev[i].lay && lev[i].lay <= NLAYER)
+                used[lev[i].lay - 1] = 1;
+    for (i = 0; i < NLAYER; i++)
+        n += used[i];
+    return n;
+}
+
+/* main loop: is a take going into a layer now (1..NLAYER), 0 if not */
+int eng_layer_rec(void)
+{
+    int i;
+    for (i = 0; i < NLAYER; i++)
+        if (st.layer[i].open)
+            return i + 1;
+    return 0;
 }
