@@ -4,6 +4,12 @@ Custom firmware for the M-VAVE FM-1. Fourteen instruments with dynamic visuals. 
 and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
 Works on both the original flash chip and the newer UC25HQ80. Uses fm1-base.
 
+[![Install on The Firmware Hub](https://img.shields.io/badge/install-The%20Firmware%20Hub-c8ff4a?style=for-the-badge)](https://thefirmwarehub.com/firmware/h1/)
+
+The easiest way to install h1 is [its listing on The Firmware Hub](https://thefirmwarehub.com/firmware/h1/):
+connect the FM-1 over USB in Chrome or Edge and press **Install**. [Install](#install) below has
+the details and the manual `.fwsc` route.
+
 <p>
 <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
 <img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
@@ -46,8 +52,7 @@ same C code that goes on the device, and can play other FM-1 firmwares too.
 > November 2026: v0.1.0 from the stock firmware, each later one over the one before. Going back to stock from h1,
 > installing h1 from another custom firmware, and a unit with the older flash chip have not been
 > tried yet:
-> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has. h1 is not on The Firmware
-> Hub yet, so for now install it [from a terminal](#from-a-terminal).
+> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has.
 
 ### Before you install
 
@@ -64,7 +69,8 @@ same C code that goes on the device, and can play other FM-1 firmwares too.
 If the FM-1 runs something older than V15, update it to V15 with M-VAVE's updater first.
 
 1. Connect the FM-1 over USB to a computer running Chrome or Edge.
-2. Open [The Firmware Hub](https://thefirmwarehub.com), press **Connect FM-1** and allow MIDI.
+2. Open [h1 on The Firmware Hub](https://thefirmwarehub.com/firmware/h1/), press **Connect FM-1** and allow
+   MIDI.
 3. Press **Install** on h1. It takes about a minute. Keep the cable in until the FM-1 restarts
    into h1.
 
