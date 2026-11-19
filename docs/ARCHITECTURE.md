@@ -9,6 +9,7 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   ui.c         what every control does, the name flash, the knob strip, the settings pages
   inst_*.c     one file per instrument: its sound and its picture, side by side
   smp.c        plays the recordings BARD and TWANG are built on (smp_data.c, written by tools/samples)
+  vibe_data.c  VIBE's recorded hits (written by tools/samples/drums.py; inst_vibe.c plays them)
   str.h        the string those recordings' plucks are fed into
 port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the FM-1 browser simulator
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
@@ -143,10 +144,13 @@ settings from the instrument in hand. An instrument that is not in hand and has 
 its `post` running for a third of a second, fading, so its tail is not cut. The snapshot for the picture
 leaves out the voices of other instruments.
 
-The saved state is version 6: 1880 bytes. Versions 4 and 5 are the same up to the steps, where
+The saved state is version 7: 1998 bytes, with room for sixteen instruments. Version 6 (1880 bytes) is
+the same with fourteen: its tables go to the start of this one's, and PLINK and VIBE, which came after,
+are as new. (They are last in PRESETS so that an instrument's number, which a recorded note's part
+holds, never changed.) Versions 4 and 5 are the same as 6 up to the steps, where
 a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
 shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.
-`h1_state_load` takes all three, straight from the bytes: a version 4 state comes up with LAYERS
+`h1_state_load` takes all four, straight from the bytes (`H1Old` in `internal.h` is the old layout): a version 4 state comes up with LAYERS
 off and no parts kept, and in both older ones every algorithm starts from where the instrument's
 knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
 to whichever instrument is in hand. An instrument's volume took a spare byte of version 6, so a
@@ -181,6 +185,14 @@ that repeats, a whole number of periods long and crossfaded into itself.
 
 Every cut is stored with its highs lifted and the player (`smp_read`) lowers them again, which puts the
 8 bits' noise under the sound instead of over it.
+
+VIBE's kits are another matter: 33 single hits (`sources.DRUMS`, all from VCSL), cut by
+`tools/samples/drums.py` into `core/vibe_data.c`, 25.7 KB. A drum is short and can take some grit, so
+they are 4-bit IMA ADPCM, each at the lowest rate its top allows (5.5 to 22.05 kHz), a tenth of a second
+or so. The hit's own dying away is divided out before it is stored and the player multiplies it back,
+longer or shorter with DECAY; a ringing hit (gong, bells, cymbal) keeps a short stretch that repeats
+while the player lets it fade. Five kits are picks and tunings from that pool, and three more are
+treatments of it (slowed, small, shuffled): eight separate sampled kits would not have fitted the flash.
 
 ## RAM and flash on the device
 

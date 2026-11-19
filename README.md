@@ -1,6 +1,6 @@
 # h1
 
-Custom firmware for the M-VAVE FM-1. Fourteen instruments with dynamic visuals. Eight algorithms 
+Custom firmware for the M-VAVE FM-1. Sixteen instruments with dynamic visuals. Eight algorithms 
 and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
 Works on both the original flash chip and the newer UC25HQ80. Uses fm1-base.
 
@@ -13,7 +13,8 @@ the details and the manual `.fwsc` route.
 <p>
 <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
 <img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
-<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO">
+<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/plink.webp" width="104" alt="PLINK">
+<img src="docs/img/vibe.webp" width="104" alt="VIBE">
 </p>
 
 **The full guide is at [jakehandy.com/h1](https://jakehandy.com/h1).** It covers every instrument's
@@ -35,6 +36,8 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **INK** | gliding lead | SLIDE, SHAKE, PRESS, DRY |
 | **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
 | **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
+| **PLINK** | electronic drum kits on a pin board, 8-bit first; every hit drops down it in time | TUNE, DECAY, BOUNCE, BITS |
+| **VIBE** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a gamelan in the rain | TUNE, DECAY, WIND, STORM |
 
 <p>
 <img src="docs/img/page.png" width="200" alt="A settings page: four columns, one per knob"> <img src="docs/img/step.png" width="200" alt="A step pattern, the notches along the bottom"> <img src="docs/img/hud.png" width="200" alt="TIDE with the knob strip pinned">
@@ -222,7 +225,7 @@ fm1-browser-simulator, to the guide site.
 
 ## Licence
 
-h1 is [MIT](LICENSE). The recordings BARD and TWANG are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
+h1 is [MIT](LICENSE). The recordings BARD, TWANG and VIBE are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
 
 The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by
 Charles Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from

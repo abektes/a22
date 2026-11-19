@@ -41,7 +41,7 @@ screen reader's channel reported COZY and ORBIT. No crash was recorded.
 
 - [ ] Every one of the 27 keys sounds, and the right key lights.
 - [ ] All seven encoders and fourteen buttons do what the README's hotkeys table says.
-- [ ] PRESETS goes through all fourteen instruments. Each one draws, animates smoothly and
+- [ ] PRESETS goes through all sixteen instruments. Each one draws, animates smoothly and
       sounds. Note any that stutter (KOI, URCHIN and BONK send the most pixels).
 - [ ] No crackle or dropouts with eight notes held on the heavy instruments (TWANG, BARD, KOI),
       with ECHO and SPACE turned up.

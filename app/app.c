@@ -186,7 +186,7 @@ void app_init(void)
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n > 0)
-        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one of the two before */
+        h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one of the three before */
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)

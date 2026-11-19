@@ -165,3 +165,52 @@ BANKS = [
     ("BASS", "pluck", "TWANG BASS: a double bass, plucked",
      dict(ms=120), [pizz("a1"), pizz("a2"), pizz("a3")]),
 ]
+
+
+# VIBE's hits: (C name, what it is, options, source). One recording each, kept short, stored as 4-bit ADPCM
+# by tools/samples/drums.py. Options: rate (Hz it is stored at: as low as the recording's top allows),
+# ms (how much of the hit is kept), loop_ms (a ringing thing: a stretch after that which repeats, while the
+# player lets it die away), ring (seconds that takes), f0 (a pitched ring's note in Hz, so the stretch is
+# whole periods).
+def perc(folder, name):
+    return vcsl(f"{folder}/{name}.wav")
+
+
+_ID = "Idiophones/Struck Idiophones/"
+_ME = "Membranophones/Struck Membranophones/"
+
+DRUMS = [
+    ("GONG", "a gong", dict(rate=11025, ms=170, loop_ms=130, ring=2.6), perc(_ID + "Gong 1", "gong_f")),
+    ("BELL", "a Nepalese hand bell", dict(rate=22050, ms=45, loop_ms=24, ring=0.9), perc(_ID + "Hand Bells, Nepalese", "HB_2")),
+    ("ZILL", "finger cymbals", dict(rate=22050, ms=36, loop_ms=22, ring=1.3), perc(_ID + "Finger Cymbals", "Fing_Cymb")),
+    ("DUM", "a darbuka, the low stroke", dict(rate=8000, ms=190), perc(_ME + "Darbuka", "Darbuka_1_hit_vl2_rr1")),
+    ("TEK", "a darbuka, the rim stroke", dict(rate=16000, ms=80), perc(_ME + "Darbuka", "Darbuka_2_hit_vl2_rr1")),
+    ("FRAME", "a frame drum", dict(rate=8000, ms=220), perc(_ME + "Frame Drum", "HDrumL_Hit_v3_rr1_Sum")),
+    ("LOG", "a slit drum", dict(rate=8000, ms=150), perc(_ID + "Slit Drum", "LogDrumLo_MedM_v3_rr1_Sum")),
+    ("BALA", "a balafon bar", dict(rate=16000, ms=110), perc(_ID + "Balafon/Hard Mallet", "EthnicXylo_hardM_C4_vl3_rr1_Mid")),
+    ("SHAKER", "a shaker", dict(rate=22050, ms=90), perc(_ID + "Shaker, Small", "Mid_ShakerHighFaster_Down_rr1")),
+    ("AGOGO", "an agogo bell", dict(rate=22050, ms=50, loop_ms=20, ring=0.35), perc(_ID + "Agogo Bells", "Agogo_High_v3_rr1_Mid")),
+    ("TUMBA", "a tumba, the low conga", dict(rate=8000, ms=160), perc(_ME + "Conga", "Tumba_HitN_v4_rr1_Sum")),
+    ("QUINTO", "a quinto, the high conga", dict(rate=11025, ms=120), perc(_ME + "Conga", "Quinto_HitN_v3_rr1_Sum")),
+    ("BONGO", "a bongo", dict(rate=11025, ms=100), perc(_ME + "Bongos", "BongoH_Hit1_v2_rr1_Mid")),
+    ("CAJON", "a cajon", dict(rate=16000, ms=100), perc(_ID + "Cajon", "Cajon_hit1_f_rr1")),
+    ("CLAP", "hands clapping", dict(rate=16000, ms=110), perc(_ID + "Claps", "Clap_rr1")),
+    ("CABASA", "a cabasa", dict(rate=22050, ms=55), perc(_ID + "Cabasa", "Cabasa1_Hit_rr1_Mid")),
+    ("CLAVE", "claves", dict(rate=22050, ms=40), perc(_ID + "Claves", "Claves1_Hit_v3_rr1_Mid")),
+    ("COWBELL", "a cowbell", dict(rate=16000, ms=90), perc(_ID + "Cowbells", "Cowbell2_Normal_v3_rr1_Mid")),
+    ("TAMB", "a tambourine", dict(rate=22050, ms=100), perc(_ID + "Tambourine 1", "Tamb1_Hit_v2_rr1_Mid")),
+    ("TIMP", "a kettledrum", dict(rate=11025, ms=120, loop_ms=56, ring=1.6, f0=212.6), perc(_ME + "Timpani 1/Hit", "Timpani3_Hit_v3_rr2_Sum")),
+    ("BASSDRUM", "a concert bass drum", dict(rate=5512, ms=300), perc(_ME + "Bass Drum 2", "bassdrum_hit_ff")),
+    ("SNARE", "a rope-tension snare drum", dict(rate=16000, ms=140), perc(_ME + "Snare Drum, Rope Tension/Hi", "RopeSnare_hi_sn_Main_vl4_rr1")),
+    ("STICK", "the same drum's rim", dict(rate=22050, ms=45), perc(_ME + "Snare Drum, Rope Tension", "RopeSnare_sidestick_Main_vl2_rr1")),
+    ("CYMBAL", "a suspended cymbal", dict(rate=16000, ms=140, loop_ms=90, ring=1.8), perc(_ID + "Suspended Cymbal 1", "susCymb1_hit_fff1")),
+    ("TRIANGLE", "a triangle", dict(rate=22050, ms=30, loop_ms=16, ring=1.0), perc(_ID + "Triangles", "Triangle3_HitM_v1_rr2_Mid")),
+    ("WOODBLOCK", "a woodblock", dict(rate=22050, ms=45), perc(_ID + "Woodblock", "wood_click_ff")),
+    ("SLAP", "a slapstick", dict(rate=22050, ms=55), perc(_ID + "Slapstick", "slapstick_rr1")),
+    ("BRAKE", "a brake drum, hammered", dict(rate=16000, ms=60, loop_ms=30, ring=0.5), perc(_ID + "Brake Drum", "BrakeDrum1_Hammer_v3_rr1_Mid")),
+    ("ANVIL", "an anvil", dict(rate=22050, ms=45, loop_ms=20, ring=0.6), perc(_ID + "Anvil", "Anvil_Hit2_v3_rr1_Mid")),
+    ("HAT", "a hi-hat, closed", dict(rate=22050, ms=60), perc(_ID + "Hi-Hat Cymbal", "HiHat_HitC_v3_rr1_Mid")),
+    ("GLOCK", "a glockenspiel bar", dict(rate=22050, ms=40, loop_ms=15, ring=1.5, f0=1052.4), perc(_ID + "Glockenspiel", "glock_loud_C5_01")),
+    ("MBIRA", "a kalimba tine", dict(rate=16000, ms=60, loop_ms=16, ring=1.0, f0=498.0), perc("Idiophones/Plucked Idiophones/Kalimba, Kenya", "Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2")),
+    ("CHIME", "a hand chime", dict(rate=16000, ms=50, loop_ms=18, ring=2.0, f0=880.2), perc(_ID + "Hand Chimes", "sus_A4_r01_main")),
+]

@@ -8,7 +8,7 @@
 #define NVOICE 8
 #define NSTEP 64                 /* the step sequencer's pattern, at most */
 #define NSNOTE 8                 /* notes a step holds, at most */
-#define NINST 14
+#define NINST 16
 #define NALGO 8
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
@@ -67,13 +67,30 @@ typedef struct InstParams {
 #define IP_CUT 0
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 6u
-/* Versions 4 and 5 are the same as this one up to steps. There a step held four notes, not eight
- * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an
- * instrument's algorithms shared InstParams.knob0. h1_state_load reads both. */
+#define H1_VERSION 7u
+/* Versions 4, 5 and 6 are of the fourteen instruments there were before PLINK and VIBE (H1Old below: this
+ * state with fourteen where it has NINST). Version 6 is that and no more. Versions 4 and 5 are the same as
+ * it up to steps: there a step held four notes, not eight (steps[NSTEP][4], then in version 5
+ * step_part[NSTEP][4]), and there was no knob table: an instrument's algorithms shared InstParams.knob0.
+ * h1_state_load reads all three, and the two new instruments come up as new. */
+#define H1_OLD_NINST 14u
 #define H1_OLD_SNOTE 4u
-#define H1_VERSION_4_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
-#define H1_VERSION_5_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
+#define H1_VERSION_4_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
+#define H1_VERSION_5_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
+#define H1_VERSION_6_SIZE sizeof(H1Old)
+
+typedef struct H1Old {           /* what versions 4 to 6 saved: only its offsets are used, nothing is read through it */
+    uint32_t magic;
+    uint8_t version, inst;
+    int8_t octave;
+    uint8_t hud, keys[4], glo[4], seq[8];
+    InstParams ip[H1_OLD_NINST];
+    uint8_t ink[H1_OLD_NINST][3];
+    uint8_t rsv[5];
+    uint8_t steps[NSTEP][NSNOTE];
+    uint8_t step_part[NSTEP][NSNOTE];
+    uint8_t knob[H1_OLD_NINST][NALGO][4];
+} H1Old;
 
 typedef struct H1State {
     uint32_t magic;
@@ -161,7 +178,7 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt,
-                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi;
+                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_plink, inst_vibe;
 extern const InstDef *const insts[NINST];
 
 /* ---- settings pages ------------------------------------------------------------------- */

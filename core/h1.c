@@ -10,6 +10,15 @@ void knobs_default(int inst, int algo)
                 st.knob[inst][a][k] = insts[inst]->def.knob0[k];
 }
 
+static void inst_default(int i)
+{
+    st.ip[i] = insts[i]->def;
+    knobs_default(i, -1);
+    st.ink[i][0] = insts[i]->ink[0];
+    st.ink[i][1] = insts[i]->ink[1];
+    st.ink[i][2] = insts[i]->ink[2];
+}
+
 static void defaults(void)
 {
     int i;
@@ -24,13 +33,8 @@ static void defaults(void)
     st.seq[1] = 1;                               /* 2 bars */
     st.seq[3] = 1;                               /* the loop snaps to 1/16 */
     st.seq[4] = 1;                               /* steps of 1/16 */
-    for (i = 0; i < NINST; i++) {
-        st.ip[i] = insts[i]->def;
-        knobs_default(i, -1);
-        st.ink[i][0] = insts[i]->ink[0];
-        st.ink[i][1] = insts[i]->ink[1];
-        st.ink[i][2] = insts[i]->ink[2];
-    }
+    for (i = 0; i < NINST; i++)
+        inst_default(i);
 }
 
 void h1_init(uint32_t sample_rate)
@@ -51,7 +55,7 @@ const void *h1_state(uint32_t *size)
 }
 
 /* Take a saved blob. Call it right after h1_init, before the audio starts. Anything that does not
- * look like a state of this version or of the two before it is refused, and every value is clamped to
+ * look like a state of this version or of the three before it is refused, and every value is clamped to
  * its range.
  *
  * The blob is bytes at any address: it is copied out a byte at a time and nothing is read from it as
@@ -59,16 +63,27 @@ const void *h1_state(uint32_t *size)
  * reading the magic straight out of the blob kept the first h1 from starting once it had saved.) */
 typedef char v4_is_664_bytes[H1_VERSION_4_SIZE == 664u ? 1 : -1];   /* what the FM-1s out there hold: these */
 typedef char v5_is_920_bytes[H1_VERSION_5_SIZE == 920u ? 1 : -1];   /* must not move with the layout */
+typedef char v6_is_1880_bytes[H1_VERSION_6_SIZE == 1880u ? 1 : -1];
+typedef char state_fits_the_store[sizeof(H1State) <= 2048u ? 1 : -1];   /* (app.c's buffer for it) */
+typedef char old_head_is_the_same[offsetof(H1Old, ip) == offsetof(H1State, ip) ? 1 : -1];
+
+static void bytes(void *to, const uint8_t *from, uint32_t n)
+{
+    uint8_t *d = (uint8_t *)to;
+    while (n--)
+        *d++ = *from++;
+}
+
 int h1_state_load(const void *blob, uint32_t size)
 {
     const uint8_t *b = (const uint8_t *)blob;
     uint8_t *d = (uint8_t *)&st;
-    const uint32_t body = (uint32_t)offsetof(H1State, steps);   /* where versions 4, 5 and 6 part ways */
     uint32_t magic = 0, was, n;
     int i, j, pg, a;
     if (!blob)
         return -1;
-    was = size == sizeof st ? H1_VERSION : size == H1_VERSION_5_SIZE ? 5u : size == H1_VERSION_4_SIZE ? 4u : 0u;
+    was = size == sizeof st ? H1_VERSION : size == H1_VERSION_6_SIZE ? 6u : size == H1_VERSION_5_SIZE ? 5u
+        : size == H1_VERSION_4_SIZE ? 4u : 0u;
     if (!was)
         return -1;
     for (n = 0; n < 4u; n++)
@@ -79,24 +94,36 @@ int h1_state_load(const void *blob, uint32_t size)
         for (n = 0; n < sizeof st; n++)
             d[n] = b[n];
     else {
-        /* An older state: the same up to the steps. A step held four notes there, with in version 5 the
-         * part of each after all the notes; LAYERS came with version 5; and an instrument's algorithms
-         * shared four knobs, so every algorithm starts from where those stood and nothing sounds
-         * different after the update. */
-        const uint8_t *notes = b + body, *parts = was >= 5u ? notes + NSTEP * H1_OLD_SNOTE : 0;
-        for (n = 0; n < body; n++)
-            d[n] = b[n];
-        for (i = 0; i < NSTEP; i++)
-            for (j = 0; j < NSNOTE; j++) {
-                st.steps[i][j] = j < (int)H1_OLD_SNOTE ? notes[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
-                st.step_part[i][j] = parts && j < (int)H1_OLD_SNOTE ? parts[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
-            }
-        if (was < 5u)
-            st.seq[6] = 0;
-        for (i = 0; i < NINST; i++)
-            for (a = 0; a < NALGO; a++)
-                for (j = 0; j < 4; j++)
-                    st.knob[i][a][j] = st.ip[i].knob0[j];
+        /* An older state, of fourteen instruments: each of its tables goes to the start of this one's, and
+         * the instruments that came after are as new. Before version 6 a step held four notes, with in
+         * version 5 the part of each after all the notes; LAYERS came with version 5; and an instrument's
+         * algorithms shared four knobs, so every algorithm starts from where those stood and nothing
+         * sounds different after the update. */
+        const uint8_t *notes = b + offsetof(H1Old, steps);
+        bytes(d, b, (uint32_t)offsetof(H1Old, ip));
+        bytes(st.ip, b + offsetof(H1Old, ip), H1_OLD_NINST * (uint32_t)sizeof(InstParams));
+        bytes(st.ink, b + offsetof(H1Old, ink), H1_OLD_NINST * 3u);
+        bytes(st.rsv, b + offsetof(H1Old, rsv), (uint32_t)sizeof st.rsv);
+        if (was == 6u) {
+            bytes(st.steps, notes, (uint32_t)sizeof st.steps);
+            bytes(st.step_part, b + offsetof(H1Old, step_part), (uint32_t)sizeof st.step_part);
+            bytes(st.knob, b + offsetof(H1Old, knob), H1_OLD_NINST * NALGO * 4u);
+        } else {
+            const uint8_t *parts = was >= 5u ? notes + NSTEP * H1_OLD_SNOTE : 0;
+            for (i = 0; i < NSTEP; i++)
+                for (j = 0; j < NSNOTE; j++) {
+                    st.steps[i][j] = j < (int)H1_OLD_SNOTE ? notes[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
+                    st.step_part[i][j] = parts && j < (int)H1_OLD_SNOTE ? parts[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
+                }
+            if (was < 5u)
+                st.seq[6] = 0;
+            for (i = 0; i < (int)H1_OLD_NINST; i++)
+                for (a = 0; a < NALGO; a++)
+                    for (j = 0; j < 4; j++)
+                        st.knob[i][a][j] = st.ip[i].knob0[j];
+        }
+        for (i = (int)H1_OLD_NINST; i < NINST; i++)
+            inst_default(i);
         st.version = H1_VERSION;
     }
     if (st.inst >= NINST) st.inst = 0;

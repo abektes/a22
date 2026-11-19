@@ -174,14 +174,15 @@ int main(void)
      * notes and the part of each */
     {
         static uint8_t blob5[sizeof(H1State)];
-        const size_t body = offsetof(H1State, steps);
+        const size_t body = offsetof(H1Old, steps);
         int j, ok = 1;
         s->version = 5;
         for (i = 0; i < NINST; i++)
             for (a = 0; a < 4; a++)
                 s->ip[i].knob0[a] = (uint8_t)(10 + i * 5 + a);
         memset(blob5, 0xFF, sizeof blob5);       /* (its padding, and what is past its end, may hold anything) */
-        memcpy(blob5, blob, body);
+        memcpy(blob5, blob, offsetof(H1Old, ip) + H1_OLD_NINST * sizeof(InstParams));   /* (fourteen instruments then) */
+        memcpy(blob5 + offsetof(H1Old, ink), s->ink, H1_OLD_NINST * 3u);
         memset(blob5 + body, 0, NSTEP * 8u);
         for (j = 0; j < 4; j++) {                /* step 3: two notes; step 63: four */
             blob5[body + 63u * 4u + (size_t)j] = (uint8_t)(50 + j);
@@ -194,7 +195,7 @@ int main(void)
         h1_init(44100);
         CHECK(H1_VERSION_5_SIZE == 920u, "a version 5 state is 920 bytes");
         CHECK(h1_state_load(blob5, (uint32_t)H1_VERSION_5_SIZE) == 0, "a version 5 state loads");
-        for (i = 0; i < NINST; i += 5)
+        for (i = 0; i < (int)H1_OLD_NINST; i += 5)
             for (a = 0; a < NALGO; a++) {
                 to(i, a);
                 CHECK(are(10 + i * 5, 11 + i * 5, 12 + i * 5, 13 + i * 5), "every algorithm starts from the instrument's old knobs");
@@ -213,6 +214,50 @@ int main(void)
         CHECK(h1_state_load(blob5, (uint32_t)sizeof blob5) != 0, "a version 5 state of this version's size is refused");
         blob5[4] = 6;
         CHECK(h1_state_load(blob5, (uint32_t)H1_VERSION_5_SIZE) != 0, "and this version's of a version 5 state's size");
+    }
+
+    /* the state of fourteen instruments (version 6, 1880 bytes): everything in it comes back, and the two
+     * instruments that came after it are as new */
+    {
+        static uint8_t blob6[sizeof(H1Old) + 8];
+        int ok = 1, k;
+        s->version = 6;
+        for (i = 0; i < (int)H1_OLD_NINST; i++)
+            for (a = 0; a < NALGO; a++)
+                for (k = 0; k < 4; k++)
+                    s->knob[i][a][k] = (uint8_t)((i * 7 + a * 3 + k) % 101);
+        s->ip[13].algo = 5;
+        s->ink[13][1] = 77;
+        s->steps[9][7] = 64;
+        s->step_part[9][7] = PART(13, 5);
+        memset(blob6, 0xFF, sizeof blob6);
+        memcpy(blob6 + 1, blob, offsetof(H1Old, ip) + H1_OLD_NINST * sizeof(InstParams));
+        memcpy(blob6 + 1 + offsetof(H1Old, ink), s->ink, H1_OLD_NINST * 3u);
+        memcpy(blob6 + 1 + offsetof(H1Old, rsv), s->rsv, sizeof s->rsv);
+        memcpy(blob6 + 1 + offsetof(H1Old, steps), s->steps, sizeof s->steps);
+        memcpy(blob6 + 1 + offsetof(H1Old, step_part), s->step_part, sizeof s->step_part);
+        memcpy(blob6 + 1 + offsetof(H1Old, knob), s->knob, H1_OLD_NINST * NALGO * 4u);
+        h1_init(44100);
+        st.knob[14][2][1] = 3;                   /* (what is there now must not show through) */
+        st.ip[15].algo = 6;
+        CHECK(H1_VERSION_6_SIZE == 1880u, "a version 6 state is 1880 bytes");
+        CHECK(h1_state_load(blob6 + 1, 1880u) == 0, "a version 6 state loads, from an odd address");
+        for (i = 0; i < (int)H1_OLD_NINST; i++)
+            for (a = 0; a < NALGO; a++)
+                for (k = 0; k < 4; k++)
+                    ok &= st.knob[i][a][k] == (uint8_t)((i * 7 + a * 3 + k) % 101);
+        CHECK(ok, "every algorithm of the fourteen has its knobs");
+        CHECK(st.ip[13].algo == 5 && st.ink[13][1] == 77 && st.steps[9][7] == 64 && st.step_part[9][7] == PART(13, 5),
+              "the last of the fourteen, its ink and a step's eighth note are where they were");
+        ok = st.version == H1_VERSION;
+        for (i = (int)H1_OLD_NINST; i < NINST; i++) {
+            ok &= st.ip[i].algo == 0 && st.ink[i][0] == insts[i]->ink[0];
+            for (a = 0; a < NALGO; a++)
+                for (k = 0; k < 4; k++)
+                    ok &= st.knob[i][a][k] == insts[i]->def.knob0[k];
+        }
+        CHECK(ok, "PLINK and VIBE come up as new");
+        CHECK(h1_state_load(blob6 + 1, 1879u) != 0, "a version 6 state of the wrong size is refused");
     }
 
     /* ---- hold SAVE: the algorithm, then the instrument, then everything ---- */
