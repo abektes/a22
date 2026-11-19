@@ -87,7 +87,8 @@ static uint32_t loop_take(int inst, const int *ka, const int *kb)
     go(100);
     to(inst, 1);
     set4(ka[0], ka[1], ka[2], ka[3]);
-    pair();
+    if (!h1_layers())                        /* (on from the start since 0.2.2) */
+        pair();
     tap(H1_BTN_REC);
     note(5, 200);
     go(300);

@@ -10,6 +10,7 @@
 #define NSNOTE 8                 /* notes a step holds, at most */
 #define NINST 14
 #define NALGO 8
+#define NLAYER 16                /* recorded layers, each with its own settings */
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
 #define SCOPE_N 512
@@ -35,6 +36,9 @@ typedef struct Voice {
     uint8_t idx;
     uint8_t part;                /* the instrument and algorithm it sounds with (PART), 0 = never used */
     uint8_t seq;                 /* 1: the sequencer started it (LAYERS), and the sequencer lets it go */
+    uint8_t lay;                 /* the recorded layer it sounds as (1..NLAYER, with its own settings), 0 = none */
+    uint8_t vel;                 /* the note's velocity, 1..127 (the panel's keys: 127) */
+    uint8_t declick;             /* 1: it was taken over while it still sounded (voice_on_part) */
     uint32_t serial;             /* counts note-ons: the picture sees a new note when it changes */
     uint32_t stamp;              /* allocation order */
     f32 pitch;                   /* MIDI note, gliding, before bends */
@@ -48,6 +52,9 @@ typedef struct Voice {
     uint32_t u[3];
     uint32_t q[4];
     SmpR r[2];
+    f32 vamp, vk, vlp[2];        /* velocity: the gain, the low-pass's coefficient (1: open) and its two poles */
+    f32 last, tail;              /* the last sample it put in the mix (gain in, before the pan), and what is
+                                  * left of a jump when it was taken over, dying away */
 } Voice;
 
 /* ---- saved parameters ----------------------------------------------------------------- */
@@ -67,13 +74,29 @@ typedef struct InstParams {
 #define IP_CUT 0
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 6u
+#define H1_VERSION 8u            /* (7 is kept for the drum screens' state, a branch of its own) */
 /* Versions 4 and 5 are the same as this one up to steps. There a step held four notes, not eight
  * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an
  * instrument's algorithms shared InstParams.knob0. h1_state_load reads both. */
 #define H1_OLD_SNOTE 4u
 #define H1_VERSION_4_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
 #define H1_VERSION_5_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
+/* Version 6 is this one up to the knob table: the steps' velocities, their layers and the layers came
+ * with version 8. */
+#define H1_VERSION_6_SIZE ((offsetof(H1State, step_vel) + 3u) & ~3u)
+
+/* A recorded layer: what was played in one take on one part (an instrument and its algorithm), and that
+ * part's settings as they stood when the take ended: its four knobs, ENV and LFO. While the take is
+ * open it follows the instrument as it is played; once it is closed it sounds as it was left, whatever
+ * is done to the instrument after. part 0: the slot is free. */
+typedef struct Layer {
+    uint8_t part;
+    uint8_t open;                /* 1 while its take goes on (never 1 in a saved state that is loaded) */
+    uint8_t knob[4];
+    uint8_t env[4];
+    uint8_t lfo[4];
+    uint8_t rsv[2];
+} Layer;
 
 typedef struct H1State {
     uint32_t magic;
@@ -90,6 +113,9 @@ typedef struct H1State {
     uint8_t steps[NSTEP][NSNOTE];       /* the step pattern: up to eight notes a step, note + 1, 0 = none */
     uint8_t step_part[NSTEP][NSNOTE];   /* the part each of those notes was played on (PART), 0 = none kept */
     uint8_t knob[NINST][NALGO][4];   /* 0..100: the four live modulations of the home screen, each algorithm its own */
+    uint8_t step_vel[NSTEP][NSNOTE];    /* each step note's velocity, 0 = 127 (version 8) */
+    uint8_t step_lay[NSTEP][NSNOTE];    /* each step note's layer, 0 = none (it follows its part as it is now) */
+    Layer layer[NLAYER];
 } H1State;
 
 /* the four home knobs of an instrument's algorithm, and of the algorithm it is on */
@@ -212,6 +238,17 @@ int seq_accent(int tick_in_bar);                 /* 2 the bar's first beat, 1 an
 
 void eng_init(uint32_t sample_rate);
 void eng_post(int type, int a);                  /* main loop -> audio, lock-free */
+void eng_post_note(int on, int note, int vel, int from_midi);   /* a note, with its velocity (1..127) and whether it
+                                                  * came in over MIDI (then it is not sent out again) */
+/* MIDI out (h1_midi_out): the engine calls it from inside the render, the UI from the main loop */
+extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
+/* the loop, saved apart from the state (h1_loop): main loop */
+uint32_t eng_loop_save(uint8_t *dst, uint32_t max);
+int eng_loop_load(const uint8_t *b, uint32_t n);
+uint32_t eng_loop_gen(void);                     /* changes whenever what is recorded in the loop changes */
+int eng_loop_quiet(void);                        /* 1: nothing is recording or playing (the loop may be written) */
+int eng_layer_count(void);                       /* main loop: layers the recorded notes are on (LAYERS) */
+int eng_layer_rec(void);                         /* main loop: the layer a take is going into, 0: none */
 void eng_render(int32_t *lr, uint32_t n);
 void eng_snapshot(Vis *vis);                     /* main loop: copy what the picture needs */
 uint32_t eng_sounding_lo(void);                  /* notes sounding, as key bits for the LEDs */
