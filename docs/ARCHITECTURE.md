@@ -164,8 +164,9 @@ At the end of the mix a limiter with one control block of look-ahead keeps every
 that follows used to bend every peak. Under 0.7 it does nothing.
 
 MIDI out (`h1_midi_out`): what the keys, the arpeggiator and the sequencer play, on channel 1, and
-CC 20-23 as the home knobs turn. Never a note that came in over MIDI, so a computer that echoes its
-input does not loop. The device sends it over USB; the FM-1's TRS jack is an input only.
+CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI, so a computer that
+echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
+(app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack is an input only.
 
 The saved state is version 8 (version 7 is the drum screens' branch): version 6 and, after the knob
 table, each step note's velocity and layer and the sixteen layers. A version 6 state (1880 bytes)

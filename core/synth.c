@@ -647,7 +647,7 @@ static void loop_record(int note, int on, int vel)
         rec_lay[note] = (uint8_t)lay;
     } else {
         part = rec_part[note] ? rec_part[note] : live_part();
-        lay = rec_lay[note];
+        lay = layer_of(rec_lay[note], part);     /* (a note-on from an earlier take: its layer may be another's now) */
     }
     if (on && q > 0.0f) {
         t = (f32)ifloor(t / q + 0.5f) * q;
@@ -940,11 +940,13 @@ static void live_note(int note, int on, int vel, int from_midi)
         phys_down--;
 }
 
-static void panic(void)
+static void panic(int from_midi)
 {
     int i;
-    if (eng_midi_fn)
-        eng_midi_fn(0xB0u, 123u, 0u);            /* (all notes off, out too) */
+    if (eng_midi_fn && !from_midi)               /* (all notes off, out too; not back to where a CC 123 came from:
+                                                  * a computer that passes MIDI through would send it back, and
+                                                  * the two would trade it for ever) */
+        eng_midi_fn(0xB0u, 123u, 0u);
     unlatch();
     loop_release();
     step_release();
@@ -965,7 +967,7 @@ static void handle(uint32_t e)
     switch (type) {
     case EV_NOTE_ON: live_note(a & 127, 1, vel ? vel : 127, midi); break;
     case EV_NOTE_OFF: live_note(a & 127, 0, 0, midi); break;
-    case EV_PANIC: panic(); break;
+    case EV_PANIC: panic(a & 1); break;
     case EV_UNLATCH: unlatch(); phys_down = 0; break;
     case EV_INST:
         if (a < NINST && a != cur_i) {
@@ -1921,6 +1923,7 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
     len = get16(b + 8);
     if (ne > NLEV || n < LOOP_HEAD + ne * 8u || len < 24u || len > 8u * 480u)
         return -1;
+    loop_release();                              /* (what the loop it replaces held: let go) */
     for (i = 0; i < ne; i++) {
         const uint8_t *e = b + LOOP_HEAD + i * 8u;
         uint32_t tick = get16(e);

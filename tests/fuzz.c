@@ -56,6 +56,17 @@ static void blit(int x, int y, int w, int h)
 
 extern uint32_t h1_fuzz_nan;                 /* core/synth.c, in this build: samples that were not numbers */
 
+/* MIDI out (h1_midi_out): every message a well-formed one on channel 1, notes and CC 20-23 and 123 only */
+static volatile uint32_t midi_outs;
+static void midi_out_check(uint8_t status, uint8_t d1, uint8_t d2)
+{
+    int ok = d1 < 128 && d2 < 128 && ((status == 0x90 && d2 >= 1) || (status == 0x80 && d2 == 0) ||
+             (status == 0xB0 && ((d1 >= 20 && d1 <= 23) || (d1 == 123 && d2 == 0))));
+    if (!ok)
+        die("a MIDI message out that is not one", status, d1, d2, 0);
+    midi_outs++;
+}
+
 static uint32_t now_ms;
 static uint32_t keys_down, btns_down;
 
@@ -151,8 +162,14 @@ static void poke(int with_sound)
     } else if (r < 75) {                                     /* an encoder: a click, or a spin */
         static const int D[] = {1, -1, 1, -1, 2, -3, 7, -11, 40, -64, 300, -300};
         h1_encoder(below(H1_NENC), D[below(12)]);
-    } else if (r < 85) {                                     /* MIDI, any bytes */
+    } else if (r < 80) {                                     /* MIDI, any bytes */
         h1_midi((uint8_t)(0x80 + below(128)), (uint8_t)below(256), (uint8_t)below(256));
+    } else if (r < 85) {                                     /* a MIDI keyboard: notes at any velocity, CC 123 */
+        int nt = 36 + below(60);
+        if (below(10) == 0)
+            h1_midi(0xB0, 123, 0);
+        else
+            h1_midi(below(3) ? 0x90 : 0x80, (uint8_t)nt, (uint8_t)below(128));
     } else if (r < 90) {                                     /* a slider in the simulator, any value */
         h1_control_set(below(H1_NENC), below(600) - 200);
     } else if (r < 93) {                                     /* everything let go */
@@ -220,6 +237,7 @@ static void fresh(uint32_t t0)
     default: h1_two_cores(0, 0); break;
     }
     h1_while_drawing(pipe_poll);
+    h1_midi_out(midi_out_check);
     have_want = 0;
     piped = (int)(rnd() & 1u);                   /* half the time as the device sends, half all at once */
     now_ms = t0;
@@ -227,6 +245,7 @@ static void fresh(uint32_t t0)
 }
 
 /* ---- 1. any saved state, from an odd address ----------------------------------------------- */
+static int loops_taken;
 static void part_state(int rounds)
 {
     static uint8_t odd[4096 + 8];
@@ -275,6 +294,25 @@ static void part_state(int rounds)
                 die("a version 6 state was refused, or came back with LAYERS off", n, 0, 0, 0);
         } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
+        if (n % 2 == 0) {                                    /* and a saved loop: any bytes after its head, from an
+                                                              * odd address (the state's layers are what it names) */
+            static uint8_t lp[H1_LOOP_MAX + 8];
+            uint32_t ln = 12u + 8u * (uint32_t)below(400), j;
+            if (ln > H1_LOOP_MAX + 4u)
+                ln = H1_LOOP_MAX + 4u;
+            for (j = 0; j < ln; j++)
+                lp[3 + j] = (uint8_t)rnd();
+            lp[3] = 'H'; lp[4] = '1'; lp[5] = 'L'; lp[6] = 'P'; lp[7] = 1;
+            if (below(4)) {                                  /* a count that fits, a length in range (mostly) */
+                uint32_t ne = (ln - 12u) / 8u, len = 24u + (uint32_t)below(3840 - 24 + 1);
+                lp[9] = (uint8_t)ne; lp[10] = (uint8_t)(ne >> 8);
+                lp[11] = (uint8_t)len; lp[12] = (uint8_t)(len >> 8);
+            }
+            if (below(8) == 0)
+                lp[3 + (uint32_t)below((int)ln)] ^= (uint8_t)(1u << below(8));
+            if (h1_loop_load(lp + 3, below(4) ? ln : ln - (uint32_t)below(9)) == 0)
+                loops_taken++;
+        }
         for (k = 0; k < 6; k++)
             frame(16, 1);
         h1_button(H1_BTN_PLAY, 1);                           /* whatever the pattern holds, play it */
@@ -286,6 +324,8 @@ static void part_state(int rounds)
         for (k = 0; k < 60; k++)
             poke(1);
     }
+    if (rounds >= 20 && !loops_taken)
+        die("no saved loop was ever taken: the loop part tested nothing", rounds, 0, 0, 0);
 }
 
 /* ---- 2. the panel, any way at all ------------------------------------------------------------ */
@@ -308,6 +348,33 @@ static void part_panel(int steps)
             poke(1);
             if (n % 4 == 0)
                 frame(16 + (uint32_t)(n % 3 == 0), 1);
+        }
+        {                                                    /* the loop as it would be saved, loaded again: the same */
+            static uint8_t a[H1_LOOP_MAX + 4], b[H1_LOOP_MAX + 4];
+            uint32_t na, nb;
+            const void *p = h1_loop(&na);
+            if (na > H1_LOOP_MAX)
+                die("a saved loop longer than its room", (int)na, 0, 0, 0);
+            memcpy(a + 1, p, na);
+            if (na) {
+                if (h1_loop_load(a + 1, na) != 0)
+                    die("a loop it saved itself was refused", (int)na, 0, 0, 0);
+                p = h1_loop(&nb);
+                memcpy(b, p, nb);
+                if (nb != na || memcmp(a + 1, b, na)) {
+                    uint32_t q;
+                    for (q = 0; q < na; q++)
+                        if (a[1 + q] != b[q])
+                            fprintf(stderr, "byte %u (event %d field %d): %u -> %u\n", q, (int)(q - 12) / 8,
+                                    (int)(q - 12) % 8, a[1 + q], b[q]);
+                }
+                if (nb != na || memcmp(a + 1, b, na))
+                    die("a loop saved, loaded and saved again changed", (int)na, (int)nb, 0, 0);
+                h1_button(H1_BTN_PLAY, 1);
+                h1_button(H1_BTN_PLAY, 0);
+                for (n = 0; n < 30; n++)
+                    frame(16, 1);
+            }
         }
     }
 }
