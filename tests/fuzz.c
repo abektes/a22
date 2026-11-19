@@ -261,8 +261,8 @@ static void part_state(int rounds)
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
         if (n % 5 == 4) {                                    /* the state before LAYERS: version 4, 664 bytes */
             odd[1 + 4] = 4;
-            if (h1_state_load(odd + 1, 664u) != 0 || h1_layers())
-                die("a version 4 state was refused, or came back with LAYERS on", n, h1_layers(), 0, 0);
+            if (h1_state_load(odd + 1, 664u) != 0 || !h1_layers())
+                die("a version 4 state was refused, or came back with LAYERS off", n, h1_layers(), 0, 0);
         } else if (n % 5 == 2) {                             /* the one before a step's eight notes and each algorithm's
                                                               * knobs: version 5, 920 bytes */
             odd[1 + 4] = 5;
@@ -270,8 +270,12 @@ static void part_state(int rounds)
                 die("a version 5 state was refused", n, 0, 0, 0);
         } else if (n % 5 == 1) {                             /* the one of fourteen instruments: version 6, 1880 bytes */
             odd[1 + 4] = 6;
-            if (h1_state_load(odd + 1, 1880u) != 0)
-                die("a version 6 state was refused", n, 0, 0, 0);
+            if (h1_state_load(odd + 1, 1880u) != 0 || !h1_layers())
+                die("a version 6 state was refused, or came back with LAYERS off", n, 0, 0, 0);
+        } else if (n % 5 == 3) {                             /* and that with velocities and layers: version 8, 3160 bytes */
+            odd[1 + 4] = 8;
+            if (h1_state_load(odd + 1, 3160u) != 0)
+                die("a version 8 state was refused", n, 0, 0, 0);
         } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
         for (k = 0; k < 6; k++)
@@ -295,13 +299,13 @@ static void part_panel(int steps)
     for (inst = 0; inst < h1_instrument_count(); inst++) {
         fresh(inst & 1 ? 0xFFFF0000u : 0u);
         h1_encoder(H1_ENC_PRESET, inst);
-        if (inst & 2) {                                      /* half of them with LAYERS on from the start */
+        if (inst & 2) {                                      /* half of them with LAYERS off from the start */
             h1_button(H1_BTN_SEQ, 1);
             h1_button(H1_BTN_REC, 1);
             h1_button(H1_BTN_REC, 0);
             h1_button(H1_BTN_SEQ, 0);
-            if (!h1_layers())
-                die("SEQ and REC together did not turn LAYERS on", inst, 0, 0, 0);
+            if (h1_layers())
+                die("SEQ and REC together did not turn LAYERS off", inst, 0, 0, 0);
         }
         for (n = 0; n < steps; n++) {
             poke(1);

@@ -54,6 +54,7 @@ void *memmove(void *d, const void *s, size_t_ n)
 #define NB 14                            /* button labels: FX SEL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+ */
 #define NE 8                             /* knob roles: SELECT ALGORITHM PRESETS K1..K4, then MASTER */
 #define FLASH_SIZE 0x100000u
+#define LOOP_AT 0x8000u                  /* (the state from 0, the loop from here) */
 #define ABI 6u
 
 typedef struct {
@@ -145,7 +146,7 @@ static void state_out(void)
 {
     uint32_t n, i;
     const uint8_t *s = (const uint8_t *)h1_state(&n);
-    if (n > FLASH_SIZE - 16u)
+    if (n > LOOP_AT - 16u)
         return;
     put32(image, MAGIC);
     put32(image + 4, n);
@@ -155,12 +156,31 @@ static void state_out(void)
     h1_state_saved();
     flash_writes++;
 }
+/* the loop recorder's loop, as the device keeps it in a store object of its own: here at LOOP_AT */
+static void loop_out(void)
+{
+    uint32_t n, i;
+    const uint8_t *s = (const uint8_t *)h1_loop(&n);
+    if (!n || n > 0x8000u - 16u)
+        return;
+    put32(image + LOOP_AT, MAGIC ^ 0x4C4F4F50u);
+    put32(image + LOOP_AT + 4, n);
+    for (i = 0; i < n; i++)
+        image[LOOP_AT + 8 + i] = s[i];
+    put32(image + LOOP_AT + 8 + n, crc32(image + LOOP_AT, 8 + n));
+    h1_loop_saved();
+    flash_writes++;
+}
 static void state_in(void)
 {
     uint32_t n = get32(image + 4);
-    if (get32(image) != MAGIC || n > FLASH_SIZE - 16u || get32(image + 8 + n) != crc32(image, 8 + n))
+    if (get32(image) != MAGIC || n > LOOP_AT - 16u || get32(image + 8 + n) != crc32(image, 8 + n))
         return;
     h1_state_load(image + 8, n);         /* refused by the core unless it is this version's or an older one it knows */
+    n = get32(image + LOOP_AT + 4);      /* then the loop, which the state's load empties */
+    if (get32(image + LOOP_AT) == (MAGIC ^ 0x4C4F4F50u) && n <= 0x8000u - 16u &&
+        get32(image + LOOP_AT + 8 + n) == crc32(image + LOOP_AT, 8 + n))
+        h1_loop_load(image + LOOP_AT + 8, n);
 }
 
 static int c_flash_stage(const uint8_t *bytes, uint32_t n)
@@ -176,6 +196,8 @@ static int c_flash_sync(void)
 {
     if (booted && h1_state_dirty())
         state_out();
+    if (booted && h1_loop_dirty())
+        loop_out();
     return 1;
 }
 
@@ -304,6 +326,8 @@ static void c_idle(void)
     if (!booted) return;
     if (h1_state_dirty())
         state_out();                     /* the device would write its store now */
+    else if (h1_loop_dirty())
+        loop_out();
 }
 #define CHUNK 512u
 static int32_t abuf[CHUNK * 2];
@@ -339,7 +363,11 @@ static void put_str(char *buf, uint32_t n, const char *s)
     buf[i] = 0;
 }
 static void c_ui_info(char *buf, uint32_t n) { put_str(buf, n, booted ? h1_instrument_name(h1_instrument()) : "h1"); }
-static void c_shutdown(void) { if (booted && h1_state_dirty()) state_out(); }
+static void c_shutdown(void)
+{
+    if (booted && h1_state_dirty()) state_out();
+    if (booted && h1_loop_dirty()) loop_out();
+}
 static int c_halted(void) { return 0; }
 
 static const core_t core = {

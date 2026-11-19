@@ -428,6 +428,6 @@ const InstDef inst_vibe = {
     {"TUNE", "DECAY", "WIND", "STORM"},
     {"WORLD", "HANDS", "HALL", "SHOP", "CHIME", "TAPE", "TINY", "DICE"},
     {{50, 50, 20, 15}, 0, {0, 50, 100, 80}, {0, 55, 0, 0}, {0, 3, 18, 50}, {0, 3, 1, 60}, {0, 0, 0}},
-    1.3f,
+    0.7f,
     vibe_block, vibe_note, vibe_render, 0, vibe_draw,
 };

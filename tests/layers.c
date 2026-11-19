@@ -99,7 +99,9 @@ int main(void)
     h1_encoder(H1_ENC_ALGO, 2);
     go(100);
     A = part_now();
-    CHECK(!h1_layers(), "LAYERS is off on a new h1");
+    CHECK(h1_layers(), "LAYERS is on on a new h1 (since 0.2.2)");
+    pair();
+    CHECK(!h1_layers(), "SEQ and REC together turn it off");
     pair();
     CHECK(h1_layers(), "SEQ and REC together turn LAYERS on");
     CHECK(h1_page() == 0, "the pair opens no page");
@@ -222,16 +224,16 @@ int main(void)
     }
     h1_init(44100);
     CHECK(h1_state_load(blob4 + 0, (uint32_t)H1_VERSION_4_SIZE) == 0, "a version 4 state loads");
-    CHECK(!h1_layers(), "a version 4 state has LAYERS off");
+    CHECK(h1_layers(), "a version 4 state comes up with LAYERS on (0.2.2 turns it on)");
     CHECK(h1_state_load(blob4, (uint32_t)H1_VERSION_4_SIZE - 1u) != 0, "a state of the wrong size is refused");
     go(200);
     tap(H1_BTN_PLAY);
-    n = listen(6000);
-    CHECK(n == 0 && played[part_now()] && only(played, part_now(), -1), "its steps play on the instrument in hand");
-    pair();                                      /* notes with no part kept belong to whatever is in hand */
-    go(300);
     listen(6000);
     CHECK(only(seen, part_now(), -1) && only(played, -1, -1), "with LAYERS on, steps that kept no part follow the hand");
+    pair();                                      /* off: everything through the hand's instrument */
+    go(300);
+    n = listen(6000);
+    CHECK(n == 0 && played[part_now()] && only(played, part_now(), -1), "with LAYERS off its steps play on the instrument in hand");
 
     printf("layers: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

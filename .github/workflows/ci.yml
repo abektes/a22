@@ -91,6 +91,22 @@ jobs:
             app/build/h1.sym
             app/build/firmware.json
           if-no-files-found: error
+      # The next release, built as it will be (identity FM-1_481XXYYZZ, from the newest heading of CHANGELOG.md)
+      # with "-test" on its name, to try on an FM-1 before the tag. Not attested and not a release: The Firmware
+      # Hub only takes releases.
+      - name: Build the next release's test package
+        run: |
+          version=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' CHANGELOG.md | head -1)
+          test -n "$version"
+          ./build.sh --release "$version-test"
+          sha256sum "app/build/h1-$version-test.fwsc"
+          mkdir -p build/test-package
+          cp "app/build/h1-$version-test.fwsc" app/build/firmware.json build/test-package/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: h1-release-test
+          path: build/test-package/
+          if-no-files-found: error
       # The same firmware without the chip's second core (FM1B_CPU2=0: the first core renders every voice). Not what
       # a release is built as: kept beside the normal build for an FM-1 whose second core misbehaves, and for timing
       # against it.

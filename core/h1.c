@@ -33,6 +33,7 @@ static void defaults(void)
     st.seq[1] = 1;                               /* 2 bars */
     st.seq[3] = 1;                               /* the loop snaps to 1/16 */
     st.seq[4] = 1;                               /* steps of 1/16 */
+    st.seq[6] = 1;                               /* LAYERS: record, change instrument, record over it */
     for (i = 0; i < NINST; i++)
         inst_default(i);
 }
@@ -64,7 +65,8 @@ const void *h1_state(uint32_t *size)
 typedef char v4_is_664_bytes[H1_VERSION_4_SIZE == 664u ? 1 : -1];   /* what the FM-1s out there hold: these */
 typedef char v5_is_920_bytes[H1_VERSION_5_SIZE == 920u ? 1 : -1];   /* must not move with the layout */
 typedef char v6_is_1880_bytes[H1_VERSION_6_SIZE == 1880u ? 1 : -1];
-typedef char state_fits_the_store[sizeof(H1State) <= 2048u ? 1 : -1];   /* (app.c's buffer for it) */
+typedef char v8_is_3160_bytes[H1_VERSION_8_SIZE == 3160u ? 1 : -1];
+typedef char state_fits_a_store_object[sizeof(H1State) <= 3840u ? 1 : -1];
 typedef char old_head_is_the_same[offsetof(H1Old, ip) == offsetof(H1State, ip) ? 1 : -1];
 
 static void bytes(void *to, const uint8_t *from, uint32_t n)
@@ -82,8 +84,8 @@ int h1_state_load(const void *blob, uint32_t size)
     int i, j, pg, a;
     if (!blob)
         return -1;
-    was = size == sizeof st ? H1_VERSION : size == H1_VERSION_6_SIZE ? 6u : size == H1_VERSION_5_SIZE ? 5u
-        : size == H1_VERSION_4_SIZE ? 4u : 0u;
+    was = size == sizeof st ? H1_VERSION : size == H1_VERSION_8_SIZE ? 8u : size == H1_VERSION_6_SIZE ? 6u
+        : size == H1_VERSION_5_SIZE ? 5u : size == H1_VERSION_4_SIZE ? 4u : 0u;
     if (!was)
         return -1;
     for (n = 0; n < 4u; n++)
@@ -95,16 +97,18 @@ int h1_state_load(const void *blob, uint32_t size)
             d[n] = b[n];
     else {
         /* An older state, of fourteen instruments: each of its tables goes to the start of this one's, and
-         * the instruments that came after are as new. Before version 6 a step held four notes, with in
-         * version 5 the part of each after all the notes; LAYERS came with version 5; and an instrument's
-         * algorithms shared four knobs, so every algorithm starts from where those stood and nothing
-         * sounds different after the update. */
+         * the instruments that came after are as new. Before version 8 a step's notes have no velocity
+         * (they play at full, as they did) and no layer (they follow their part, as they did), and LAYERS
+         * comes on: recording over a loop on another instrument is what h1 does now. Before version 6 a
+         * step held four notes, with in version 5 the part of each after all the notes, and an
+         * instrument's algorithms shared four knobs, so every algorithm starts from where those stood and
+         * nothing sounds different after the update. */
         const uint8_t *notes = b + offsetof(H1Old, steps);
         bytes(d, b, (uint32_t)offsetof(H1Old, ip));
         bytes(st.ip, b + offsetof(H1Old, ip), H1_OLD_NINST * (uint32_t)sizeof(InstParams));
         bytes(st.ink, b + offsetof(H1Old, ink), H1_OLD_NINST * 3u);
         bytes(st.rsv, b + offsetof(H1Old, rsv), (uint32_t)sizeof st.rsv);
-        if (was == 6u) {
+        if (was >= 6u) {
             bytes(st.steps, notes, (uint32_t)sizeof st.steps);
             bytes(st.step_part, b + offsetof(H1Old, step_part), (uint32_t)sizeof st.step_part);
             bytes(st.knob, b + offsetof(H1Old, knob), H1_OLD_NINST * NALGO * 4u);
@@ -115,12 +119,19 @@ int h1_state_load(const void *blob, uint32_t size)
                     st.steps[i][j] = j < (int)H1_OLD_SNOTE ? notes[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
                     st.step_part[i][j] = parts && j < (int)H1_OLD_SNOTE ? parts[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
                 }
-            if (was < 5u)
-                st.seq[6] = 0;
             for (i = 0; i < (int)H1_OLD_NINST; i++)
                 for (a = 0; a < NALGO; a++)
                     for (j = 0; j < 4; j++)
                         st.knob[i][a][j] = st.ip[i].knob0[j];
+        }
+        if (was >= 8u) {
+            bytes(st.step_vel, b + offsetof(H1Old, step_vel), (uint32_t)sizeof st.step_vel);
+            bytes(st.step_lay, b + offsetof(H1Old, step_lay), (uint32_t)sizeof st.step_lay);
+            bytes(st.layer, b + offsetof(H1Old, layer), (uint32_t)sizeof st.layer);
+        } else {
+            for (n = (uint32_t)offsetof(H1State, step_vel); n < sizeof st; n++)
+                d[n] = 0;
+            st.seq[6] = 1;
         }
         for (i = (int)H1_OLD_NINST; i < NINST; i++)
             inst_default(i);
@@ -152,8 +163,27 @@ int h1_state_load(const void *blob, uint32_t size)
     if (st.seq[5] > 2) st.seq[5] = CLICK_REC;
     st.seq[6] &= 1;
     for (i = 0; i < NSTEP; i++)
-        for (j = 0; j < NSNOTE; j++)
+        for (j = 0; j < NSNOTE; j++) {
             if (st.steps[i][j] > 128) st.steps[i][j] = 0;
+            if (st.step_vel[i][j] > 127) st.step_vel[i][j] = 127;
+            if (st.step_lay[i][j] > NLAYER) st.step_lay[i][j] = 0;
+        }
+    for (i = 0; i < NLAYER; i++) {
+        Layer *l = &st.layer[i];
+        if (!(l->part & 0x80u) || ((l->part >> 3) & 15u) >= NINST) {
+            uint8_t *p = (uint8_t *)l;
+            for (n = 0; n < sizeof *l; n++)
+                p[n] = 0;
+            continue;
+        }
+        l->open = 0;
+        l->rsv[0] = l->rsv[1] = 0;
+        for (j = 0; j < 4; j++) {
+            if (l->knob[j] > 100) l->knob[j] = 100;
+            if (l->env[j] > 100) l->env[j] = 100;
+            l->lfo[j] = (uint8_t)iclamp(l->lfo[j], page_param(PG_LFO, j)->min, page_param(PG_LFO, j)->max);
+        }
+    }
     eng_init(0);
     ui_init();
     return 0;
@@ -186,3 +216,28 @@ void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b)
     st.ink[inst][1] = g;
     st.ink[inst][2] = b;
 }
+
+/* ---- the loop, saved apart (h1.h) ---------------------------------------------------------------- */
+static uint8_t loop_blob[H1_LOOP_MAX];
+static uint32_t loop_saved_gen, loop_given_gen;
+
+const void *h1_loop(uint32_t *size)
+{
+    uint32_t n;
+    loop_given_gen = eng_loop_gen();
+    n = eng_loop_save(loop_blob, sizeof loop_blob);
+    if (size)
+        *size = n;
+    return loop_blob;
+}
+
+int h1_loop_load(const void *blob, uint32_t size)
+{
+    int r = eng_loop_load((const uint8_t *)blob, size);
+    loop_saved_gen = eng_loop_gen();
+    return r;
+}
+
+int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && eng_loop_quiet(); }
+void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
+void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2)) { eng_midi_fn = fn; }

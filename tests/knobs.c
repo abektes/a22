@@ -87,7 +87,8 @@ static uint32_t loop_take(int inst, const int *ka, const int *kb)
     go(100);
     to(inst, 1);
     set4(ka[0], ka[1], ka[2], ka[3]);
-    pair();
+    if (!h1_layers())                        /* (on from the start since 0.2.2) */
+        pair();
     tap(H1_BTN_REC);
     note(5, 200);
     go(300);
@@ -258,6 +259,25 @@ int main(void)
         }
         CHECK(ok, "PLINK and VIBE come up as new");
         CHECK(h1_state_load(blob6 + 1, 1879u) != 0, "a version 6 state of the wrong size is refused");
+
+        /* and version 8, the same fourteen with each step note's velocity and layer and the layers after */
+        blob6[1 + offsetof(H1Old, version)] = 8;
+        memset(blob6 + 1 + offsetof(H1Old, step_vel), 0, sizeof(H1Old) - offsetof(H1Old, step_vel));
+        blob6[1 + offsetof(H1Old, step_vel) + 9 * NSNOTE + 7] = 40;
+        blob6[1 + offsetof(H1Old, step_lay) + 9 * NSNOTE + 7] = 3;
+        blob6[1 + offsetof(H1Old, layer) + 2 * sizeof(Layer)] = PART(13, 5);
+        blob6[1 + offsetof(H1Old, layer) + 2 * sizeof(Layer) + 2] = 61;
+        h1_init(44100);
+        CHECK(H1_VERSION_8_SIZE == 3160u, "a version 8 state is 3160 bytes");
+        CHECK(h1_state_load(blob6 + 1, 3160u) == 0, "a version 8 state loads");
+        CHECK(st.step_vel[9][7] == 40 && st.step_lay[9][7] == 3 && st.layer[2].part == PART(13, 5) && st.layer[2].knob[0] == 61,
+              "a step note's velocity and layer and a layer's settings are where they were");
+        CHECK(st.knob[13][7][3] == (uint8_t)((13 * 7 + 7 * 3 + 3) % 101) && st.ip[13].algo == 5 && st.steps[9][7] == 64,
+              "with the fourteen's knobs and steps");
+        ok = st.version == H1_VERSION;
+        for (i = (int)H1_OLD_NINST; i < NINST; i++)
+            ok &= st.ip[i].algo == 0 && st.knob[i][3][2] == insts[i]->def.knob0[2];
+        CHECK(ok, "and PLINK and VIBE as new");
     }
 
     /* ---- hold SAVE: the algorithm, then the instrument, then everything ---- */
