@@ -4,6 +4,11 @@ Custom firmware for the M-VAVE FM-1. Fourteen instruments with dynamic visuals. 
 and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
 Works on both the original flash chip and the newer UC25HQ80. Uses fm1-base.
 
+**USB audio and MIDI.** Over one USB cable the FM-1 is an audio input and a MIDI device, so you can
+record h1 straight into a computer or a phone. MIDI in works over USB and the TRS jack: notes play
+at their velocity, and CC 20 to 23 turn the four knobs. MIDI out is USB only, on channel 1: the
+FM-1's TRS jack is an input. See [USB audio and MIDI](#usb-audio-and-midi).
+
 [![Install on The Firmware Hub](https://img.shields.io/badge/install-The%20Firmware%20Hub-c8ff4a?style=for-the-badge)](https://thefirmwarehub.com/firmware/h1/)
 
 The easiest way to install h1 is [its listing on The Firmware Hub](https://thefirmwarehub.com/firmware/h1/):
@@ -120,12 +125,35 @@ That is what the backup is for.
 - **M-VAVE FM-1 only.** Not the SMK-37.
 - **Both flash chips.** h1 saves and updates on the original Puya P25Q80 (JEDEC ID `0x856014`)
   and on the UC25HQ80 (`0xB36014`) fitted to units sold since autumn 2026.
-- MIDI in over USB and the TRS jack: notes, and CC 20 to 23 for the four knobs. No MIDI out.
-- No Bluetooth, and no audio over USB.
+- USB audio out and USB MIDI in and out. MIDI in over the TRS jack too. No MIDI out over TRS, and
+  no Bluetooth. See [USB audio and MIDI](#usb-audio-and-midi).
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the
   instrument, the algorithm, the page and each control's value as it changes. It can't describe
   the pictures.
 - Package identity `FM-1_481`. A release X.Y.Z answers `FM-1_481XXYYZZ`.
+
+## USB audio and MIDI
+
+Plug the FM-1 into a computer or a phone with a USB cable that carries data. It shows up as one
+device with two parts.
+
+**Audio.** An audio input, like a USB microphone. Pick the FM-1 as the input in a DAW, a recording
+app or the system's sound settings, and record. It carries the whole mix at the MASTER volume, the
+same as the speaker. Nothing plays back through it: the FM-1 isn't a sound card for the computer.
+
+**MIDI in,** over USB or the TRS jack, on any channel:
+
+- Notes play the instrument in hand at their velocity, about 20 dB from the softest to the hardest,
+  and darker the softer they are. The FM-1's own keys play at full.
+- CC 20 to 23 turn the four knobs. CC 123 stops every note.
+- The loop and the step sequencer record the velocity and play it back.
+
+**MIDI out,** over USB only, on channel 1:
+
+- The notes of the keys, the arpeggiator and the sequencer, so a DAW can record what you play as
+  MIDI, or h1 can play another synth.
+- CC 20 to 23 as the four knobs turn.
+- A note that came in over MIDI isn't sent back out, so a DAW that echoes its input doesn't loop.
 
 ## Hotkeys
 
@@ -136,14 +164,14 @@ That is what the backup is for.
 | KNOB 1–4 | Home screen: the instrument's four live modulations. Settings page: its four columns |
 | SELECT | Home screen: tempo. Settings page: next page. Writing steps: moves the cursor |
 | FX SEL ENV LFO GLO ARP SEQ | Open that settings page. Press it again, or HOME, to go back |
-| REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it. Step: REC turns step-write on and off, PLAY runs the pattern |
+| REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it, and a stopped loop is kept through a power-off. Step: REC turns step-write on and off, PLAY runs the pattern |
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
 | MASTER | Volume of everything. A ring in the middle of the screen shows it while it turns, marked GLOBAL |
 | hold EDIT, turn MASTER or SELECT | Volume of the instrument in hand. The same ring, marked INSTRUMENT. MASTER sets it to where the knob stands, SELECT moves it a step a click. Holding EDIT alone shows where it stands |
 | hold SEQ | Swap LOOP and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
-| SEQ + REC | LAYERS on and off: with it on, what you record keeps the instrument and algorithm it was played on |
+| SEQ + REC | LAYERS on and off (on by default): with it on, each take keeps its own instrument, algorithm and settings |
 | hold REC | Clear the loop or the pattern. With LAYERS on: clear what was recorded on the instrument in hand, and keep holding to three seconds to clear everything |
 | hold HOME | Silence everything |
 | hold SAVE | Reset the algorithm in hand: its four knobs go back to how they came (everything else saves by itself) |
@@ -167,17 +195,24 @@ that algorithm, not where they were on the one before. The settings pages and th
 volume belong to the instrument: the volume is saved with it, and resetting the instrument puts it
 back to full.
 
-**LAYERS** (press SEQ and REC together) gives the sequencer more than one instrument. With it on,
-every note in the loop or the step pattern goes on sounding on the instrument and algorithm it was
-recorded with: record a bass line on TWANG, turn PRESETS to KOI, and play or record over it. A
-take started over a stopped loop joins it, and nothing is erased until you hold REC. An
-instrument's knobs, ENV, LFO and volume stay its own, so turning them changes its layer (hold EDIT
-and turn MASTER or SELECT to sit one layer under another); the effects are
-those of the instrument in hand; the eight voices are shared by all the layers, and a step holds
-eight notes in all. With the ARP on, the loop records the notes the arpeggiator played. The
-picture is the instrument in hand. With LAYERS off, everything recorded plays on the instrument in
-hand. The SEQ page's top line scrolls through the three sequencer hotkeys and shows which way
-LAYERS is set.
+**LAYERS** gives the sequencer more than one instrument, and it's on unless you turn it off with
+SEQ + REC. Record a loop, change the instrument (or just its knobs), press REC and play over it:
+that take is a new layer. Changing the instrument over a loop says `REC: NEW LAYER`, each take
+says `LAYER 2`, `LAYER 3` and so on, and a dot for each layer sits by the loop's progress line. A
+take started over a stopped loop joins it, and nothing is erased until you hold REC. Steps work
+the same way: each run of step-write is a layer.
+
+Each layer keeps its own instrument, algorithm, four knobs, ENV and LFO, as they stood when its
+take ended. Record a bass on COZY, turn COZY into a pad and record over it: the bass stays a bass.
+Up to sixteen layers. The effects are one chain that follows the instrument in hand, and the
+instrument's volume is shared by its layers (hold EDIT and turn MASTER or SELECT to sit one
+instrument under another). The eight voices are shared by all the layers, and a step holds eight
+notes in all. With the ARP on, the loop records the notes the arpeggiator played. The picture is
+the instrument in hand. With LAYERS off, everything recorded plays on the instrument in hand.
+The SEQ page's top line scrolls through the sequencer hotkeys and shows which way LAYERS is set.
+
+The loop and its layers are saved once the loop is stopped with PLAY and nothing is sounding, and
+come back after a restart. The step pattern and every instrument's settings save by themselves.
 
 In the simulator: <kbd>A</kbd>–<kbd>'</kbd> are the white keys from F and <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd>
 the black keys. <kbd>Z</kbd> <kbd>X</kbd> change the octave, <kbd>←</kbd> <kbd>→</kbd> change the
