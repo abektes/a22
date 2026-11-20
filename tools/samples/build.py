@@ -372,11 +372,11 @@ def main():
 
     with open(os.path.join(ROOT, "docs", "SAMPLES.md"), "w") as f:
         f.write("# The recordings in h1\n\n"
-                "BARD, TWANG and VIBE are built on recordings of real instruments. Every one of them is CC0: the people\n"
+                "BARD, TWANG and PLUNK are built on recordings of real instruments. Every one of them is CC0: the people\n"
                 "who made them gave them to the public domain, so they can be used in anything, sold or not, with no\n"
                 "credit owed. They are credited here all the same.\n\n"
                 "This file is written by `tools/samples/build.py` from `tools/samples/sources.py`, with\n"
-                "`core/smp_data.c`. To change a recording, change the sources and run it again. (VIBE's hits are\n"
+                "`core/smp_data.c`. To change a recording, change the sources and run it again. (PLUNK's hits are\n"
                 "at the end, and `tools/samples/drums.py` cuts those.)\n\n"
                 f"In the firmware BARD's and TWANG's come to {len(blob):,} bytes: {len(zones)} cuts, 8-bit mu-law at 22.05 kHz.\n\n"
                 "## Libraries\n\n| Library | By | Licence |\n|---|---|---|\n")

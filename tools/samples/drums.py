@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cuts VIBE's hits down to what the firmware carries: core/vibe_data.c and core/vibe_data.h, from
+"""Cuts PLUNK's hits down to what the firmware carries: core/plunk_data.c and core/plunk_data.h, from
 sources.DRUMS. (docs/SAMPLES.md's part on them is written by build.py, from the same list.)
 
     python3 tools/samples/drums.py [--preview]
@@ -11,7 +11,7 @@ the coder's noise. A ringing thing gets a stretch after its start that repeats, 
 what came before it, and the player lets that die away at the ring's length.
 
 They are stored as 4-bit IMA ADPCM: half the bytes of the 8 bits BARD's and TWANG's recordings have, at
-the price of some grit, which a drum can take. --preview writes build/samples-preview/VIBE_*.wav: every
+the price of some grit, which a drum can take. --preview writes build/samples-preview/PLUNK_*.wav: every
 hit as the firmware will decode it, at its stored rate.
 """
 import os
@@ -155,36 +155,36 @@ def main():
               f"gain {z['gain']:.2f}  snr {z['snr']:.1f} dB")
         if "--preview" in sys.argv:
             import build
-            build.write_wav(os.path.join(PREVIEW, f"VIBE_{name}.wav"), z["dec"] * 0.9, z["rate"])
+            build.write_wav(os.path.join(PREVIEW, f"PLUNK_{name}.wav"), z["dec"] * 0.9, z["rate"])
     blob = np.concatenate(blob)
-    with open(os.path.join(ROOT, "core", "vibe_data.h"), "w") as f:
-        f.write("/* h1 - VIBE's hits. Written by tools/samples/drums.py: do not edit. */\n#pragma once\n#include <stdint.h>\n\nenum {\n")
+    with open(os.path.join(ROOT, "core", "plunk_data.h"), "w") as f:
+        f.write("/* h1 - PLUNK's hits. Written by tools/samples/drums.py: do not edit. */\n#pragma once\n#include <stdint.h>\n\nenum {\n")
         for z in zones:
             f.write(f"    VZ_{z['name']},{' ' * (11 - len(z['name']))}/* {z['what']} */\n")
         f.write("    VZ_N\n};\n\n"
-                "typedef struct VibeZone {\n"
-                "    uint32_t off;                /* into vibe_data: two samples to a byte, the low four bits first */\n"
+                "typedef struct PlunkZone {\n"
+                "    uint32_t off;                /* into plunk_data: two samples to a byte, the low four bits first */\n"
                 "    uint16_t len, loop;          /* samples; a ringing hit goes round from loop to the end, another has loop == len */\n"
                 "    uint16_t rate;               /* Hz it is stored at */\n"
                 "    int16_t lpred;               /* the decoder as it was at loop, to go round with */\n"
                 "    uint8_t idx0, lidx;          /* its step at the start, and at loop */\n"
                 "    float tau;                   /* seconds: how it dies away, which was taken out of what is stored */\n"
                 "    float gain;                  /* makes every hit as loud as the next */\n"
-                "} VibeZone;\n\n"
-                "extern const VibeZone vibe_zones[VZ_N];\nextern const uint8_t vibe_data[];\nextern const uint16_t vibe_steps[89];\n")
-    with open(os.path.join(ROOT, "core", "vibe_data.c"), "w") as f:
-        f.write("/* h1 - VIBE's hits, cut down. Written by tools/samples/drums.py from sources.DRUMS in\n"
+                "} PlunkZone;\n\n"
+                "extern const PlunkZone plunk_zones[VZ_N];\nextern const uint8_t plunk_data[];\nextern const uint16_t plunk_steps[89];\n")
+    with open(os.path.join(ROOT, "core", "plunk_data.c"), "w") as f:
+        f.write("/* h1 - PLUNK's hits, cut down. Written by tools/samples/drums.py from sources.DRUMS in\n"
                 " * tools/samples/sources.py: do not edit. Where each came from and its licence: docs/SAMPLES.md. */\n"
-                "#include \"vibe_data.h\"\n\n")
-        f.write("const uint16_t vibe_steps[89] = {\n")
+                "#include \"plunk_data.h\"\n\n")
+        f.write("const uint16_t plunk_steps[89] = {\n")
         for i in range(0, 89, 16):
             f.write("    " + " ".join(f"{v}," for v in STEPS[i:i + 16]) + "\n")
         f.write("};\n\n/* offset, length, loop start, rate, the decoder at loop, its first step and its step at loop, tau, gain */\n")
-        f.write("const VibeZone vibe_zones[VZ_N] = {\n")
+        f.write("const PlunkZone plunk_zones[VZ_N] = {\n")
         for z in zones:
             f.write(f"    {{{z['off']}u, {z['n']}, {z['loop']}, {z['rate']}, {z['lpred']}, {z['idx0']}, {z['lidx']}, "
                     f"{z['tau']:.4f}f, {z['gain']:.3f}f}},    /* {z['name']} */\n")
-        f.write(f"}};\n\nconst uint8_t vibe_data[{len(blob)}] = {{\n")
+        f.write(f"}};\n\nconst uint8_t plunk_data[{len(blob)}] = {{\n")
         f.write(c_bytes(blob))
         f.write("\n};\n")
     print(f"{len(zones)} hits, {len(blob)} bytes")
@@ -200,10 +200,10 @@ def doc():
         fn = urllib.parse.unquote(src[1].rsplit("/", 1)[1])
         rows.append(f"| `VZ_{name}` | {what} | {opt['rate'] / 1000:g} kHz, {opt['ms'] + opt.get('loop_ms', 0)} ms | "
                     f"[{fn}]({urllib.parse.quote(src[1], safe=':/')}) |\n")
-    return ("\n## VIBE's hits\n\n"
-            "VIBE's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian\n"
+    return ("\n## PLUNK's hits\n\n"
+            "PLUNK's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian\n"
             "Community Sample Library (CC0 1.0, credited above). `tools/samples/drums.py` cuts them from\n"
-            f"`sources.DRUMS` into `core/vibe_data.c`: {len(rows)} hits, about {total:,} bytes, 4-bit ADPCM at the rate\n"
+            f"`sources.DRUMS` into `core/plunk_data.c`: {len(rows)} hits, about {total:,} bytes, 4-bit ADPCM at the rate\n"
             "each one's top allows. A ringing hit keeps its start and a short stretch that repeats.\n\n"
             "| Hit | What it is | Kept | Recording |\n|---|---|---|---|\n" + "".join(rows))
 

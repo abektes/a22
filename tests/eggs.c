@@ -31,7 +31,7 @@ static void go(int msec)                         /* the sound and the frames, as
 static void tap(int b) { h1_button(b, 1); go(40); h1_button(b, 0); go(40); }
 static void key(int k, int down_ms, int up_ms) { h1_key(k, 1); go(down_ms); h1_key(k, 0); go(up_ms); }
 static void inst(int i) { h1_encoder(H1_ENC_PRESET, i - h1_instrument()); go(600); }
-enum { COZY, ORBIT, KOI, HAUNT, TIDE, PIP, BONK, URCHIN, TWANG, LAVA, KNOT, INK, BARD, TURBO, TILT, VIBE };
+enum { COZY, ORBIT, KOI, HAUNT, TIDE, PIP, BONK, URCHIN, TWANG, LAVA, KNOT, INK, BARD, TURBO, TILT, PLUNK };
 
 static void run_up(void)                         /* eight notes, each higher than the last */
 {

@@ -1,4 +1,4 @@
-/* h1 - VIBE's hits. Written by tools/samples/drums.py: do not edit. */
+/* h1 - PLUNK's hits. Written by tools/samples/drums.py: do not edit. */
 #pragma once
 #include <stdint.h>
 
@@ -39,16 +39,16 @@ enum {
     VZ_N
 };
 
-typedef struct VibeZone {
-    uint32_t off;                /* into vibe_data: two samples to a byte, the low four bits first */
+typedef struct PlunkZone {
+    uint32_t off;                /* into plunk_data: two samples to a byte, the low four bits first */
     uint16_t len, loop;          /* samples; a ringing hit goes round from loop to the end, another has loop == len */
     uint16_t rate;               /* Hz it is stored at */
     int16_t lpred;               /* the decoder as it was at loop, to go round with */
     uint8_t idx0, lidx;          /* its step at the start, and at loop */
     float tau;                   /* seconds: how it dies away, which was taken out of what is stored */
     float gain;                  /* makes every hit as loud as the next */
-} VibeZone;
+} PlunkZone;
 
-extern const VibeZone vibe_zones[VZ_N];
-extern const uint8_t vibe_data[];
-extern const uint16_t vibe_steps[89];
+extern const PlunkZone plunk_zones[VZ_N];
+extern const uint8_t plunk_data[];
+extern const uint16_t plunk_steps[89];
