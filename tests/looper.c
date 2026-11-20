@@ -1,12 +1,11 @@
-/* The loop recorder's room and length (user feedback for 0.3.0). "On the third or fourth layer it stops
- * recording new takes ... the portion of the layer is not recorded": the loop held 384 events (a note-on
- * and a note-off a note) across every layer, and once they were taken whatever came next was dropped
- * without a word. And "8 bars is a little short ... at least 16 bars (or ideal 128 bars)". Now: 2048
- * events, 1 to 128 bars, a full loop says LOOP FULL and never keeps a note-on without its note-off, and a
- * loop saved by 0.2.2 (events as played, not in order) still loads and plays every note.
+/* The tape's room and length. From h1 (user feedback for its 0.3.0: a loop that silently dropped the
+ * later layers' notes once 384 events were taken): 2048 events, and a full tape says so (TAPE FULL) and
+ * never keeps a note-on without its note-off. a22's tape is 1 to 32 bars. And a22's own: a tape recorded
+ * long, then shortened, keeps what lies past its new end through a save and a load (it used to drop it).
  *
  * Run by tests/run_tests.sh: the core alone, its panel worked as a hand would, and what the loop plays
  * counted on MIDI out. */
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -133,9 +132,9 @@ int main(void)
     stop_and_clear();
     CHECK(h1_loop_room() == NLEV / 2, "hold REC empties the loop");
 
-    /* ---- longer loops: 16, 32, 64 and 128 bars, at a quick tempo to keep the test short ---- */
+    /* ---- longer loops: 16 and 32 bars (a22's longest), at a quick tempo to keep the test short ---- */
     st.glo[0] = 240;
-    for (lb = 4; lb <= 7; lb++) {
+    for (lb = 4; lb <= 5; lb++) {
         int n = 16 << (lb - 4);                  /* a note a bar */
         got = layered(lb, 2, n);
         printf("looper: %d bars, two layers of %d notes: %d notes play back in one pass\n", 1 << lb, n, got);
@@ -157,7 +156,7 @@ int main(void)
     tap(H1_BTN_REC);                             /* one more onto the full loop: it says why it is not kept */
     h1_key(3, 1);
     until(now() + 80);
-    CHECK(strcmp(h1_toast_now(), "LOOP FULL") == 0, "a note turned away by a full loop says LOOP FULL");
+    CHECK(strcmp(h1_toast_now(), "TAPE FULL") == 0, "a note turned away by a full tape says TAPE FULL");
     h1_key(3, 0);
     until(now() + 80);
     tap(H1_BTN_REC);
@@ -185,45 +184,52 @@ int main(void)
     st.glo[0] = 112;
     st.seq[3] = 1;
 
-    /* ---- a loop as 0.2.2 saved it: version 1, events as they were played (a later take's after an earlier
-     * one's, whatever their ticks), two bars. It loads in order and plays every note ---- */
-    memset(old, 0, sizeof old);
-    old[0] = 0x48; old[1] = 0x31; old[2] = 0x4C; old[3] = 0x50; old[4] = 1;
-    old[6] = 32; old[8] = 768 & 255; old[9] = 768 >> 8;
-    for (i = 0; i < 32; i++) {                   /* take one: 8 notes on 0.., take two: 8 on 12.. between them */
-        int t = i < 16, k = (i % 16) / 2, on = !(i & 1);
-        uint32_t tick = (uint32_t)(k * 96 + (t ? 0 : 48) + (on ? 0 : 30));
-        uint8_t *e = old + 12 + 8 * i;
-        e[0] = (uint8_t)tick; e[1] = (uint8_t)(tick >> 8);
-        e[2] = (uint8_t)(60 + (t ? 0 : 12) + k);
-        e[3] = (uint8_t)on;
-        e[4] = (uint8_t)(0x80 | 1 << 3 | 0);     /* 0.2.2's part: ORBIT, its first algorithm */
-        e[6] = on ? 100 : 0;
-    }
+    /* ---- recorded on 4 bars, the tape shortened to 1, saved and loaded, lengthened again: every note is
+     * there (the loader used to drop events past the saved length, which the session still had) ---- */
     stop_and_clear();
-    CHECK(h1_loop_load(old, sizeof old - 8 * (384 - 32)) == 0, "a 0.2.2 loop loads");
-    CHECK(h1_loop_room() == NLEV / 2 - 16, "with all 32 of its events");
+    got = layered(2, 1, 16);                     /* 4 bars, 16 notes */
+    CHECK(got == 16, "4 bars of 16 notes play back");
     tap(H1_BTN_PLAY);
-    got = count_pass(4.0 * 60000.0 / 112 * 2);
-    printf("looper: a 0.2.2 loop of 16 notes: %d play back\n", got);
-    CHECK(got == 16, "a 0.2.2 loop plays every note, in order");
+    until(now() + 200);
+    st.seq[1] = 0;                               /* BARS 1: three quarters of the notes lie past the end */
+    tap(H1_BTN_PLAY);                            /* (played a moment: the tape takes on its new length) */
+    until(now() + 300);
+    tap(H1_BTN_PLAY);
+    until(now() + 200);
+    p = (const uint8_t *)h1_loop(&size);
+    memcpy(blob, p, size);
+    CHECK((int)(blob[8] | blob[9] << 8) == seq_bar_ticks(), "the tape saves its new length: one bar");
+    stop_and_clear();
+    CHECK(h1_loop_load(blob, size) == 0, "the shortened tape loads");
+    CHECK(h1_loop_room() == NLEV / 2 - 16, "with every one of its 16 notes, past the end or not");
+    st.seq[1] = 2;                               /* BARS 4 again */
+    tap(H1_BTN_PLAY);
+    got = count_pass(bar_ms() * 4);
+    printf("looper: recorded on 4 bars, saved on 1, played on 4: %d of 16 notes\n", got);
+    CHECK(got == 16, "lengthened again after a load, every note plays");
     tap(H1_BTN_PLAY);
 
-    /* ---- the length's bounds: a loop longer than 128 bars of 5/4 is refused, the BARS byte is kept in range ---- */
-    old[6] = 0; old[7] = 0;
-    old[8] = (uint8_t)61440; old[9] = (uint8_t)(61440 >> 8);
-    CHECK(h1_loop_load(old, 12) == 0, "128 bars of 5/4 load");
-    old[8] = (uint8_t)61441; old[9] = (uint8_t)(61441 >> 8);
+    /* ---- the length's bounds: 32 bars of 5/4 (15360 ticks) is the longest a loop loads; BARS is kept in range ---- */
+    memset(old, 0, sizeof old);
+    old[0] = 'A'; old[1] = '2'; old[2] = '2'; old[3] = 'T'; old[4] = 1;
+    old[8] = (uint8_t)15360; old[9] = (uint8_t)(15360 >> 8);
+    CHECK(h1_loop_load(old, 12) == 0, "32 bars of 5/4 load");
+    old[8] = (uint8_t)15361; old[9] = (uint8_t)(15361 >> 8);
     CHECK(h1_loop_load(old, 12) != 0, "and nothing longer");
+    old[0] = 'H'; old[1] = '1'; old[2] = 'L'; old[3] = 'P';
+    old[8] = 96; old[9] = 0;
+    CHECK(h1_loop_load(old, 12) != 0, "an h1 loop is not a22's");
     {
         static uint8_t sb[sizeof(H1State)];
         const void *sp;
         uint32_t ssz;
-        st.seq[1] = 7;
+        st.seq[1] = 5;
         sp = h1_state(&ssz);
         memcpy(sb, sp, ssz);
         st.seq[1] = 1;
-        CHECK(h1_state_load(sb, ssz) == 0 && st.seq[1] == 7, "BARS 128 is saved with the state");
+        CHECK(h1_state_load(sb, ssz) == 0 && st.seq[1] == 5, "BARS 32 is saved with the state");
+        sb[offsetof(H1State, seq) + 1] = 9;
+        CHECK(h1_state_load(sb, ssz) == 0 && st.seq[1] <= 5, "and a BARS out of range comes back in range");
     }
 
     printf("looper: %d checks, %d failed\n", checks, fails);

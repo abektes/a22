@@ -14,10 +14,10 @@ static void palette_sync(void)
 {
     const uint16_t *pal = h1_palette();
     uint32_t i;
-    if (pal[255] == pal_seen[0] && pal[128] == pal_seen[1])
+    if (pal[31] == pal_seen[0] && pal[255] == pal_seen[1])
         return;
-    pal_seen[0] = pal[255];
-    pal_seen[1] = pal[128];
+    pal_seen[0] = pal[31];
+    pal_seen[1] = pal[255];
     for (i = 0; i < 256u; i++)
         pal_be[i] = (uint16_t)((pal[i] >> 8) | (pal[i] << 8));
 }
@@ -230,7 +230,7 @@ static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 #define RING_SLOT_BYTES (RING_SECT * 4096u)
 #define RING_BASE (0xDC000u - RING_SLOTS * RING_SLOT_BYTES)   /* 0xC8000: just under the panel's calibration */
 #define RING_BODY 256u
-#define RING_MAGIC 0x524C3148u           /* "H1LR" */
+#define RING_MAGIC 0x52323241u           /* "A22R" */
 #define RING_PAGE 256u
 typedef char loop_fits_a_slot[H1_LOOP_MAX <= RING_SLOT_BYTES - RING_BODY ? 1 : -1];
 typedef char ring_in_the_data_area[RING_BASE >= PLAT_DATA_LO ? 1 : -1];

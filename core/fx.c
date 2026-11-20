@@ -1,161 +1,641 @@
-/* h1 - the shared effects: TONE (one knob, low-pass below the middle and high-pass above),
- * ECHO (tempo-synced ping-pong, run at half rate so 1.5 s fits in 64 KB) and SPACE (a small
- * comb/all-pass reverb). The four knobs of the FX page are all there is. */
+/* A22 - Selectable 8-Engine FX Rack + Master Bus (3-Band EQ, Tape Drive, Glue)
+ * + 48 KB RAM Tape Performance FX (Tape Brake & Beat Stutter).
+ *
+ * Pool RAM budget:
+ *   echo_buf:    32768 x int16 = 64 KB (shared by DELAY, SHIFT, CHORUS, TANK)
+ *   rev_buf:     24576 x int16 = 48 KB (true Dattorro modulated stereo plate for PLATE)
+ *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop) */
 #include "internal.h"
 #include "dsp.h"
 
+const char *const FX_NAMES[NFX] = {
+    "PLATE", "DELAY", "FILTER", "SHIFT", "CHORUS", "TANK", "LOFI", "THUMP"
+};
+
+const char *const FX_KNOBS[NFX][4] = {
+    {"MIX",   "DECAY", "DAMP",   "MOD"},      /* PLATE: Dattorro modulated plate */
+    {"MIX",   "TIME",  "FEEDBK", "TAPE"},     /* DELAY: stereo tape/BBD ping-pong */
+    {"LPF",   "HPF",   "RESO",   "ENV"},      /* FILTER: dual resonant ZDF filter */
+    {"FREQ",  "DELAY", "FEEDBK", "MIX"},      /* SHIFT: frequency shifter + comb */
+    {"MIX",   "RATE",  "DEPTH",  "WIDTH"},    /* CHORUS: 3-tap stereo ensemble */
+    {"MIX",   "DECAY", "TWANG",  "TONE"},     /* TANK: dispersive spring tank */
+    {"CRUSH", "RATE",  "BAND",   "GRIT"},     /* LOFI: lo-fi speaker + crush */
+    {"PUNCH", "DRIVE", "BASS",   "TONE"},     /* THUMP: transient + tape drive */
+};
+
+const uint8_t FX_DEFAULTS[NFX][4] = {
+    {38, 62, 35, 40},   /* PLATE */
+    {35, 3,  48, 30},   /* DELAY (p[1] = 0..7 division index, 3 = 1/8) */
+    {78, 8,  35, 45},   /* FILTER */
+    {58, 32, 55, 50},   /* SHIFT */
+    {45, 32, 55, 80},   /* CHORUS */
+    {40, 58, 60, 55},   /* TANK */
+    {35, 30, 50, 25},   /* LOFI */
+    {45, 35, 40, 55},   /* THUMP */
+};
+
+/* ---- shared .pool delay buffers ------------------------------------------------------- */
 #define ECHO_N 32768u
+#define REV_N  24576u
+#define TFX_FRAMES 12288u
 static int16_t echo_buf[ECHO_N] H1_POOL;
+static int16_t rev_buf[REV_N] H1_POOL;
+static int16_t tfx_buf[TFX_FRAMES * 2u] H1_POOL;
+
+/* ---- Dattorro Plate Reverb layout inside rev_buf (22,534 <= 24,576 int16 samples) ----- */
+enum {
+    D_IN1 = 142, D_IN2 = 107, D_IN3 = 379, D_IN4 = 277,
+    D_AP1A = 696, D_DL1A = 4453, D_AP2A = 1800, D_DL2A = 3720,
+    D_AP1B = 932, D_DL1B = 4217, D_AP2B = 2656, D_DL2B = 3163,
+    D_NSEG = 12
+};
+static const uint16_t D_LEN[D_NSEG] = {
+    D_IN1, D_IN2, D_IN3, D_IN4,
+    D_AP1A, D_DL1A, D_AP2A, D_DL2A,
+    D_AP1B, D_DL1B, D_AP2B, D_DL2B
+};
+static uint32_t d_off[D_NSEG];
+static uint16_t d_pos[D_NSEG];
+static f32 d_inlp, d_dampa, d_dampb, d_lfo1, d_lfo2;
+
+/* ---- DELAY / SHIFT / CHORUS / TANK state ---------------------------------------------- */
 static uint32_t echo_w;
-static f32 echo_t = 4000.0f, echo_lp, echo_ol, echo_or;
-static f32 send_s, fb_s, wet_s, room_s;
+static f32 echo_t = 4000.0f, echo_lpl, echo_lpr, echo_ol, echo_or, wow_ph, ch_ph;
+static f32 shf_ph, shf_i1[4], shf_q1[4], shf_fb_l, shf_fb_r;
+static f32 spr_ap[4], spr_lp;
 
-#define NCOMB 4
-#define NAP 2
-static const uint16_t COMB_LEN[NCOMB] = {1116, 1188, 1277, 1356};
-static const uint16_t AP_LEN[NAP] = {556, 441};
-#define STEREO_SPREAD 23
-#define REV_TOTAL ((1116 + 1188 + 1277 + 1356) * 2 + NCOMB * STEREO_SPREAD + (556 + 441) * 2 + NAP * STEREO_SPREAD)
-static f32 rev_buf[REV_TOTAL] H1_POOL;
-static f32 *comb_b[2][NCOMB], *ap_b[2][NAP];
-static uint16_t comb_n[2][NCOMB], ap_n[2][NAP], comb_i[2][NCOMB], ap_i[2][NAP];
-static f32 comb_f[2][NCOMB];
+/* ---- FILTER / LOFI / THUMP state ------------------------------------------------------ */
+static f32 filt_l[4], filt_r[4], filt_env;
+static f32 phone_s[2][2], phone_hl, phone_hr, phone_cnt;
+static uint32_t phone_rng = 0x504804E1u;
+static f32 punch_fast, punch_slow, punch_lp_l, punch_lp_r, punch_hi_l, punch_hi_r;
 
-static f32 tone_s[2][2], tone_k = 1.0f;
-static int tone_mode;
-static f32 SRf = 44100.0f;
+/* ---- Master EQ, Glue & Tape Trick state ----------------------------------------------- */
+static f32 eq_lo[2], eq_hi[2], eq_mid[2][2];
+static f32 glue_env = 0.0f;
+static uint32_t tfx_w;
+static int tfx_prev;
+static f32 tfx_rpos, tfx_spd = 1.0f, tfx_stut_len = 5512.0f, tfx_stut_pos, tfx_stut_anchor;
+
+static f32 SRf = 44100.0f, ISRf = 1.0f / 44100.0f;
+static int fx_last = -1;
+
+/* helpers for int16 delay lines */
+static inline int16_t f_to_i16(f32 x)
+{
+    x = clampf(x, -0.9999f, 0.9999f);
+    return (int16_t)(x * 32767.0f);
+}
+static inline f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
+
+void fx_reset(void)
+{
+    uint32_t i;
+    for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
+    for (i = 0; i < REV_N; i++) rev_buf[i] = 0;
+    for (i = 0; i < TFX_FRAMES * 2u; i++) tfx_buf[i] = 0;
+    for (i = 0; i < D_NSEG; i++) d_pos[i] = 0;
+    d_inlp = d_dampa = d_dampb = d_lfo1 = d_lfo2 = 0.0f;
+    echo_w = 0;
+    echo_t = 4000.0f;
+    echo_lpl = echo_lpr = echo_ol = echo_or = wow_ph = ch_ph = shf_ph = spr_lp = 0.0f;
+    shf_fb_l = shf_fb_r = 0.0f;
+    for (i = 0; i < 4; i++) {
+        shf_i1[i] = shf_q1[i] = filt_l[i] = filt_r[i] = spr_ap[i] = 0.0f;
+    }
+    filt_env = 0.0f;
+    phone_s[0][0] = phone_s[0][1] = phone_s[1][0] = phone_s[1][1] = 0.0f;
+    phone_hl = phone_hr = phone_cnt = 0.0f;
+    punch_fast = punch_slow = punch_lp_l = punch_lp_r = punch_hi_l = punch_hi_r = 0.0f;
+    eq_lo[0] = eq_lo[1] = eq_hi[0] = eq_hi[1] = 0.0f;
+    eq_mid[0][0] = eq_mid[0][1] = eq_mid[1][0] = eq_mid[1][1] = 0.0f;
+    glue_env = 0.0f;
+    tfx_prev = TRICK_OFF;
+    tfx_spd = 1.0f;
+    tfx_w = 0;
+}
 
 void fx_init(f32 sr)
 {
-    f32 *p = rev_buf;
-    int c, i;
-    SRf = sr;
-    for (c = 0; c < 2; c++) {
-        for (i = 0; i < NCOMB; i++) {
-            comb_b[c][i] = p;
-            comb_n[c][i] = (uint16_t)(COMB_LEN[i] + c * STEREO_SPREAD);
-            p += comb_n[c][i];
-        }
-        for (i = 0; i < NAP; i++) {
-            ap_b[c][i] = p;
-            ap_n[c][i] = (uint16_t)(AP_LEN[i] + c * STEREO_SPREAD);
-            p += ap_n[c][i];
-        }
+    uint32_t off = 0, i;
+    SRf = sr > 1000.0f ? sr : 44100.0f;
+    ISRf = 1.0f / SRf;
+    for (i = 0; i < D_NSEG; i++) {
+        d_off[i] = off;
+        off += D_LEN[i];
+    }
+    fx_last = -1;
+    fx_reset();
+}
+
+/* ---- Dattorro helpers ----------------------------------------------------------------- */
+static inline f32 d_read(int seg, int delay)
+{
+    int len = D_LEN[seg];
+    int idx = (int)d_pos[seg] - delay;
+    while (idx < 0) idx += len;
+    while (idx >= len) idx -= len;
+    return i16_to_f(rev_buf[d_off[seg] + (uint32_t)idx]);
+}
+
+static inline f32 d_read_frac(int seg, f32 delay)
+{
+    int len = D_LEN[seg];
+    int d = ifloor(delay);
+    f32 fr = delay - (f32)d;
+    int i0 = (int)d_pos[seg] - d;
+    int i1;
+    f32 a, b;
+    while (i0 < 0) i0 += len;
+    while (i0 >= len) i0 -= len;
+    i1 = i0 - 1;
+    if (i1 < 0) i1 += len;
+    a = i16_to_f(rev_buf[d_off[seg] + (uint32_t)i0]);
+    b = i16_to_f(rev_buf[d_off[seg] + (uint32_t)i1]);
+    return a + (b - a) * fr;
+}
+
+static inline void d_write(int seg, f32 x)
+{
+    uint16_t p = d_pos[seg];
+    rev_buf[d_off[seg] + p] = f_to_i16(x);
+    if (++p >= D_LEN[seg]) p = 0;
+    d_pos[seg] = p;
+}
+
+static inline f32 d_allpass(int seg, f32 x, f32 g)
+{
+    f32 buf = i16_to_f(rev_buf[d_off[seg] + d_pos[seg]]);
+    f32 v = x + buf * g;
+    d_write(seg, v);
+    return buf - v * g;
+}
+
+/* ---- 0: PLATE (True Dattorro Modulated Stereo Plate Reverb) -------------------------- */
+static void fx_plate(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 mix = (f32)p[0] * 0.01f;
+    f32 dec = 0.35f + 0.59f * ((f32)p[1] * 0.01f);
+    f32 damp = 0.08f + 0.72f * ((f32)p[2] * 0.01f);
+    f32 mod = (f32)p[3] * 0.01f * 10.0f;
+    f32 wet = mix * (0.45f + 0.75f * mix);
+    f32 bw = 0.65f;
+    int n;
+
+    if (mix <= 0.001f)
+        return;
+
+    for (n = 0; n < CTRL; n++) {
+        f32 in = (sl[n] + sr[n]) * 0.35f + 1e-18f;
+        f32 ap, ta, tb, ma, mb, va, vb, ol, or_;
+
+        d_lfo1 += 0.67f * ISRf; if (d_lfo1 >= 1.0f) d_lfo1 -= 1.0f;
+        d_lfo2 += 0.91f * ISRf; if (d_lfo2 >= 1.0f) d_lfo2 -= 1.0f;
+
+        /* input bandwidth filter + 4 cascaded input diffusers */
+        d_inlp += (in - d_inlp) * bw;
+        ap = d_allpass(0, d_inlp, 0.72f);
+        ap = d_allpass(1, ap, 0.72f);
+        ap = d_allpass(2, ap, 0.60f);
+        ap = d_allpass(3, ap, 0.60f);
+
+        /* cross-coupled tank inputs from opposite halves */
+        ta = ap + d_read(11, D_DL2B - 1) * dec;
+        tb = ap + d_read(7, D_DL2A - 1) * dec;
+
+        /* Half A: modulated decay allpass -> delay -> HF damp -> allpass -> delay */
+        ma = d_read_frac(4, 672.0f + mod * tsin(d_lfo1));
+        va = softclip(ta + ma * 0.68f);
+        d_write(4, va);
+        ta = ma - va * 0.68f;
+        d_write(5, ta);
+        ta = d_read(5, D_DL1A - 1);
+        d_dampa += (ta - d_dampa) * (1.0f - damp);
+        ta = d_allpass(6, d_dampa * dec, -0.50f);
+        d_write(7, softclip(ta));
+
+        /* Half B */
+        mb = d_read_frac(8, 908.0f + mod * tsin(d_lfo2));
+        vb = softclip(tb + mb * 0.68f);
+        d_write(8, vb);
+        tb = mb - vb * 0.68f;
+        d_write(9, tb);
+        tb = d_read(9, D_DL1B - 1);
+        d_dampb += (tb - d_dampb) * (1.0f - damp);
+        tb = d_allpass(10, d_dampb * dec, -0.50f);
+        d_write(11, softclip(tb));
+
+        /* Dattorro 7-tap stereo matrix */
+        ol = 0.6f * (d_read(9, 266) + d_read(9, 2974) - d_read(10, 1913) + d_read(11, 1996)
+                   - d_read(5, 1990) - d_read(6, 187) - d_read(7, 1066));
+        or_ = 0.6f * (d_read(5, 353) + d_read(5, 3627) - d_read(6, 1228) + d_read(7, 2673)
+                    - d_read(9, 2111) - d_read(10, 335) - d_read(11, 121));
+
+        dl[n] += ol * wet * 0.55f;
+        dr[n] += or_ * wet * 0.55f;
     }
 }
 
-/* The read position is worked out in whole samples first and only the fraction is a float:
- * echo_w counts up for as long as the unit is on, and (f32)echo_w - delay lost the fraction
- * after about 13 minutes, then whole samples, so the echo went grainy until a restart. */
-static inline f32 echo_read(f32 delay)
+/* ---- echo_buf integer-indexed fractional reader --------------------------------------- */
+static inline f32 echo_read_frac(uint32_t mask, uint32_t base, uint32_t w, f32 delay)
 {
     int32_t d = ifloor(delay);
     f32 fr = 1.0f - (delay - (f32)d), a, b;
-    uint32_t i = echo_w - (uint32_t)d - 1u;      /* pos = echo_w - delay = i + fr */
-    a = (f32)echo_buf[i & (ECHO_N - 1u)];
-    b = (f32)echo_buf[(i + 1u) & (ECHO_N - 1u)];
-    return (a + (b - a) * fr) * (1.0f / 32768.0f);
+    uint32_t i = w - (uint32_t)d - 1u;
+    a = i16_to_f(echo_buf[base + (i & mask)]);
+    b = i16_to_f(echo_buf[base + ((i + 1u) & mask)]);
+    return a + (b - a) * fr;
 }
 
-void fx_block(f32 *l, f32 *r, const InstParams *ip, f32 bpm)
+/* ---- 1: DELAY (Modulated Stereo Tape / BBD Ping-Pong Echo) ---------------------------- */
+static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4], f32 bpm)
 {
-    static const f32 DIV[8] = {0.125f, 0.25f, 1.0f / 3.0f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f};   /* in beats */
-    f32 x, send, fb, tgt, wet, room, t;
-    int n, c, i;
+    static const f32 DIV[8] = {0.125f, 0.25f, 1.0f / 3.0f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f};
+    f32 mix = (f32)p[0] * 0.01f;
+    f32 fb = 0.08f + 0.78f * ((f32)p[2] * 0.01f);
+    f32 tape = (f32)p[3] * 0.01f;
+    f32 tgt = DIV[p[1] & 7] * 60.0f / maxf(40.0f, bpm) * SRf * 0.5f;   /* half-rate -> up to 1.48 s */
+    f32 lp_k = 0.85f - 0.62f * tape;
+    int n;
 
-    /* TONE */
-    t = (f32)ip->fx[3] * 0.01f;
-    if (t < 0.47f) {
-        tone_mode = 1;
-        tone_k = onepole_k(1.0f / (H1_TAU * 180.0f * exp2fx(t / 0.47f * 6.7f)), SRf);
-    } else if (t > 0.53f) {
-        tone_mode = 2;
-        tone_k = onepole_k(1.0f / (H1_TAU * 20.0f * exp2fx((t - 0.53f) / 0.47f * 7.2f)), SRf);
-    } else
-        tone_mode = 0;
-    if (tone_mode)
-        for (n = 0; n < CTRL; n++) {
-            f32 a = l[n], b = r[n];
-            tone_s[0][0] += (a - tone_s[0][0]) * tone_k;
-            tone_s[0][1] += (tone_s[0][0] - tone_s[0][1]) * tone_k;
-            tone_s[1][0] += (b - tone_s[1][0]) * tone_k;
-            tone_s[1][1] += (tone_s[1][0] - tone_s[1][1]) * tone_k;
-            if (tone_mode == 1) {
-                l[n] = tone_s[0][1];
-                r[n] = tone_s[1][1];
-            } else {
-                l[n] = a - tone_s[0][1];
-                r[n] = b - tone_s[1][1];
-            }
-        }
-    else
-        for (c = 0; c < 2; c++)
-            tone_s[c][0] = tone_s[c][1] = (c ? r[CTRL - 1] : l[CTRL - 1]);
+    while (tgt > 15200.0f) tgt *= 0.5f;
+    if (tgt < 24.0f) tgt = 24.0f;
+    if (mix <= 0.001f)
+        return;
 
-    /* ECHO */
-    x = (f32)ip->fx[0] * 0.01f;
-    send = x * 0.85f;
-    fb = x > 0.0f ? 0.22f + 0.56f * x : 0.0f;
-    tgt = DIV[ip->fx[1] & 7] * 60.0f / bpm * SRf * 0.5f;
-    while (tgt > 15800.0f)
-        tgt *= 0.5f;
-    if (tgt < 24.0f)
-        tgt = 24.0f;
     for (n = 0; n < CTRL; n += 2) {
-        f32 in, tl, tr, w;
-        send_s += (send - send_s) * 0.02f;
-        fb_s += (fb - fb_s) * 0.02f;
-        echo_t += (tgt - echo_t) * 0.0012f;
-        in = (l[n] + r[n] + l[n + 1] + r[n + 1]) * 0.25f * send_s;
-        tl = echo_read(echo_t);
-        tr = echo_read(echo_t * 2.0f);
-        echo_lp += (tr * fb_s - echo_lp) * 0.42f;
-        w = softclip(in + echo_lp) * 32767.0f;
-        echo_buf[echo_w & (ECHO_N - 1u)] = (int16_t)w;
+        f32 inl = (sl[n] + sl[n + 1]) * 0.5f * mix;
+        f32 inr = (sr[n] + sr[n + 1]) * 0.5f * mix;
+        f32 wow, tl, tr;
+        wow_ph += 0.62f * 2.0f * ISRf; if (wow_ph >= 1.0f) wow_ph -= 1.0f;
+        echo_t += (tgt - echo_t) * 0.0018f;
+        wow = tape * tape * 18.0f * tsin(wow_ph);
+        tl = echo_read_frac(16383u, 0u, echo_w, maxf(8.0f, echo_t + wow));
+        tr = echo_read_frac(16383u, 16384u, echo_w, maxf(8.0f, echo_t * 1.5f - wow));
+
+        /* ping-pong cross-feedback with warm tape damping & saturation */
+        echo_lpl += (tr * fb - echo_lpl) * lp_k;
+        echo_lpr += (tl * fb - echo_lpr) * lp_k;
+        echo_buf[echo_w & 16383u] = f_to_i16(softclip((inl + echo_lpl) * (1.0f + 0.5f * tape)));
+        echo_buf[16384u + (echo_w & 16383u)] = f_to_i16(softclip((inr + echo_lpr) * (1.0f + 0.5f * tape)));
         echo_w++;
-        l[n] += (echo_ol + tl) * 0.5f;
-        r[n] += (echo_or + tr) * 0.5f;
-        l[n + 1] += tl;
-        r[n + 1] += tr;
+
+        dl[n]     += (echo_ol + tl) * 0.5f;
+        dr[n]     += (echo_or + tr) * 0.5f;
+        dl[n + 1] += tl;
+        dr[n + 1] += tr;
         echo_ol = tl;
         echo_or = tr;
     }
+}
 
-    /* SPACE */
-    x = (f32)ip->fx[2] * 0.01f;
-    wet = x * (0.25f + 0.55f * x);
-    room = 0.74f + 0.235f * x;
-    if (x <= 0.0f && wet_s < 0.0005f)
-        return;
+/* ---- 2: FILTER (Dual Resonant ZDF Filter + Envelope Follower) --------------------- */
+static void fx_filter(f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 lpf_base = 80.0f * exp2fx((f32)p[0] * 0.01f * 7.8f);
+    f32 hpf_hz = 20.0f * exp2fx((f32)p[1] * 0.01f * 7.2f);
+    f32 q = 0.707f + 7.5f * ((f32)p[2] * 0.01f) * ((f32)p[2] * 0.01f);
+    f32 env_amt = ((f32)p[3] - 50.0f) * 0.02f;   /* bipolar: <50 closes on hits, >50 opens */
+    Svf flp, fhp;
+    f32 peak = 0.0f, fc;
+    int n;
+
     for (n = 0; n < CTRL; n++) {
-        f32 in, o[2];
-        wet_s += (wet - wet_s) * 0.002f;
-        room_s += (room - room_s) * 0.002f;
-        in = (l[n] + r[n]) * 0.03f + 1e-18f;
-        for (c = 0; c < 2; c++) {
-            f32 acc = 0.0f;
-            for (i = 0; i < NCOMB; i++) {
-                f32 *b = comb_b[c][i];
-                uint16_t k = comb_i[c][i];
-                f32 y = b[k];
-                comb_f[c][i] = y * 0.68f + comb_f[c][i] * 0.32f;
-                b[k] = in + comb_f[c][i] * room_s;
-                if (++k >= comb_n[c][i]) k = 0;
-                comb_i[c][i] = k;
-                acc += y;
-            }
-            for (i = 0; i < NAP; i++) {
-                f32 *b = ap_b[c][i];
-                uint16_t k = ap_i[c][i];
-                f32 y = b[k];
-                b[k] = acc + y * 0.5f;
-                acc = y - acc;
-                if (++k >= ap_n[c][i]) k = 0;
-                ap_i[c][i] = k;
-            }
-            o[c] = acc;
+        f32 m = maxf(absf(dl[n]), absf(dr[n]));
+        if (m > peak) peak = m;
+    }
+    filt_env += (peak - filt_env) * (peak > filt_env ? 0.35f : 0.03f);
+    fc = clampf(lpf_base * exp2fx(env_amt * filt_env * 6.0f), 40.0f, 18000.0f);
+    svf_set(&flp, fc, q, ISRf);
+    svf_set(&fhp, clampf(hpf_hz, 20.0f, 12000.0f), 0.707f + 0.4f * (q - 0.707f), ISRf);
+
+    for (n = 0; n < CTRL; n++) {
+        f32 l1, b1, l2, b2, xl = dl[n], xr = dr[n];
+        SVF_TICK(flp, &filt_l[0], xl, l1, b1);
+        SVF_TICK(fhp, &filt_l[2], l1, l2, b2);
+        dl[n] = p[1] > 1 ? (l1 - l2 - fhp.k * b2) : l1;
+
+        SVF_TICK(flp, &filt_r[0], xr, l1, b1);
+        SVF_TICK(fhp, &filt_r[2], l1, l2, b2);
+        dr[n] = p[1] > 1 ? (l1 - l2 - fhp.k * b2) : l1;
+    }
+}
+
+/* ---- 3: SHIFT (Frequency Shifter + Resonant Comb Delay) ---------------------------- */
+/* 4-pole allpass Hilbert quadrature pair (Olli Niemitalo coefficients, ~0.7 deg accuracy) */
+static const f32 HILB_A[4] = {0.6923878f, 0.9360654322959f, 0.9882295226860f, 0.9987488452737f};
+static const f32 HILB_B[4] = {0.4021921162426f, 0.8561710882420f, 0.9722909545651f, 0.9952884791278f};
+
+static void fx_shift(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 fnorm = ((f32)p[0] - 50.0f) * 0.02f;                      /* -1..+1 */
+    f32 shift_hz = fnorm * fnorm * (fnorm < 0.0f ? -320.0f : 320.0f);
+    f32 dly_s = 0.002f * exp2fx((f32)p[1] * 0.01f * 6.5f);        /* 2 ms .. 180 ms */
+    f32 dly_samp = clampf(dly_s * SRf, 16.0f, 15000.0f);
+    f32 fb = (f32)p[2] * 0.01f * 0.84f;
+    f32 mix = (f32)p[3] * 0.01f;
+    f32 dph = shift_hz * ISRf;
+    int n, j;
+
+    if (mix <= 0.001f)
+        return;
+
+    for (n = 0; n < CTRL; n++) {
+        f32 in = (sl[n] + sr[n]) * 0.5f + 0.5f * (shf_fb_l + shf_fb_r) * fb;
+        f32 x1 = in, x2 = in, cs, sn, up, dn, yl, yr;
+        for (j = 0; j < 4; j++) {
+            f32 t = x1 - HILB_A[j] * shf_i1[j];
+            x1 = shf_i1[j] + HILB_A[j] * t;
+            shf_i1[j] = t;
+
+            t = x2 - HILB_B[j] * shf_q1[j];
+            x2 = shf_q1[j] + HILB_B[j] * t;
+            shf_q1[j] = t;
         }
-        l[n] += o[0] * wet_s * 2.2f;
-        r[n] += o[1] * wet_s * 2.2f;
+        shf_ph += dph;
+        if (shf_ph >= 1.0f) shf_ph -= 1.0f;
+        if (shf_ph < 0.0f) shf_ph += 1.0f;
+        cs = tcos(shf_ph);
+        sn = tsin(shf_ph);
+        /* stereo frequency shift: L gets upper sideband, R gets slight opposite/quadrature! */
+        up = x1 * cs - x2 * sn;
+        dn = x1 * cs + x2 * sn * 0.85f;
+
+        echo_buf[echo_w & 16383u] = f_to_i16(softclip(up));
+        echo_buf[16384u + (echo_w & 16383u)] = f_to_i16(softclip(dn));
+        yl = echo_read_frac(16383u, 0u, echo_w, dly_samp);
+        yr = echo_read_frac(16383u, 16384u, echo_w, dly_samp * 1.03f);
+        echo_w++;
+
+        shf_fb_l = yl;
+        shf_fb_r = yr;
+        dl[n] += yl * mix;
+        dr[n] += yr * mix;
+    }
+}
+
+/* ---- 4: CHORUS (Juno-style 3-Tap Stereo Ensemble) ------------------------------- */
+static void fx_chorus(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 mix = (f32)p[0] * 0.01f;
+    f32 rate = 0.15f * exp2fx((f32)p[1] * 0.01f * 5.2f);          /* 0.15 .. 5.5 Hz */
+    f32 depth = (0.0005f + 0.0055f * ((f32)p[2] * 0.01f)) * SRf;  /* 0.5 .. 6 ms */
+    f32 width = (f32)p[3] * 0.01f;
+    f32 base_d = 0.008f * SRf;
+    int n;
+
+    if (mix <= 0.001f)
+        return;
+
+    for (n = 0; n < CTRL; n++) {
+        f32 t1, t2, t3, wl, wr;
+        echo_buf[echo_w & 4095u] = f_to_i16(sl[n]);
+        echo_buf[4096u + (echo_w & 4095u)] = f_to_i16(sr[n]);
+
+        ch_ph += rate * ISRf;
+        if (ch_ph >= 1.0f) ch_ph -= 1.0f;
+
+        t1 = echo_read_frac(4095u, 0u, echo_w, base_d + depth * tsin(ch_ph));
+        t2 = echo_read_frac(4095u, 4096u, echo_w, base_d * 1.17f + depth * tsin(ch_ph + 0.3333f));
+        t3 = echo_read_frac(4095u, 0u, echo_w, base_d * 1.37f + depth * tsin(ch_ph + 0.6667f));
+        echo_w++;
+
+        wl = (t1 + 0.55f * t3) * 0.65f;
+        wr = (t2 + 0.55f * t3) * 0.65f;
+        dl[n] += lerpf((wl + wr) * 0.5f, wl, width) * mix;
+        dr[n] += lerpf((wl + wr) * 0.5f, wr, width) * mix;
+    }
+}
+
+/* ---- 5: TANK (Dispersive Spring Tank Reverb) ---------------------------------------- */
+static void fx_tank(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 mix = (f32)p[0] * 0.01f;
+    f32 dec = 0.45f + 0.48f * ((f32)p[1] * 0.01f);
+    f32 twang = 0.35f + 0.42f * ((f32)p[2] * 0.01f);
+    f32 tone = 0.25f + 0.65f * ((f32)p[3] * 0.01f);
+    int n;
+
+    if (mix <= 0.001f)
+        return;
+
+    for (n = 0; n < CTRL; n++) {
+        f32 in = (sl[n] + sr[n]) * 0.45f;
+        f32 d1 = echo_read_frac(8191u, 0u, echo_w, 2411.0f);
+        f32 d2 = echo_read_frac(8191u, 8192u, echo_w, 2963.0f);
+        f32 x = in + (d1 * 0.65f + d2 * 0.35f) * dec;
+        int j;
+        /* 4 short allpass dispersion stages -> metallic spring chirp! */
+        for (j = 0; j < 4; j++) {
+            f32 v = x - twang * spr_ap[j];
+            x = spr_ap[j] + twang * v;
+            spr_ap[j] = v;
+        }
+        spr_lp += (x - spr_lp) * tone;
+        echo_buf[echo_w & 8191u] = f_to_i16(softclip(spr_lp));
+        echo_buf[8192u + (echo_w & 8191u)] = f_to_i16(softclip(in * 0.8f + d1 * dec * 0.9f - d2 * 0.25f));
+        echo_w++;
+
+        dl[n] += (d1 * 0.8f + d2 * 0.3f) * mix;
+        dr[n] += (d2 * 0.8f + d1 * 0.3f) * mix;
+    }
+}
+
+/* ---- 6: LOFI (Lo-Fi Speaker + Bitcrush + Rate Crush + Grit) --------------------- */
+static void fx_lofi(f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 crush = (f32)p[0] * 0.01f;
+    f32 rate = (f32)p[1] * 0.01f;
+    f32 band = (f32)p[2] * 0.01f;
+    f32 grit = (f32)p[3] * 0.01f;
+    f32 steps = 256.0f * exp2fx(-crush * 6.2f);        /* 256 down to ~3.5 quantization levels */
+    f32 hstep = 1.0f - rate * 0.92f;
+    f32 fc = 500.0f * exp2fx(band * 3.0f);             /* 500 .. 4000 Hz */
+    Svf bp;
+    int n;
+
+    svf_set(&bp, fc, 1.1f + 1.4f * band, ISRf);
+
+    for (n = 0; n < CTRL; n++) {
+        f32 xl = dl[n], xr = dr[n], lo, b;
+        phone_cnt += hstep;
+        if (phone_cnt >= 1.0f) {
+            phone_cnt -= 1.0f;
+            if (crush > 0.02f) {
+                phone_hl = (f32)ifloor(xl * steps + 0.5f) / steps;
+                phone_hr = (f32)ifloor(xr * steps + 0.5f) / steps;
+            } else {
+                phone_hl = xl;
+                phone_hr = xr;
+            }
+        }
+        xl = phone_hl + grit * grit * 0.05f * noise_s(&phone_rng);
+        xr = phone_hr + grit * grit * 0.05f * noise_s(&phone_rng);
+        if (band > 0.02f) {
+            SVF_TICK(bp, phone_s[0], xl, lo, b); (void)lo;
+            xl = lerpf(xl, softclip(b * 2.1f) * 0.85f, sat(band * 1.4f));
+            SVF_TICK(bp, phone_s[1], xr, lo, b); (void)lo;
+            xr = lerpf(xr, softclip(b * 2.1f) * 0.85f, sat(band * 1.4f));
+        }
+        dl[n] = softclip(xl * (1.0f + 2.5f * grit)) / (1.0f + 0.7f * grit);
+        dr[n] = softclip(xr * (1.0f + 2.5f * grit)) / (1.0f + 0.7f * grit);
+    }
+}
+
+/* ---- 7: THUMP (Transient Shaper + Tape Drive + Bass Boost) ----------------------- */
+static void fx_thump(f32 *dl, f32 *dr, const uint8_t p[4])
+{
+    f32 punch = (f32)p[0] * 0.01f;
+    f32 drive = 1.0f + 3.5f * ((f32)p[1] * 0.01f) * ((f32)p[1] * 0.01f);
+    f32 comp = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
+    f32 bass = (f32)p[2] * 0.01f * 0.85f;
+    f32 tone = ((f32)p[3] - 50.0f) * 0.02f;
+    f32 klp = onepole_k(1.0f / (H1_TAU * 110.0f), SRf);
+    f32 khi = onepole_k(1.0f / (H1_TAU * 3600.0f), SRf);
+    int n;
+
+    for (n = 0; n < CTRL; n++) {
+        f32 m = maxf(absf(dl[n]), absf(dr[n]));
+        f32 tr, g, xl, xr;
+        punch_fast += (m - punch_fast) * (m > punch_fast ? 0.12f : 0.008f);
+        punch_slow += (m - punch_slow) * 0.0012f;
+        tr = maxf(0.0f, punch_fast - punch_slow);
+        g = 1.0f + punch * minf(2.0f, tr * 4.5f);
+
+        xl = dl[n] * g;
+        xr = dr[n] * g;
+        punch_lp_l += (xl - punch_lp_l) * klp;
+        punch_lp_r += (xr - punch_lp_r) * klp;
+        xl += punch_lp_l * bass;
+        xr += punch_lp_r * bass;
+
+        punch_hi_l += (xl - punch_hi_l) * khi;
+        punch_hi_r += (xr - punch_hi_r) * khi;
+        xl += (xl - punch_hi_l) * tone * 0.65f;
+        xr += (xr - punch_hi_r) * tone * 0.65f;
+
+        dl[n] = softclip(xl * drive) * comp;
+        dr[n] = softclip(xr * drive) * comp;
+    }
+}
+
+void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, const uint8_t p[4], f32 bpm, int fx_on)
+{
+    if (!fx_on)
+        return;
+    fx_type = iclamp(fx_type, 0, NFX - 1);
+    if (fx_type != fx_last) {
+        /* gently clear shared buffer when switching between FX sharing echo_buf */
+        uint32_t i;
+        if (fx_type == FX_DELAY || fx_type == FX_SHIFT || fx_type == FX_CHORUS || fx_type == FX_TANK)
+            for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
+        fx_last = fx_type;
+    }
+    switch (fx_type) {
+    case FX_PLATE: fx_plate(sl, sr, dl, dr, p); break;
+    case FX_DELAY:  fx_delay(sl, sr, dl, dr, p, bpm); break;
+    case FX_FILTER:  fx_filter(dl, dr, p); break;
+    case FX_SHIFT:    fx_shift(sl, sr, dl, dr, p); break;
+    case FX_CHORUS: fx_chorus(sl, sr, dl, dr, p); break;
+    case FX_TANK: fx_tank(sl, sr, dl, dr, p); break;
+    case FX_LOFI:  fx_lofi(dl, dr, p); break;
+    case FX_THUMP:  fx_thump(dl, dr, p); break;
+    default: break;
+    }
+}
+
+/* ---- Master Bus: 3-Band Master EQ + Tape Drive/Glue + RAM Tape Performance FX ---- */
+void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
+{
+    f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
+    f32 md_g = ((f32)master[1] - 50.0f) * 0.02f;
+    f32 hi_g = ((f32)master[2] - 50.0f) * 0.02f;
+    f32 drv  = (f32)master[3] * 0.01f;
+    f32 klo = onepole_k(1.0f / (H1_TAU * 130.0f), SRf);
+    f32 khi = onepole_k(1.0f / (H1_TAU * 4800.0f), SRf);
+    f32 drive = 1.0f + 2.8f * drv * drv;
+    f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
+    Svf fmid;
+    int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
+    int n;
+
+    if (eq_on)
+        svf_set(&fmid, 1100.0f, 0.9f, ISRf);
+
+    for (n = 0; n < CTRL; n++) {
+        f32 xl = l[n], xr = r[n];
+        /* 3-band EQ */
+        if (eq_on) {
+            f32 lp, bp;
+            eq_lo[0] += (xl - eq_lo[0]) * klo;
+            eq_lo[1] += (xr - eq_lo[1]) * klo;
+            eq_hi[0] += (xl - eq_hi[0]) * khi;
+            eq_hi[1] += (xr - eq_hi[1]) * khi;
+            SVF_TICK(fmid, eq_mid[0], xl, lp, bp); (void)lp;
+            xl += eq_lo[0] * lo_g * 0.9f + bp * md_g * 0.75f + (xl - eq_hi[0]) * hi_g * 0.85f;
+            SVF_TICK(fmid, eq_mid[1], xr, lp, bp); (void)lp;
+            xr += eq_lo[1] * lo_g * 0.9f + bp * md_g * 0.75f + (xr - eq_hi[1]) * hi_g * 0.85f;
+        }
+        /* Master Tape Drive + subtle soft-knee glue compression */
+        if (drv > 0.01f) {
+            f32 pk = maxf(absf(xl), absf(xr));
+            f32 gr;
+            glue_env += (pk - glue_env) * (pk > glue_env ? 0.03f : 0.0005f);
+            gr = glue_env > 0.35f ? 1.0f / (1.0f + (glue_env - 0.35f) * (1.2f + 1.8f * drv)) : 1.0f;
+            xl = softclip(xl * gr * drive) * comp_g * (1.0f + 0.25f * drv);
+            xr = softclip(xr * gr * drive) * comp_g * (1.0f + 0.25f * drv);
+        }
+        l[n] = xl;
+        r[n] = xr;
+    }
+
+    /* Live RAM Tape Performance FX: Brake & Beat Stutter (48 KB stereo ring) */
+    if (trick != tfx_prev) {
+        if (trick == TRICK_BRAKE) {
+            tfx_rpos = 0.0f;
+            tfx_spd = 1.0f;
+        } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
+            static const f32 SDIV[3] = {0.5f, 0.25f, 0.125f};
+            f32 len = SDIV[trick - TRICK_STUT8] * 60.0f / maxf(40.0f, bpm) * SRf;
+            tfx_stut_len = clampf(len, 256.0f, (f32)(TFX_FRAMES - 64u));
+            tfx_stut_anchor = (f32)((tfx_w % TFX_FRAMES + TFX_FRAMES - (uint32_t)tfx_stut_len) % TFX_FRAMES);
+            tfx_stut_pos = 0.0f;
+        }
+        tfx_prev = trick;
+    }
+
+    for (n = 0; n < CTRL; n++) {
+        uint32_t wi = tfx_w % TFX_FRAMES;
+        if (trick < TRICK_STUT8) {
+            tfx_buf[wi * 2u]     = f_to_i16(l[n]);
+            tfx_buf[wi * 2u + 1] = f_to_i16(r[n]);
+            tfx_w++;
+        }
+        if (trick == TRICK_BRAKE) {
+            uint32_t back, i0, i1, curw = tfx_w % TFX_FRAMES;
+            f32 fr, al, ar, bl, br;
+            tfx_spd = maxf(0.0f, tfx_spd - 2.3f * ISRf);
+            tfx_rpos += (1.0f - tfx_spd);
+            if (tfx_rpos > (f32)(TFX_FRAMES - 4u))
+                tfx_rpos = (f32)(TFX_FRAMES - 4u);
+            back = (uint32_t)ifloor(tfx_rpos);
+            fr = tfx_rpos - (f32)back;
+            i0 = (curw + TFX_FRAMES - 1u - (back % TFX_FRAMES)) % TFX_FRAMES;
+            i1 = (i0 + TFX_FRAMES - 1u) % TFX_FRAMES;
+            al = i16_to_f(tfx_buf[i0 * 2u]);     ar = i16_to_f(tfx_buf[i0 * 2u + 1]);
+            bl = i16_to_f(tfx_buf[i1 * 2u]);     br = i16_to_f(tfx_buf[i1 * 2u + 1]);
+            l[n] = (al + (bl - al) * fr) * sat(tfx_spd * 6.0f);
+            r[n] = (ar + (br - ar) * fr) * sat(tfx_spd * 6.0f);
+        } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
+            uint32_t idx = ((uint32_t)(tfx_stut_anchor + tfx_stut_pos)) % TFX_FRAMES;
+            f32 win = 1.0f;
+            if (tfx_stut_pos < 64.0f) win = tfx_stut_pos * (1.0f / 64.0f);
+            else if (tfx_stut_pos > tfx_stut_len - 64.0f) win = (tfx_stut_len - tfx_stut_pos) * (1.0f / 64.0f);
+            l[n] = i16_to_f(tfx_buf[idx * 2u]) * win;
+            r[n] = i16_to_f(tfx_buf[idx * 2u + 1]) * win;
+            tfx_stut_pos += 1.0f;
+            if (tfx_stut_pos >= tfx_stut_len)
+                tfx_stut_pos -= tfx_stut_len;
+        }
     }
 }

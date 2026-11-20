@@ -1,5 +1,5 @@
-# h1 in fm1-base's host simulator: the device app (app/) with the platform simulated.
-#   ./build.sh --host, then app/build/host/h1_host tests/basic.txt app/build/host
+# a22 in fm1-base's host simulator: the device app (app/) with the platform simulated.
+#   ./build.sh --host, then app/build/host/a22_host tests/basic.txt app/build/host
 wait 600
 shot boot.png
 # a key sounds, and lets go
@@ -24,16 +24,16 @@ wait 200
 # a screen reader hears where it is, then each change
 listen
 wait 100
-said HOME. DUST. WOW. MUFFLE. SWAY
+said HOME. RATIO. DEPTH. FEEDBK. FILTER
 turn PRESET 1
 wait 200
-said ORBIT. NEBULA
+said ELECTRIC. RHODES
 turn ALGO 1
 wait 200
-said ORBIT. DRIFT
+said ELECTRIC. WURLI
 turn K1 3
 wait 600
-said SWEEP
+said BARK
 tap FX
 wait 100
 said PAGE
@@ -51,7 +51,7 @@ reboot
 wait 600
 turn ALGO 1
 wait 200
-said ORBIT. PULSAR
+said ELECTRIC. DX-EP
 # the sequencer has the white keys while it runs: REC arms the loop, a key starts the take
 tap REC
 wait 100
@@ -63,21 +63,8 @@ leds
 shot loop.png
 tap PLAY
 wait 100
-# SEQ and REC together: LAYERS, and the reader says so (on from the start since 0.2.2: off, then on
-# again). With it on, what was recorded keeps its instrument: the loop sounds on with another instrument
-# in hand and no key down
-press SEQ
-press REC
-release REC
-release SEQ
-wait 200
-said LAYERS OFF
-press SEQ
-press REC
-release REC
-release SEQ
-wait 200
-said LAYERS ON
+# a take on track 1: with another instrument in hand and no key down, the tape plays it on (a22's tape is
+# 4 bars, so a whole pass is listened to)
 tap REC
 wait 100
 key 14 down
@@ -86,22 +73,13 @@ key 14 up
 wait 300
 tap REC
 turn PRESET 3
-wait 1500
+wait 500
 peakreset
-wait 4500
+wait 8500
 expect peak_db_min -50
-tap SEQ
-wait 2500
-shot layers.png
-tap HOME
 tap PLAY
 turn PRESET -3
-press SEQ
-press REC
-release REC
-release SEQ
 wait 200
-said LAYERS OFF
 # (the settings are written once nothing sounds: the last notes' tails first)
 tap SAVE
 wait 4000
@@ -112,12 +90,12 @@ reboot
 wait 600
 where
 wait 100
-said h1. COZY. TINE
+said A22. FM-4. KEYS
 reboot
 wait 600
 where
 wait 100
-said h1. ORBIT
+said A22. ELECTRIC
 # the loop survives a power-off: record one, stop it with PLAY, let the tails go (it is written then), cut
 # the power, and PLAY after the start plays it (held REC clears what any earlier part of this left first)
 press REC

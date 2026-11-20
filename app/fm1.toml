@@ -1,8 +1,8 @@
-# h1's build settings for fm1-base's tools/build.py (../build.sh runs it; the keys are explained at its top)
-name = "h1"                    # names the build's files: app/build/h1.fwsc, h1-X.Y.Z.fwsc
-id_prefix = "FM-1_481"         # h1's own package identity: dev builds FM-1_48100, releases FM-1_481XXYYZZ
-usb_manufacturer = "h1"
-usb_product = "h1 FM-1"
+# A22's build settings for fm1-base's tools/build.py (../build.sh runs it; the keys are explained at its top)
+name = "a22"                   # names the build's files: app/build/a22.fwsc, a22-X.Y.Z.fwsc
+id_prefix = "FM-1_4122"        # A22's own package identity: dev builds FM-1_412200, releases FM-1_4122XXYYZZ
+usb_manufacturer = "A22"
+usb_product = "A22 FM-1"
 # the core is the DSP and the drawing: separate units at -O2
 o2 = ["../core/*.c"]
 o2_cflags = ["-DH1_DEVICE=1"]
@@ -34,15 +34,14 @@ crash_history = true
 usb_audio_in = true
 usb_audio_out = false
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
-# the name people see on a listing; name above stays "h1" (file names, id, USB names)
-title = "handy-1 (h1)"
-tagline = "Sixteen animated instruments for the FM-1"
-repo = "https://github.com/jakehandy/h1"
+# the name people see on a listing; name above is "a22" (file names, id, USB names)
+title = "A22"
+tagline = "FM workstation for the FM-1"
+repo = "https://github.com/abektes/a22"
 licence = "MIT"
-credits = "h1 is built on fm1-base by Charles Vestal and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments."
-author = "Jake Handy"
-description = "Sixteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome."
-tags = ["synth", "sequencer", "experimental"]
-install = "https://github.com/jakehandy/h1#install"
-site = "https://jakehandy.com/h1"
-screenshot = "docs/img/cozy.png"
+credits = "A22 is derived from h1 by Jake Handy, built on fm1-base by Charles Vestal and felucca-bsp from Felucca by Leo Kuroshita, Hügelton Instruments."
+author = "A22"
+description = "FM-first custom firmware for the M-VAVE FM-1 with 4-color vector graphics, 10 flagship synth & drum engines (FM-4, Electric, Stack, Analog, Shaper, Wire, Haze, Mono, Kit, Perc), 8 selectable FX, 4-track virtual tape, mixer, and Riff/Shake sequencers."
+tags = ["synth", "fm", "groovebox", "sequencer"]
+install = "https://github.com/abektes/a22#install"
+screenshot = "docs/img/a22/fm4.png"

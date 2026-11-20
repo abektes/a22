@@ -1,6 +1,6 @@
 /* g_line against the plain way of drawing one: for every pixel near the line, its distance to the
  * line in floats. g_line steps that distance in integers and a path leaves out the round ends its
- * neighbouring strokes cover, and neither may move a pixel by more than one ink level of 255. Random
+ * neighbouring strokes cover, and neither may move a pixel by more than one ink level (of a22's 32). Random
  * lines of every width, slope, place (on the screen, across its edge, far off it) and mode, then
  * random paths and arcs. Run by tests/run_tests.sh. */
 #include <stdio.h>
@@ -10,7 +10,7 @@
 
 #define N (FB_W * FB_H)
 static uint8_t ref[N];
-static int ref_mode, ref_level;
+static int ref_mode, ref_level, ref_level5;
 static uint32_t seed = 12345u;
 static int fails;
 
@@ -21,25 +21,33 @@ static f32 rnd(void)                             /* 0..1 */
 }
 static f32 span(f32 a, f32 b) { return a + (b - a) * rnd(); }
 
+/* a22's pixel is a colour bank (bits 5..7, 0 here) and a level of 0..31; the modes as core/gfx.c ink()
+ * has them for one bank */
 static void ref_put(int x, int y, int cov)
 {
     uint8_t *p;
-    int v;
+    int v, lev5 = ref_level5;
     if ((unsigned)x >= FB_W || (unsigned)y >= FB_H || cov <= 0)
         return;
     if (cov > 256)
         cov = 256;
     p = &ref[y * FB_W + x];
     if (ref_mode == G_MAX) {
-        v = (cov * ref_level) >> 8;
+        v = (cov * lev5 + 128) >> 8;
+        if (v > 31) v = 31;
         if (v > *p)
             *p = (uint8_t)v;
     } else if (ref_mode == G_ADD) {
-        v = *p + ((cov * ref_level) >> 8);
-        *p = (uint8_t)(v > 255 ? 255 : v);
+        v = (cov * lev5 + 128) >> 8;
+        v += *p;
+        *p = (uint8_t)(v > 31 ? 31 : v);
+    } else if (ref_level == 0) {
+        *p = (uint8_t)(*p - ((*p * cov + 128) >> 8));
+    } else if (cov >= 240) {
+        *p = (uint8_t)lev5;
     } else {
-        v = ref_level - *p;
-        *p = (uint8_t)(*p + (v * cov) / 256);
+        v = *p + (((lev5 - *p) * cov + 128) >> 8);
+        *p = (uint8_t)(v > 31 ? 31 : (v < 0 ? 0 : v));
     }
 }
 
@@ -49,6 +57,7 @@ static void ref_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a)
     f32 dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy, R = w * 0.5f + 0.5f;
     int i, j, ia, ib, ja, jb;
     ref_level = a <= 0.0f ? 0 : (a >= 1.0f ? 255 : (int)(a * 255.0f + 0.5f));
+    ref_level5 = a <= 0.0f ? 0 : (a >= 1.0f ? 31 : (int)(a * 31.0f + 0.5f));
     if (!ref_level && ref_mode != G_PAINT)
         return;
     ia = imax(0, ifloor(minf(x0, x1) - R - 2.0f));
@@ -137,7 +146,9 @@ int main(void)
         ref_line(p[0], p[1], p[2], p[3], w, a);
         d = worst(&at);
         lines++;
-        if (d > 1) {
+        /* (G_PAINT takes a pixel whole from 240/256 of cover, core/gfx.c ink(): a cover one step under that,
+         * which is as close as g_line's integer steps come to the float distance, lands two levels away) */
+        if (d > (mode == G_PAINT ? 2 : 1)) {
             printf("FAIL line %d: (%g, %g) to (%g, %g), width %g, alpha %g, mode %d: pixel (%d, %d) is %d, should be %d\n",
                    k, (double)p[0], (double)p[1], (double)p[2], (double)p[3], (double)w, (double)a, mode, at % FB_W, at / FB_W, g_fb[at], ref[at]);
             if (++fails > 8)

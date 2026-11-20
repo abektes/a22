@@ -24,7 +24,6 @@
  * with are in range, and a frame sent the way the device sends it (in pieces, while the next one is
  * drawn) leaves the panel showing exactly that frame. */
 #include <pthread.h>
-#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,30 +193,51 @@ static void poke(int with_sound)
     }
 }
 
-/* a second core, as a thread: it sleeps until it is handed a job, and the sound waits for it */
-static sem_t job_go, job_done;
+/* a second core, as a thread: it sleeps until it is handed a job, and the sound waits for it
+ * (a mutex and a condition, not sem_init: macOS has no unnamed semaphores) */
+static pthread_mutex_t job_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t job_cv = PTHREAD_COND_INITIALIZER;
+static int job_pending, job_finished;
 static void (*job_fn)(uint32_t);
 static uint32_t job_arg;
 static void *core_two(void *x)
 {
     (void)x;
     for (;;) {
-        sem_wait(&job_go);
-        job_fn(job_arg);
-        sem_post(&job_done);
+        void (*fn)(uint32_t);
+        uint32_t arg;
+        pthread_mutex_lock(&job_mu);
+        while (!job_pending)
+            pthread_cond_wait(&job_cv, &job_mu);
+        job_pending = 0;
+        fn = job_fn;
+        arg = job_arg;
+        pthread_mutex_unlock(&job_mu);
+        fn(arg);
+        pthread_mutex_lock(&job_mu);
+        job_finished = 1;
+        pthread_cond_broadcast(&job_cv);
+        pthread_mutex_unlock(&job_mu);
     }
     return 0;
 }
 static int run_two(void (*fn)(uint32_t), uint32_t arg)
 {
+    pthread_mutex_lock(&job_mu);
     job_fn = fn;
     job_arg = arg;
-    sem_post(&job_go);
+    job_finished = 0;
+    job_pending = 1;
+    pthread_cond_broadcast(&job_cv);
+    pthread_mutex_unlock(&job_mu);
     return 1;
 }
 static int wait_two(void)
 {
-    sem_wait(&job_done);
+    pthread_mutex_lock(&job_mu);
+    while (!job_finished)
+        pthread_cond_wait(&job_cv, &job_mu);
+    pthread_mutex_unlock(&job_mu);
     return 0;
 }
 static int no_two(void (*fn)(uint32_t), uint32_t arg) { (void)fn; (void)arg; return 0; }   /* (it takes nothing) */
@@ -228,8 +248,6 @@ static void fresh(uint32_t t0)
     static pthread_t th;
     if (!started) {
         started = 1;
-        sem_init(&job_go, 0, 0);
-        sem_init(&job_done, 0, 0);
         if (pthread_create(&th, 0, core_two, 0))
             die("no thread for the second core", 0, 0, 0, 0);
     }
@@ -263,41 +281,29 @@ static void part_state(int rounds)
     for (k = 1; k < 4; k++) {
         fresh(0);
         h1_encoder(H1_ENC_PRESET, 3 + k);
-        memcpy(odd + k, h1_state(&size), size);
+        { const void *src_ = h1_state(&size); memcpy(odd + k, src_, size); }   /* (size set first: argument order is unspecified) */
         fresh(0);
         if (h1_state_load(odd + k, size) != 0 || h1_instrument() != 3 + k)
             die("a good state was refused at an odd address", k, h1_instrument(), 0, 0);
     }
     /* what is not this version's is refused and changes nothing */
     fresh(0);
-    memcpy(odd + 1, h1_state(&size), size);
+    { const void *src_ = h1_state(&size); memcpy(odd + 1, src_, size); }   /* (size set first: argument order is unspecified) */
     odd[1] ^= 1u;
     if (h1_state_load(odd + 1, size) == 0 || h1_state_load(odd + 1, size - 1) == 0 || h1_state_load(0, size) == 0)
         die("a bad state was taken", 0, 0, 0, 0);
     for (n = 0; n < rounds; n++) {
         fresh(n & 1 ? 0xFFFFF000u : 0u);                     /* (the clock's wrap too) */
-        memcpy(odd + 1, h1_state(&size), size);
+        { const void *src_ = h1_state(&size); memcpy(odd + 1, src_, size); }   /* (size set first: argument order is unspecified) */
         if (n % 3 == 0)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
-        if (n % 5 == 4) {                                    /* the state before LAYERS: version 4, 664 bytes */
-            odd[1 + 4] = 4;
-            if (h1_state_load(odd + 1, 664u) != 0 || !h1_layers())
-                die("a version 4 state was refused, or came back with LAYERS off", n, h1_layers(), 0, 0);
-        } else if (n % 5 == 2) {                             /* the one before a step's eight notes and each algorithm's
-                                                              * knobs: version 5, 920 bytes */
-            odd[1 + 4] = 5;
-            if (h1_state_load(odd + 1, 920u) != 0)
-                die("a version 5 state was refused", n, 0, 0, 0);
-        } else if (n % 5 == 1) {                             /* the one of fourteen instruments: version 6, 1880 bytes */
-            odd[1 + 4] = 6;
-            if (h1_state_load(odd + 1, 1880u) != 0 || !h1_layers())
-                die("a version 6 state was refused, or came back with LAYERS off", n, 0, 0, 0);
-        } else if (n % 5 == 3) {                             /* and that with velocities and layers: version 8, 3160 bytes */
-            odd[1 + 4] = 8;
-            if (h1_state_load(odd + 1, 3160u) != 0)
-                die("a version 8 state was refused", n, 0, 0, 0);
+        if (n % 5 == 4) {                                    /* an h1 save (its magic, any version) is not a22's:
+                                                              * refused, and the state in hand plays on */
+            odd[1] = '1'; odd[1 + 1] = 'H'; odd[1 + 2] = 'S'; odd[1 + 3] = '1';
+            if (h1_state_load(odd + 1, size) == 0)
+                die("an h1 save was taken as a22's", n, 0, 0, 0);
         } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
         if (n % 2 == 0) {                                    /* and a saved loop: any bytes after its head, from an
@@ -308,9 +314,9 @@ static void part_state(int rounds)
                 ln = H1_LOOP_MAX + 4u;
             for (j = 0; j < ln; j++)
                 lp[3 + j] = (uint8_t)rnd();
-            lp[3] = 'H'; lp[4] = '1'; lp[5] = 'L'; lp[6] = 'P'; lp[7] = 1;
+            lp[3] = 'A'; lp[4] = '2'; lp[5] = '2'; lp[6] = 'T'; lp[7] = 1;     /* core/synth.c LOOP_MAGIC */
             if (below(4)) {                                  /* a count that fits, a length in range (mostly) */
-                uint32_t ne = (ln - 12u) / 8u, len = 24u + (uint32_t)below(3840 - 24 + 1);
+                uint32_t ne = (ln - 12u) / 8u, len = 24u + (uint32_t)below(32 * 480 - 24 + 1);
                 lp[9] = (uint8_t)ne; lp[10] = (uint8_t)(ne >> 8);
                 lp[11] = (uint8_t)len; lp[12] = (uint8_t)(len >> 8);
             }
@@ -347,8 +353,6 @@ static void part_panel(int steps)
             h1_button(H1_BTN_REC, 1);
             h1_button(H1_BTN_REC, 0);
             h1_button(H1_BTN_SEQ, 0);
-            if (h1_layers())
-                die("SEQ and REC together did not turn LAYERS off", inst, 0, 0, 0);
         }
         for (n = 0; n < steps; n++) {
             poke(1);
@@ -362,8 +366,8 @@ static void part_panel(int steps)
             if (na > H1_LOOP_MAX)
                 die("a saved loop longer than its room", (int)na, 0, 0, 0);
             memcpy(a + 1, p, na);
-            for (n = 12; n + 8 <= (int)na; n += 8)          /* (bit 7 of on: played this pass, not saved) */
-                a[1 + n + 3] &= 1;
+            for (n = 12; n + 8 <= (int)na; n += 8)          /* (bit 7 of flags: played this pass, not saved; the kind is bits 0..2) */
+                a[1 + n + 3] &= 7;
             if (na) {
                 if (h1_loop_load(a + 1, na) != 0)
                     die("a loop it saved itself was refused", (int)na, 0, 0, 0);

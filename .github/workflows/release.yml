@@ -1,10 +1,10 @@
-# h1's release: built from source on GitHub by the shared FM-1 builder (zvenson/fm1-build), its packages
+# a22's release: built from source on GitHub by the shared FM-1 builder (zvenson/fm1-build), its packages
 # signed with build provenance, so The Firmware Hub shows them as built from source. After fm1-base's
 # template (base/template/.github/workflows/release.yml).
 #
-# A pushed tag vX.Y.Z builds h1-X.Y.Z.fwsc (identity FM-1_481XXYYZZ), runs tests/run_tests.sh, attests the
-# package and publishes the release. "Run workflow" by hand builds a development package (h1.fwsc, identity
-# FM-1_48100) as the run's "packages" artifact, with no release: the one to try on an FM-1 before tagging.
+# A pushed tag vX.Y.Z builds a22-X.Y.Z.fwsc (identity FM-1_4122XXYYZZ), runs tests/run_tests.sh, attests the
+# package and publishes the release. "Run workflow" by hand builds a development package (a22.fwsc, identity
+# FM-1_412200) as the run's "packages" artifact, with no release: the one to try on an FM-1 before tagging.
 # Go through docs/RELEASE-CHECKLIST.md before any tag.
 name: Build and attest firmware
 
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: h1-release-${{ github.ref }}
+  group: a22-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TITLE: h1
+          TITLE: A22
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then exit 0; fi
@@ -59,7 +59,7 @@ jobs:
       tests-block: true
       build: |
         set -euo pipefail
-        pkg=h1
+        pkg=a22
         # the builder checks out without submodules: fm1-base (base/) and its felucca-bsp (base/bsp/), at the
         # commits this one links
         git submodule update --init --recursive
@@ -83,7 +83,7 @@ jobs:
         cp app/build/firmware.json build/release-assets/
       test: |
         set -euo pipefail
-        [ -f app/build/h1.fwsc ]
+        [ -f app/build/a22.fwsc ]
         sh tests/run_tests.sh
       packages: build/release-assets/*
 

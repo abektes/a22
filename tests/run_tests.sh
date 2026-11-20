@@ -1,67 +1,61 @@
 #!/bin/sh
-# h1's tests: the device app in fm1-base's host simulator (the platform simulated, the same app.c
-# and core as the firmware), then LAYERS (tests/layers.c), each algorithm's own knobs, the resets and a
-# step's eight notes (tests/knobs.c), each instrument's own volume and the volume ring (tests/volume.c),
-# what 0.2.2 adds (tests/v022.c), ECHO after a long time on (tests/echo.c), two cores (tests/cores.c), what is hidden in the pictures (tests/eggs.c) and the line drawing (tests/lines.c) on the core alone. The release workflow
-# runs this after the build; a failure stops it.
+# a22's tests. First the device app in fm1-base's host simulator (the platform simulated, the same app.c
+# and core as the firmware), with the second core and without. Then the core alone, most of it under the
+# compiler's address and undefined-behaviour checkers:
+#   a22_test   two cores bit-exact on all 80 presets, MONO mono, the tape saved and loaded from odd
+#              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
+#   basics     the limiter on every algorithm, velocity, the tape through a power cycle, MIDI out
+#   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
+#   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
+#   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
+#   echo       DELAY the same after 25 minutes on as at start
+#   cores      two cores sound the same as one, section by section
+#   lines      g_line, g_poly and g_arc against a distance worked out in floats
+# The release workflow runs this after the build; a failure stops it. tests/run_fuzz.sh is the crash hunt.
 set -eu
 cd "$(dirname "$0")/.."
+CC="${CC:-cc}"
+SAN="-O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w"
+export ASAN_OPTIONS=detect_leaks=0
+
 ./build.sh --host
 out=app/build/host
-"$out/h1_host" tests/basic.txt "$out"
+"$out/a22_host" tests/basic.txt "$out"
 # USB host: OCT- and OCT+ held, a keyboard plugged in and played, unplugged, and back to the computer
-"$out/h1_host" tests/usbhost.txt "$out"
-# the loop kept through a power-off while it plays (#39), and one cut off in the middle of its save
-"$out/h1_host" tests/looppower.txt "$out"
+"$out/a22_host" tests/usbhost.txt "$out"
+# the tape kept through a power-off while it plays, and one cut off in the middle of its save
+"$out/a22_host" tests/looppower.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host
-"$out/h1_host" tests/basic.txt "$out"
+"$out/a22_host" tests/basic.txt "$out"
 ./build.sh --host
+
 mkdir -p build
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/layers.c -o build/h1layers -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1layers
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/knobs.c -o build/h1knobs -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1knobs
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/volume.c -o build/h1volume -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1volume
-# 0.2.2: the limiter, velocity, each layer's own settings, the loop saved, MIDI out, a 0.2.1 state
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/v022.c -o build/h1v022 -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1v022
-# LAVA's ninth algorithm (HOOVER): parts counted, state version 9, a loop saved as version 2, and 0.2.2's of both read
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/ninth.c -o build/h1ninth -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1ninth
-# BARD's drone holds a moment after the playing stops and dies away, never cut off
-"${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/drone.c -o build/h1drone -lm
-build/h1drone | tail -1
-# the loop's room and length: four layers on eight bars, 16 to 128 bars, a full loop, 0.2.2's loop read
-"${CC:-cc}" -std=c99 -O2 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/looper.c -o build/h1looper -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1looper
-# ECHO the same after 25 minutes on as at start (issue #31: it went grainy the longer the unit was on)
-"${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/h1echo -lm
-build/h1echo
+$CC -std=c99 $SAN core/*.c tests/a22_test.c -o build/a22test -lm -lpthread
+build/a22test
+$CC -std=c99 $SAN core/*.c tests/basics.c -o build/a22basics -lm
+build/a22basics
+$CC -std=c99 $SAN core/*.c tests/mixer.c -o build/a22mixer -lm
+build/a22mixer
+$CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
+build/a22looper
+$CC -std=c99 $SAN core/*.c tests/chords.c -o build/a22chords -lm
+build/a22chords
+# (25 minutes of DELAY: without the checkers, or it takes most of an hour)
+$CC -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/a22echo -lm
+build/a22echo
 # two cores sound the same as one, to the bit (tests/cores.c: the second core is a thread)
-"${CC:-cc}" -std=c11 -O2 -ffp-contract=off -w core/*.c tests/cores.c -o build/h1cores -lm -lpthread
-build/h1cores > build/cores1.txt
-build/h1cores 2 > build/cores2.txt
+$CC -std=c11 -O2 -ffp-contract=off -w core/*.c tests/cores.c -o build/a22cores -lm -lpthread
+build/a22cores > build/cores1.txt
+build/a22cores 2 > build/cores2.txt
 if cmp -s build/cores1.txt build/cores2.txt; then
-    echo "cores: $(wc -l < build/cores1.txt) sections, the same on one core and two"
+    echo "cores: $(wc -l < build/cores1.txt | tr -d ' ') sections, the same on one core and two"
 else
     echo "FAIL cores: two cores sound different from one, in these sections:"
     diff build/cores1.txt build/cores2.txt | head -20
     exit 1
 fi
-# what is hidden in the pictures, and the noise each makes
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/*.c tests/eggs.c -o build/h1eggs -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1eggs
-# g_line against a distance worked out in floats at every pixel: never more than one ink level off
-"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
-    core/gfx.c tests/lines.c -o build/h1lines -lm
-ASAN_OPTIONS=detect_leaks=0 build/h1lines
+$CC -std=c99 $SAN core/gfx.c tests/lines.c -o build/a22lines -lm
+build/a22lines
+echo "run_tests: all passed"

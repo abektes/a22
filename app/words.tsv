@@ -1,5 +1,5 @@
-# The words h1 gives a screen reader (fm1-reader): the text on the screen <TAB> what to say.
+# The words A22 gives a screen reader (fm1-reader): the text on the screen <TAB> what to say.
 # The files gen_words.py writes from this are in app/web/words/ and are served from the address below:
 # keep every one of them in the repository, a device in the wild points at its own.
-# url: https://raw.githubusercontent.com/jakehandy/h1/main/app/web/words/
-h1	H one
+# url: https://raw.githubusercontent.com/abektes/a22/main/app/web/words/
+A22	A twenty two

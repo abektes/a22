@@ -1,20 +1,19 @@
 {
   "schema": 1,
-  "id": "h1",
-  "name": "handy-1 (h1)",
-  "author": "Jake Handy",
+  "id": "a22",
+  "name": "A22",
+  "author": "A22",
   "license": "MIT",
-  "tagline": "Sixteen animated instruments for the FM-1",
-  "description": "Sixteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome.",
-  "tags": ["synth", "sequencer", "experimental"],
-  "install": "https://github.com/jakehandy/h1#install",
-  "site": "https://jakehandy.com/h1",
-  "source": "https://github.com/jakehandy/h1",
-  "screenshot": "docs/img/cozy.png",
+  "tagline": "FM workstation for the FM-1",
+  "description": "FM-first custom firmware for the M-VAVE FM-1 with 4-color vector graphics, 10 flagship synth & drum engines (FM-4, Electric, Stack, Analog, Shaper, Wire, Haze, Mono, Kit, Perc), 8 selectable FX, 4-track virtual tape, mixer, and Riff/Shake sequencers.",
+  "tags": ["synth", "fm", "groovebox", "sequencer"],
+  "install": "https://github.com/abektes/a22#install",
+  "source": "https://github.com/abektes/a22",
+  "screenshot": "docs/img/a22/fm4.png",
   "hardware": {
     "models": ["FM-1"],
     "flash": ["856014", "B36014"],
     "features": ["usb-audio-in", "usb-midi-host", "second-core", "screen-reader"]
   },
-  "credits": "h1 is built on fm1-base by Charles Vestal and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments."
+  "credits": "A22 is derived from h1 by Jake Handy, built on fm1-base by Charles Vestal and felucca-bsp from Felucca by Leo Kuroshita, Hügelton Instruments."
 }

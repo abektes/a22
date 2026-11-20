@@ -95,16 +95,16 @@ if not commit:
         commit = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     except OSError:
         commit = ""
-wasm = open(os.path.join(root, "build/h1-core.wasm"), "rb").read()
+wasm = open(os.path.join(root, "build/a22-core.wasm"), "rb").read()
 mem = check(wasm)
-manifest = {"rfm1": 1, "abi": 6, "id": "h1", "name": "h1", "version": a.version,
+manifest = {"rfm1": 1, "abi": 6, "id": "a22", "name": "A22", "version": a.version,
             "license": "MIT",
             "source_url": "https://github.com/jakehandy/h1" + ("@" + commit if commit else ""),
-            "authors": ["Jake Handy"], "built_by": "h1 tools/build_rfm1.sh, clang wasm32",
+            "authors": ["A22", "Jake Handy"], "built_by": "A22 tools/build_rfm1.sh, clang wasm32",
             "memory_mib": mem // (1024 * 1024)}
 out = wasm + section("rfm1", json.dumps(manifest, indent=1).encode())
-out += section("rfm1.credits", "h1, a firmware for the M-VAVE FM-1, by Jake Handy.\n".encode())
+out += section("rfm1.credits", "A22 FM workstation for the M-VAVE FM-1 (derived from h1 by Jake Handy).\n".encode())
 out += section("rfm1.license.0", ("MIT\n" + open(os.path.join(root, "LICENSE"), encoding="utf-8").read()).encode())
 os.makedirs(os.path.join(root, "dist"), exist_ok=True)
-open(os.path.join(root, "dist/h1.rfm1"), "wb").write(out)
-print("wrote dist/h1.rfm1, %d KB (%d MiB memory)" % (len(out) // 1024, mem >> 20))
+open(os.path.join(root, "dist/a22.rfm1"), "wb").write(out)
+print("wrote dist/a22.rfm1, %d KB (%d MiB memory)" % (len(out) // 1024, mem >> 20))

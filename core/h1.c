@@ -1,9 +1,11 @@
-/* h1 - the public calls that are not the UI's or the engine's own: start-up and saved state. */
+/* A22 - start-up defaults, saved state persistence, and public introspection. */
 #include "internal.h"
 
 void knobs_default(int inst, int algo)
 {
     int a, k;
+    if (inst < 0 || inst >= NINST)
+        return;
     for (a = 0; a < NALGO; a++)
         if (algo < 0 || a == algo)
             for (k = 0; k < 4; k++)
@@ -14,29 +16,88 @@ static void inst_default(int i)
 {
     st.ip[i] = insts[i]->def;
     knobs_default(i, -1);
-    st.ink[i][0] = insts[i]->ink[0];
-    st.ink[i][1] = insts[i]->ink[1];
-    st.ink[i][2] = insts[i]->ink[2];
+}
+
+static void track_default(int t)
+{
+    /* Default 4-Track band setup:
+     *   T1 (Blue):   FM-4 (KEYS)
+     *   T2 (Green):  ELECTRIC (RHODES)
+     *   T3 (White):  ANALOG (SUB / DUAL)
+     *   T4 (Orange): KIT (808 Drums) */
+    static const uint8_t DEF_INST[NTRACK] = {0, 1, 3, 8};
+    static const uint8_t DEF_ALGO[NTRACK] = {0, 0, 3, 0};
+    static const uint8_t DEF_SEND[NTRACK] = {42, 46, 25, 16};
+    int inst = DEF_INST[t] < NINST ? DEF_INST[t] : 0;
+    int algo = DEF_ALGO[t] < NALGO ? DEF_ALGO[t] : 0;
+    int k;
+    Track *tr = &st.trk[t];
+    tr->inst = (uint8_t)inst;
+    tr->algo = (uint8_t)algo;
+    tr->vol = 88;
+    tr->pan = 50;
+    tr->send = DEF_SEND[t];
+    tr->mute = 0;
+    tr->has_snap = 0;
+    tr->rsv = 0;
+    for (k = 0; k < 4; k++) {
+        tr->knob[k] = insts[inst]->def.knob0[k];
+        tr->env[k]  = insts[inst]->def.env[k];
+        tr->menv[k] = insts[inst]->def.menv[k];
+        tr->lfo[k]  = insts[inst]->def.lfo[k];
+    }
 }
 
 static void defaults(void)
 {
-    int i;
+    int i, f, k;
     uint8_t *p = (uint8_t *)&st;
     for (i = 0; i < (int)sizeof st; i++)
         p[i] = 0;
     st.magic = H1_MAGIC;
     st.version = H1_VERSION;
-    st.glo[0] = 112;                             /* tempo */
-    st.glo[2] = 50;                              /* tune: centre */
-    st.glo[3] = 100;                             /* bright */
-    st.seq[1] = 1;                               /* 2 bars */
-    st.seq[3] = 1;                               /* the loop snaps to 1/16 */
-    st.seq[4] = 1;                               /* steps of 1/16 */
-    st.seq[6] = 1;                               /* LAYERS: record, change instrument, record over it */
+    st.inst = 0;                                 /* FM-4 */
+    st.track = 0;                                /* T1 */
+    st.hud = 1;                                  /* color-coded knob strip on by default */
+    st.glo[0] = 118;                             /* tempo */
+    st.glo[1] = 0;                               /* swing */
+    st.glo[2] = 50;                              /* tune: center */
+    st.glo[3] = 100;                             /* brightness */
+    st.seq[0] = SEQ_TAPE;                        /* 4-track Tape default */
+    st.seq[1] = 2;                               /* 4 bars (1 << 2) */
+    st.seq[2] = 0;                               /* 4/4 */
+    st.seq[3] = 1;                               /* 1/16 snap */
+    st.seq[4] = 1;                               /* 1/16 step grid */
+    st.seq[5] = CLICK_REC;                       /* click while recording */
+    st.seq[6] = 1;                               /* multi-track enabled */
+    st.seq[7] = 1;                               /* tape pitch-link ON */
+    st.tape[0] = TAPE_SPD_1X;
+    st.tape[1] = 0;                              /* loop in bar 0 */
+    st.tape[2] = 0;                              /* loop out = full length */
+    st.tape[3] = TRICK_OFF;
+    st.fx_type = FX_PLATE;                      /* Lush Dattorro plate reverb default */
+    st.fx_on = 1;
+    for (f = 0; f < NFX; f++)
+        for (k = 0; k < 4; k++)
+            st.fx_p[f][k] = FX_DEFAULTS[f][k];
+    st.master[0] = 52;                           /* LOW: subtle warmth */
+    st.master[1] = 50;                           /* MID: flat */
+    st.master[2] = 52;                           /* HIGH: subtle air */
+    st.master[3] = 22;                           /* DRIVE: subtle tape glue */
+    st.shake[0] = 45;                          /* GRAVITY */
+    st.shake[1] = 62;                          /* SPIN (gentle clockwise) */
+    st.shake[2] = 78;                          /* BOUNCE */
+    st.shake[3] = 50;                          /* CAGE / SCALE */
+    st.riff_len = 0;
+    st.riff_root = 60;
+    st.chord[0] = CHORD_OFF;                     /* chord memory off; MEMORY holds a major triad until one */
+    st.chord_n = 3;                              /* is captured (EDIT + GLO with keys held) */
+    st.chord_mem[0] = 0; st.chord_mem[1] = 4; st.chord_mem[2] = 7;
     st.ninst = NINST;
     for (i = 0; i < NINST; i++)
         inst_default(i);
+    for (i = 0; i < NTRACK; i++)
+        track_default(i);
 }
 
 SMALL void h1_init(uint32_t sample_rate)
@@ -56,21 +117,9 @@ const void *h1_state(uint32_t *size)
     return &st;
 }
 
-/* Take a saved blob. Call it right after h1_init, before the audio starts. Anything that does not
- * look like a state of this version or of one it can read (4, 5, 6 and 8) is refused, and every value is clamped to
- * its range.
- *
- * The blob is bytes at any address: it is copied out a byte at a time and nothing is read from it as
- * a word. (A byte buffer may sit at an odd address, and the FM-1's CPU stops on a word read from one:
- * reading the magic straight out of the blob kept the first h1 from starting once it had saved.) */
-typedef char v4_is_664_bytes[H1_VERSION_4_SIZE == 664u ? 1 : -1];   /* what the FM-1s out there hold: these */
-typedef char v5_is_920_bytes[H1_VERSION_5_SIZE == 920u ? 1 : -1];   /* must not move with the layout */
-typedef char v6_is_1880_bytes[H1_VERSION_6_SIZE == 1880u ? 1 : -1];
-typedef char v8_is_3160_bytes[H1_VERSION_8_SIZE == 3160u ? 1 : -1];
-typedef char v9_is_3344_bytes[sizeof(H1State) == 3344u ? 1 : -1];
-typedef char old_head_is_the_same[offsetof(H1Old, ip) == offsetof(H1State, ip) ? 1 : -1];
-typedef char the_slots_hold_the_instruments[NINST <= NSLOT && NSLOT * NALGO < 255 ? 1 : -1];
-typedef char v9_fits_a_store_object[sizeof(H1State) <= 3840u ? 1 : -1];
+typedef char a22_state_fits_store[sizeof(H1State) <= 3840u ? 1 : -1];
+typedef char a22_slots_valid[NINST <= NSLOT && NSLOT * NALGO < 255 ? 1 : -1];
+
 static void bytes(void *to, const uint8_t *from, uint32_t n)
 {
     uint8_t *d = (uint8_t *)to;
@@ -81,135 +130,125 @@ static void bytes(void *to, const uint8_t *from, uint32_t n)
 SMALL int h1_state_load(const void *blob, uint32_t size)
 {
     const uint8_t *b = (const uint8_t *)blob;
-    uint8_t *d = (uint8_t *)&st;
-    uint32_t magic = 0, was, n;
-    int i, j, pg, a, had;
-    if (!blob)
-        return -1;
-    was = size == sizeof st ? H1_VERSION : size == H1_VERSION_8_SIZE ? 8u : size == H1_VERSION_6_SIZE ? 6u
-        : size == H1_VERSION_5_SIZE ? 5u : size == H1_VERSION_4_SIZE ? 4u : 0u;
-    if (!was)
+    uint32_t magic = 0, n;
+    int i, j, a;
+    if (!blob || size != sizeof st)
         return -1;
     for (n = 0; n < 4u; n++)
         ((uint8_t *)&magic)[n] = b[n];
-    if (magic != H1_MAGIC || b[offsetof(H1State, version)] != was)
-        return -1;                               /* (refused: nothing has been touched) */
-    if (was == H1_VERSION) {
-        bytes(d, b, (uint32_t)sizeof st);
-        had = st.ninst < NINST ? st.ninst : NINST;
-    } else {
-        /* An older state, of fourteen instruments of eight algorithms: each of its tables goes to the start
-         * of this one's, and its parts are counted now. Before version 8 a step's notes have no velocity
-         * (they play at full, as they did) and no layer (they follow their part, as they did), and LAYERS
-         * comes on: recording over a loop on another instrument is what h1 does now. Before version 6 a
-         * step held four notes, with in version 5 the part of each after all the notes, and an
-         * instrument's algorithms shared four knobs, so every algorithm starts from where those stood and
-         * nothing sounds different after the update. The ninth algorithm (HOOVER) starts as new. */
-        const uint8_t *notes = b + offsetof(H1Old, steps);
-        for (n = 0; n < sizeof st; n++)
-            d[n] = 0;
-        bytes(d, b, (uint32_t)offsetof(H1Old, ip));
-        bytes(st.ip, b + offsetof(H1Old, ip), H1_OLD_NINST * (uint32_t)sizeof(InstParams));
-        bytes(st.ink, b + offsetof(H1Old, ink), H1_OLD_NINST * 3u);
-        if (was >= 6u) {
-            bytes(st.steps, notes, (uint32_t)sizeof st.steps);
-            bytes(st.step_part, b + offsetof(H1Old, step_part), (uint32_t)sizeof st.step_part);
-            for (i = 0; i < (int)H1_OLD_NINST; i++)
-                for (a = 0; a < (int)H1_OLD_NALGO; a++)
-                    bytes(st.knob[i][a], b + offsetof(H1Old, knob) + ((uint32_t)i * H1_OLD_NALGO + (uint32_t)a) * 4u, 4u);
-        } else {
-            const uint8_t *parts = was >= 5u ? notes + NSTEP * H1_OLD_SNOTE : 0;
-            for (i = 0; i < NSTEP; i++)
-                for (j = 0; j < NSNOTE; j++) {
-                    st.steps[i][j] = j < (int)H1_OLD_SNOTE ? notes[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
-                    st.step_part[i][j] = parts && j < (int)H1_OLD_SNOTE ? parts[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
-                }
-            for (i = 0; i < (int)H1_OLD_NINST; i++)
-                for (a = 0; a < (int)H1_OLD_NALGO; a++)
-                    for (j = 0; j < 4; j++)
-                        st.knob[i][a][j] = st.ip[i].knob0[j];
-        }
-        if (was >= 8u) {
-            bytes(st.step_vel, b + offsetof(H1Old, step_vel), (uint32_t)sizeof st.step_vel);
-            bytes(st.step_lay, b + offsetof(H1Old, step_lay), (uint32_t)sizeof st.step_lay);
-            bytes(st.layer, b + offsetof(H1Old, layer), (uint32_t)sizeof st.layer);
-        } else
-            st.seq[6] = 1;
-        for (i = 0; i < NSTEP; i++)
-            for (j = 0; j < NSNOTE; j++)
-                st.step_part[i][j] = PART_V8(st.step_part[i][j]);
-        for (i = 0; i < NLAYER; i++)
-            st.layer[i].part = PART_V8(st.layer[i].part);
-        for (i = 0; i < (int)H1_OLD_NINST && i < NINST; i++)
-            for (a = (int)H1_OLD_NALGO; a < NALGO; a++)
-                knobs_default(i, a);
-        had = (int)H1_OLD_NINST < NINST ? (int)H1_OLD_NINST : NINST;
-    }
-    for (i = had; i < NSLOT; i++) {              /* instruments that came after the state was saved: as new */
-        uint8_t *p = (uint8_t *)&st.ip[i];
-        for (n = 0; n < sizeof st.ip[i]; n++)
-            p[n] = 0;
-        for (n = 0; n < 3u; n++)
-            st.ink[i][n] = 0;
-        for (a = 0; a < NALGO; a++)
-            for (j = 0; j < 4; j++)
-                st.knob[i][a][j] = 0;
-        if (i < NINST)
-            inst_default(i);
-    }
-    for (n = 0; n < sizeof st.rsv; n++)
-        st.rsv[n] = 0;
-    st.ninst = NINST;
+    if (magic != H1_MAGIC || b[offsetof(H1State, version)] != H1_VERSION)
+        return -1;
+    bytes(&st, b, (uint32_t)sizeof st);
+
+    /* clamp every loaded parameter safely */
+    st.magic = H1_MAGIC;
     st.version = H1_VERSION;
     if (st.inst >= NINST) st.inst = 0;
+    if (st.track >= NTRACK) st.track = 0;
     st.octave = (int8_t)iclamp(st.octave, -2, 2);
-    st.hud &= 1;
-    for (i = 0; i < NINST; i++) {
-        uint8_t keep = st.inst;
-        st.inst = (uint8_t)i;
-        for (j = 0; j < 4; j++) {
-            if (st.ip[i].knob0[j] > 100) st.ip[i].knob0[j] = 100;
-            for (a = 0; a < NALGO; a++)
-                if (KNOBS(i, a)[j] > 100) KNOBS(i, a)[j] = 100;
-        }
-        if (st.ip[i].algo >= NALGOS(i)) st.ip[i].algo = 0;
-        if (st.ip[i].mix[IP_CUT] > 100) st.ip[i].mix[IP_CUT] = 0;           /* (not a volume: full, rather than an instrument gone quiet) */
-        for (pg = 1; pg < NPAGE; pg++)
-            for (j = 0; j < 4; j++) {
-                uint8_t *v = page_value(pg, j);
-                *v = (uint8_t)iclamp(*v, page_param(pg, j)->min, page_param(pg, j)->max);
-            }
-        st.inst = keep;
-    }
-    st.seq[0] &= 1;
-    if (st.seq[1] > 7) st.seq[1] = 1;              /* bars: 1 to 128 (0.2.2 had 1 to 8) */
+    st.hud &= 1u;
+    st.keys[0] = (uint8_t)iclamp(st.keys[0], 0, 11);
+    st.keys[1] = (uint8_t)iclamp(st.keys[1], 0, 7);
+    st.keys[2] = (uint8_t)iclamp(st.keys[2], 0, 100);
+    st.keys[3] &= 1u;
+    st.glo[0] = (uint8_t)iclamp(st.glo[0], 40, 240);
+    st.glo[1] = (uint8_t)iclamp(st.glo[1], 0, 100);
+    st.glo[2] = (uint8_t)iclamp(st.glo[2], 0, 100);
+    st.glo[3] = (uint8_t)iclamp(st.glo[3], 20, 100);
+    st.seq[0] &= 1u;
+    if (st.seq[1] > 5) st.seq[1] = 2;
+    if (st.seq[2] > 4) st.seq[2] = 0;
     if (st.seq[3] > 2) st.seq[3] = 1;
     if (st.seq[4] > 2) st.seq[4] = 1;
     if (st.seq[5] > 2) st.seq[5] = CLICK_REC;
-    st.seq[6] &= 1;
+    st.seq[6] = 1;
+    st.seq[7] &= 1u;
+    if (st.tape[0] > 3) st.tape[0] = TAPE_SPD_1X;
+    if (st.tape[1] > 31) st.tape[1] = 0;
+    if (st.tape[2] > 32) st.tape[2] = 0;
+    st.tape[3] = TRICK_OFF;
+    if (st.fx_type >= NFX) st.fx_type = FX_PLATE;
+    st.fx_on &= 1u;
+    for (i = 0; i < NFX; i++)
+        for (j = 0; j < 4; j++)
+            if (st.fx_p[i][j] > 100) st.fx_p[i][j] = 100;
+    if (st.fx_p[FX_DELAY][1] > 7) st.fx_p[FX_DELAY][1] = 3;
+    for (j = 0; j < 4; j++) {
+        if (st.master[j] > 100) st.master[j] = 50;
+        if (st.shake[j] > 100) st.shake[j] = 50;
+    }
+    if (st.riff_len > NRIFF) st.riff_len = 0;
+    if (st.riff_root > 127) st.riff_root = 60;
+    for (i = 0; i < NRIFF; i++)
+        if (st.riff[i] > 128) st.riff[i] = 0;
+    if (st.chord[0] > CHORD_SHAPE) st.chord[0] = CHORD_OFF;
+    if (st.chord[1] >= CHORD_NSHAPE) st.chord[1] = 0;
+    if (st.chord[2] > 3) st.chord[2] = 0;
+    if (st.chord[3] > 100) st.chord[3] = 0;
+    if (st.chord_n < 1 || st.chord_n > CHORD_MAX) st.chord_n = 1;
+    st.chord_mem[0] = 0;
+    for (i = 1; i < CHORD_MAX; i++)
+        if (st.chord_mem[i] > 48) st.chord_mem[i] = 0;
+    for (i = 0; i < NINST; i++) {
+        if (st.ip[i].algo >= NALGO) st.ip[i].algo = 0;
+        for (j = 0; j < 4; j++) {
+            if (st.ip[i].knob0[j] > 100) st.ip[i].knob0[j] = 100;
+            if (st.ip[i].env[j] > 100) st.ip[i].env[j] = 100;
+            if (st.ip[i].menv[j] > 100) st.ip[i].menv[j] = 100;
+            for (a = 0; a < NALGO; a++)
+                if (st.knob[i][a][j] > 100) st.knob[i][a][j] = 100;
+        }
+        if (st.ip[i].lfo[0] > 6) st.ip[i].lfo[0] = 0;
+        if (st.ip[i].lfo[1] > 100) st.ip[i].lfo[1] = 50;
+        if (st.ip[i].lfo[2] > 100) st.ip[i].lfo[2] = 0;
+        if (st.ip[i].lfo[3] > 6) st.ip[i].lfo[3] = 0;
+        if (st.ip[i].arp[0] >= NARPMODE) st.ip[i].arp[0] = 0;
+        if (st.ip[i].arp[1] > 5) st.ip[i].arp[1] = 3;
+        st.ip[i].arp[2] = (uint8_t)iclamp(st.ip[i].arp[2], 1, 4);
+        st.ip[i].arp[3] = (uint8_t)iclamp(st.ip[i].arp[3], 5, 100);
+        if (st.ip[i].mix[IP_CUT] > 100) st.ip[i].mix[IP_CUT] = 0;
+        if (st.ip[i].mix[IP_PAN] > 100) st.ip[i].mix[IP_PAN] = 50;
+        if (st.ip[i].mix[IP_SEND] > 100) st.ip[i].mix[IP_SEND] = 35;
+    }
+    for (i = 0; i < NTRACK; i++) {
+        Track *tr = &st.trk[i];
+        if (tr->inst >= NINST) tr->inst = 0;
+        if (tr->algo >= NALGO) tr->algo = 0;
+        if (tr->vol > 100) tr->vol = 88;
+        if (tr->pan > 100) tr->pan = 50;
+        if (tr->send > 100) tr->send = 35;
+        tr->mute &= 3u;
+        tr->has_snap &= 1u;
+        for (j = 0; j < 4; j++) {
+            if (tr->knob[j] > 100) tr->knob[j] = 50;
+            if (tr->env[j] > 100) tr->env[j] = 50;
+            if (tr->menv[j] > 100) tr->menv[j] = 50;
+        }
+        if (tr->lfo[0] > 6) tr->lfo[0] = 0;
+        if (tr->lfo[1] > 100) tr->lfo[1] = 50;
+        if (tr->lfo[2] > 100) tr->lfo[2] = 0;
+        if (tr->lfo[3] > 6) tr->lfo[3] = 0;
+    }
+    for (i = 0; i < NSNAP; i++) {
+        Snap *sn = &st.snap[i];
+        sn->used &= 1u;
+        if (sn->inst >= NINST) sn->used = 0;
+        if (sn->algo >= NALGO) sn->algo = 0;
+        if (sn->fx_type >= NFX) sn->fx_type = 0;
+        for (j = 0; j < 4; j++) {
+            if (sn->knob[j] > 100) sn->knob[j] = 50;
+            if (sn->env[j] > 100) sn->env[j] = 50;
+            if (sn->menv[j] > 100) sn->menv[j] = 50;
+            if (sn->fx_p[j] > 100) sn->fx_p[j] = 50;
+        }
+    }
     for (i = 0; i < NSTEP; i++)
         for (j = 0; j < NSNOTE; j++) {
             if (st.steps[i][j] > 128) st.steps[i][j] = 0;
+            if (st.step_trk[i][j] >= NTRACK) st.step_trk[i][j] = 0;
             if (st.step_vel[i][j] > 127) st.step_vel[i][j] = 127;
-            if (st.step_lay[i][j] > NLAYER) st.step_lay[i][j] = 0;
-            if (!part_ok(st.step_part[i][j])) st.step_part[i][j] = 0;
         }
-    for (i = 0; i < NLAYER; i++) {
-        Layer *l = &st.layer[i];
-        if (!part_ok(l->part)) {
-            uint8_t *p = (uint8_t *)l;
-            for (n = 0; n < sizeof *l; n++)
-                p[n] = 0;
-            continue;
-        }
-        l->open = 0;
-        l->rsv[0] = l->rsv[1] = 0;
-        for (j = 0; j < 4; j++) {
-            if (l->knob[j] > 100) l->knob[j] = 100;
-            if (l->env[j] > 100) l->env[j] = 100;
-            l->lfo[j] = (uint8_t)iclamp(l->lfo[j], page_param(PG_LFO, j)->min, page_param(PG_LFO, j)->max);
-        }
-    }
+    st.ninst = NINST;
     eng_init(0);
     ui_init();
     return 0;
@@ -219,31 +258,23 @@ int h1_instrument(void) { return st.inst; }
 const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->name : ""; }
 int h1_algorithm(void) { return st.ip[st.inst].algo; }
 int h1_page(void) { return ui_page(); }
-int h1_layers(void) { return st.seq[6] == 1; }
-int h1_instrument_volume(int inst) { return inst >= 0 && inst < NINST ? INST_VOL(inst) : 0; }
+int h1_layers(void) { return 1; }
+int h1_instrument_volume(int inst) { (void)inst; return st.trk[st.track].vol; }
 void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
 int h1_instrument_count(void) { return NINST; }
 const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
-const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGOS(inst) ? insts[inst]->algo[a] : ""; }
+const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }
 uint32_t h1_voices_active(void) { return eng_voices(); }
 
 void h1_ink(int inst, uint8_t rgb[3])
 {
     int i;
     for (i = 0; i < 3; i++)
-        rgb[i] = inst >= 0 && inst < NINST ? st.ink[inst][i] : 255;
+        rgb[i] = inst >= 0 && inst < NINST ? insts[inst]->ink[i] : 255;
 }
+void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b) { (void)inst; (void)r; (void)g; (void)b; }
 
-void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b)
-{
-    if (inst < 0 || inst >= NINST)
-        return;
-    st.ink[inst][0] = r;
-    st.ink[inst][1] = g;
-    st.ink[inst][2] = b;
-}
-
-/* ---- the loop, saved apart (h1.h) ---------------------------------------------------------------- */
+/* ---- 4-track tape persistence (h1_loop) ----------------------------------------------- */
 static uint32_t loop_saved_gen, loop_given_gen;
 
 const void *h1_loop(uint32_t *size)
@@ -252,8 +283,7 @@ const void *h1_loop(uint32_t *size)
     const void *p;
     loop_given_gen = eng_loop_gen();
     p = eng_loop_blob(&n);
-    if (size)
-        *size = n;
+    if (size) *size = n;
     return p;
 }
 

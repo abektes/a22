@@ -1,13 +1,9 @@
 {
-  "what": "handy-1 (h1): sixteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. Loop recorder, step sequencer, arpeggiator and metronome built in.",
-  "author": "Jake Handy",
+  "what": "A22: an FM workstation for the FM-1. Ten synthesised engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC), each with eight algorithms and four live knobs, drawn in colour vector graphics. Eight effects, a four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step sequencer and eight patch snapshots. Derived from h1 by Jake Handy.",
+  "author": "A22",
   "kinds": [
     "synth"
   ],
-  "play": "https://jakehandy.github.io/fm1-browser-simulator/?fw=h1",
-  "editor": "https://jakehandy.com/h1",
-  "cheat": "https://jakehandy.com/h1#hotkeys",
-  "image": "docs/img/hub-card.webp",
-  "color": "#FFB08A",
-  "sounds": "CC0: Karoryfer Samples, Versilian VCSL, sfzinstruments and Discord SFZ GM Bank libraries, credited in docs/SAMPLES.md"
+  "image": "docs/img/a22/hub-card.webp",
+  "color": "#EE6518"
 }

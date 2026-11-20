@@ -12,7 +12,7 @@
  *   wav NAME      start writing audio      bytes         print the present() byte count stats, and what a
  *                                                        frame took to draw here (the FM-1 takes about 39 times as long)
  */
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,236 +1,232 @@
-# h1 (or handy-1)
+# A22
 
-Custom firmware for the M-VAVE FM-1. Sixteen instruments with dynamic visuals. Eight algorithms 
-and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
-Works on both the original flash chip and the newer UC25HQ80. Uses fm1-base.
+Custom firmware for the M-VAVE FM-1: an FM workstation. Ten synth and drum engines, each with eight
+algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
+four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
+sequencer and eight patch snapshots. Everything is synthesised: no samples.
 
-**USB audio and MIDI.** Over one USB cable the FM-1 is an audio input and a MIDI device, so you can
-record h1 straight into a computer or a phone. MIDI in works over USB and the TRS jack: notes play
-at their velocity, and CC 20 to 23 turn the four knobs. MIDI out is USB only, on channel 1: the
-FM-1's TRS jack is an input. See [USB audio and MIDI](#usb-audio-and-midi).
-
-[![Install on The Firmware Hub](https://img.shields.io/badge/install-The%20Firmware%20Hub-c8ff4a?style=for-the-badge)](https://thefirmwarehub.com/firmware/h1/)
-
-The easiest way to install h1 is [its listing on The Firmware Hub](https://thefirmwarehub.com/firmware/h1/):
-connect the FM-1 over USB in Chrome or Edge and press **Install**. [Install](#install) below has
-the details and the manual `.fwsc` route.
+A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
 
 <p>
-<img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
-<img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
-<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/tilt.webp" width="104" alt="TILT">
-<img src="docs/img/plunk.webp" width="104" alt="PLUNK">
+<img src="docs/img/a22/fm4.png" width="120" alt="FM-4"> <img src="docs/img/a22/electric.png" width="120" alt="ELECTRIC"> <img src="docs/img/a22/stack.png" width="120" alt="STACK"> <img src="docs/img/a22/analog.png" width="120" alt="ANALOG"> <img src="docs/img/a22/shaper.png" width="120" alt="SHAPER">
+<img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
 </p>
 
-**The full guide is at [jakehandy.com/h1](https://jakehandy.com/h1).** It covers every instrument's
-knobs and algorithms, the settings pages, loop and step recording, and FAQs.
+> **A22 has not been tried on an FM-1 yet.** It builds with JieLi's toolchain and passes its tests in
+> fm1-base's host simulator, but nobody has installed it on a unit. Install it only if you are ready to
+> go back to stock or another firmware if it misbehaves (see [If something goes wrong](#if-something-goes-wrong)).
 
-| | Sound | Knobs |
+## Engines
+
+PRESETS changes the engine, ALGORITHM picks one of its eight algorithms, and the four knobs shape the
+sound and the picture together. Each algorithm keeps its own knob settings.
+
+| Engine | Sound | Algorithms | Knobs |
+|---|---|---|---|
+| **FM-4** | four-operator stereo FM with a filter after it | KEYS, BASS, BELL, PAD, BRASS, PLUCK, ORGAN, ALIEN | RATIO, DEPTH, FEEDBK, FILTER |
+| **ELECTRIC** | electric pianos and keys | RHODES, WURLI, DX-EP, CLAV, ORGAN, FELT, VIBES, TAPE | BARK, TINE, TREM, WARMTH |
+| **STACK** | stacked chords and wide pads | CLOUD, CHORD, JUNO, GLASS, ORGAN, DRONE, CHOIR, DREAM | SPREAD, CHORD, DRIFT, GLOW |
+| **ANALOG** | virtual analog with thru-zero FM and a ladder filter | DUAL, TZFM, SUPER, SUB, SYNC, ACID, BRASS, CHORD | SHAPE, TZFM, CUTOFF, RESO |
+| **SHAPER** | phase distortion and wavefolding | CZ-SAW, CZ-RES, BUCHLA, PLUCK, METRIC, CYBER, GLASSY, CRUSH | WARP, FOLD, BIAS, TONE |
+| **WIRE** | plucked and bowed strings, physically modelled | NYLON, STEEL, HARP, KOTO, CLAV, BASS, SITAR, BOWED | DAMP, PLUCK, BODY, TENSION |
+| **HAZE** | evolving ambient textures | AETHER, VOX, SOLAR, ICE, MIST, ABYSS, PRISM, GHOST | MORPH, FORMANT, DRIFT, SHIMMER |
+| **MONO** | monophonic leads and basses, with glide | ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER | FM-BITE, CUTOFF, GLIDE, SUB-DRV |
+| **KIT** | drum kits, a drum on every note of the octave | 808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD | TUNE, DECAY, PUNCH, FM-GRIT |
+| **PERC** | tuned percussion | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
+
+## Effects
+
+One effect at a time, chosen on the FX page with ALGORITHM. Each track sets how much of it it sends.
+
+| Effect | Knobs |
+|---|---|
+| **PLATE** (plate reverb) | MIX, DECAY, DAMP, MOD |
+| **DELAY** (tape ping-pong) | MIX, TIME, FEEDBK, TAPE |
+| **FILTER** (resonant filter with an envelope follower) | LPF, HPF, RESO, ENV |
+| **SHIFT** (frequency shifter and comb) | FREQ, DELAY, FEEDBK, MIX |
+| **CHORUS** | MIX, RATE, DEPTH, WIDTH |
+| **TANK** (spring reverb) | MIX, DECAY, TWANG, TONE |
+| **LOFI** (lo-fi) | CRUSH, RATE, BAND, GRIT |
+| **THUMP** (drive and transient) | PUNCH, DRIVE, BASS, TONE |
+
+The master bus has its own three-band EQ and drive (the MIX page's last subpage).
+
+## Pages
+
+<p>
+<img src="docs/img/a22/fx.png" width="180" alt="The FX page"> <img src="docs/img/a22/mix.png" width="180" alt="The MIX page"> <img src="docs/img/a22/tape.png" width="180" alt="The TAPE page">
+</p>
+
+Each page's four columns are the four knobs. SELECT steps through a page's subpages.
+
+| Page | Button | Columns |
 |---|---|---|
-| **COZY** | lo-fi keys | DUST, WOW, MUFFLE, SWAY |
-| **ORBIT** | space synths | SWEEP, SPIN, SHIMMER, GRAVITY |
-| **KOI** | struck metal and wood: handpan, kalimba, marimba | MALLET, RIPPLE, LINGER, SINK |
-| **HAUNT** | spooky ambient | FOG, DREAD, SHIVER, DEPTH |
-| **TIDE** | analog pad | GLOW, HALO, DRIFT, SURGE |
-| **PIP** | chiptune | SHAPE, WOBBLE, ZAP, CRUNCH |
-| **BONK** | drum kit, a drum on every note of the octave | TUNE, DECAY, PUNCH, DIRT |
-| **URCHIN** | FM | RATIO, DEPTH, FUZZ, TAIL |
-| **TWANG** | plucked strings, from recordings of real ones: harp, guitars, sitar, banjo, koto, bass, and a bowed cello | DAMP, PICK, TONE, BUZZ |
-| **LAVA** | wavefolder bass | FOLD, HEAT, LEAN, SUB |
-| **KNOT** | additive bells | BLOOM, RING, TWIST, WARP |
-| **INK** | gliding lead | SLIDE, SHAKE, PRESS, DRY |
-| **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
-| **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
-| **TILT** | electronic drum kits, 8-bit first, on a pinball table that is a drum kit: the kick is the flippers, the snare and toms are the bumpers, the crash fires the plunger | TUNE, DECAY, BOUNCE, BITS |
-| **PLUNK** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a steel tongue drum in the grass of a garden in the rain, by a stone lantern | TUNE, DECAY, WIND, STORM |
+| FX | FX | The effect's four knobs |
+| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE |
+| ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
+| LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
+| GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
+| SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: GRAV, SPIN, BOUNCE, CAGE |
+| TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH |
 
-<p>
-<img src="docs/img/page.png" width="200" alt="A settings page: four columns, one per knob"> <img src="docs/img/step.png" width="200" alt="A step pattern, the notches along the bottom"> <img src="docs/img/hud.png" width="200" alt="TIDE with the knob strip pinned">
-</p>
+## The tape
 
-## Try it in the browser
+Four tracks, T1 to T4. Each track keeps its own engine, algorithm, knobs, volume, pan, send and mute.
+The tape is 1 to 32 bars and holds 2,048 events (1,024 notes) across all four tracks, knob moves included.
+When it is full the screen says **TAPE FULL**.
 
-Open [the simulator](https://jakehandy.com/public/h1/simulator.html). It lives in its own repo,
-[fm1-browser-simulator](https://github.com/jakehandy/fm1-browser-simulator), opens on h1, runs the
-same C code that goes on the device, and can play other FM-1 firmwares too.
+- **REC** arms the track in hand and the first key starts the take. REC again closes it and the tape plays
+  on. REC while it plays overdubs.
+- **PLAY** starts and stops the tape.
+- Knobs turned while recording are recorded too, and play back as automation.
+- SPEED plays the tape at half speed, double speed or backwards. TRICK adds a tape brake or stutters.
+- **EDIT + REC** cuts the track in hand's notes (between the loop's in and out bars) to a clipboard, and
+  **EDIT + PLAY** pastes them at the current bar.
+- **EDIT + OCT −** and **EDIT + OCT +** move the loop's in and out bars.
+- **Hold REC** clears the track in hand. Keep holding (about three seconds) to clear the whole tape.
 
-## Install
+The tape and every setting are saved by themselves and come back after a restart.
 
-> **h1 is new.** Its releases have been installed and played on one FM-1, a unit bought in
-> November 2026: v0.1.0 from the stock firmware, each later one over the one before. A tester put
-> v0.2.1 on a unit with the older flash chip, over stock V16
-> ([#25](https://github.com/jakehandy/h1/issues/25)). Going back to stock through the Hub's
-> **Back to official V15** and installing h1 from another custom firmware have not been tried yet:
-> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has.
+**STEP.** Hold SEQ to swap the tape for the step sequencer. REC then turns step writing on and off, PLAY
+runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest.
 
-### Before you install
+## Riff and Shake
 
-- **Back up first.** Every firmware keeps your work in the FM-1's flash in its own way. Presets,
-  projects and samples saved by the firmware you are leaving may be gone or unreadable afterwards,
-  and going back doesn't always bring them back. Save them with that firmware's own backup. The
-  Firmware Hub's notes on this are [here](https://thefirmwarehub.com/kb/#data).
-- Charge the FM-1, and use a USB cable that carries data.
-- h1 is community firmware with no warranty. You install it at your own risk. It has nothing to
-  do with M-VAVE.
+Both are modes of the SEQ page (ARP button, then ALGORITHM, or hold EDIT and turn ALGORITHM anywhere).
 
-### From the stock firmware (V15)
+- **RIFF:** on the SEQ page, REC starts recording a sequence. Play its notes one at a time, tap EDIT for
+  a rest, and REC again to finish. Then hold any key and the sequence plays from it, transposed. Hold
+  REC on the page to clear it.
+- **SHAKE:** every key drops a ball into a spinning cage, and the ball plays its note each time it
+  bounces. GRAV, SPIN, BOUNCE and CAGE shape the cage.
 
-If the FM-1 runs something older than V15, update it to V15 with M-VAVE's updater first.
+## Chord memory
 
-1. Connect the FM-1 over USB to a computer running Chrome or Edge.
-2. Open [h1 on The Firmware Hub](https://thefirmwarehub.com/firmware/h1/), press **Connect FM-1** and allow
-   MIDI.
-3. Press **Install** on h1. It takes about a minute. Keep the cable in until the FM-1 restarts
-   into h1.
+One key plays a chord. Its settings are GLO's third subpage, CHORD (GLO, then SELECT twice):
 
-### From another custom firmware
+- **MODE:** OFF; MEMORY, a chord you play in yourself; SCALE, chords built from the KEYS page's root and
+  scale (with CHROM, the major scale on the root); SHAPE, a fixed chord.
+- **TYPE:** in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER or OCT.
+- **VOICING:** CLOSE; OPEN (the middle note an octave up); DROP2 (the second note from the top an octave
+  down); +BASS (the root again an octave below).
+- **STRUM:** 0 plays the notes together; up to 60 ms between each, from the bottom up.
 
-The same three steps. The firmware you are running starts h1's update loader, and the loader
-writes h1. If the Hub says the FM-1 is still in another firmware's update mode, finish that update
-with that firmware's installer first.
+**Hold the chord's keys and press EDIT + GLO** to store it as MEMORY's chord (up to six notes). Each key then
+plays that shape from itself. EDIT + GLO with no keys held turns chords off, and on again.
 
-### From a terminal
-
-Download `h1-X.Y.Z.fwsc` from [Releases](https://github.com/jakehandy/h1/releases), then from a
-clone of this repo (`git clone --recurse-submodules`):
-
-```
-pip3 install mido python-rtmidi
-python3 base/tools/fm1_install.py h1-X.Y.Z.fwsc
-```
-
-It works from V15 and from other firmwares, asks before it writes, and checks what the FM-1
-answers afterwards.
-
-## Leave h1 again
-
-h1's package carries an update loader, so the same installers can replace it.
-
-- **Another custom firmware:** press **Install** on its card at
-  [The Firmware Hub](https://thefirmwarehub.com), or use that firmware's own installer.
-- **Back to stock:** press **Back to official V15** in the Hub's
-  [Official firmware](https://thefirmwarehub.com/#official) box.
-
-h1 only saves its own settings. Leaving it doesn't restore what an earlier firmware had saved.
-That is what the backup is for.
-
-## If something goes wrong
-
-- **An install stopped halfway:** plug the FM-1 back in and press Install again. The loader picks
-  up where it stopped.
-- **h1 doesn't start:** after two failed starts it comes up in SAFE MODE. There is no sound, but
-  USB works, so the Hub can install h1 again, another firmware, or V15.
-- **Nothing reaches it:** hold **REC** while you switch it on. That is the chip's own update mode,
-  and the Hub's [rescue page](https://thefirmwarehub.com/tools/rescue/) takes it from there. The
-  chip's bootloader is in ROM and can't be overwritten.
-
-## Compatibility
-
-- **M-VAVE FM-1 only.** Not the SMK-37.
-- **Both flash chips.** h1 saves and updates on the original Puya P25Q80 (JEDEC ID `0x856014`)
-  and on the UC25HQ80 (`0xB36014`) fitted to units sold since autumn 2026.
-- USB audio out and USB MIDI in and out, or USB host for a keyboard. MIDI in over the TRS jack too. No MIDI out over TRS, and
-  no Bluetooth. See [USB audio and MIDI](#usb-audio-and-midi).
-- A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the
-  instrument, the algorithm, the page and each control's value as it changes. It can't describe
-  the pictures.
-- Package identity `FM-1_481`. A release X.Y.Z answers `FM-1_481XXYYZZ`.
-
-## USB audio and MIDI
-
-Plug the FM-1 into a computer or a phone with a USB cable that carries data. It shows up as one
-device with two parts.
-
-**Audio.** An audio input, like a USB microphone. Pick the FM-1 as the input in a DAW, a recording
-app or the system's sound settings, and record. It carries the whole mix at the MASTER volume, the
-same as the speaker. Nothing plays back through it: the FM-1 isn't a sound card for the computer.
-
-**MIDI in,** over USB or the TRS jack, on any channel:
-
-- Notes play the instrument in hand at their velocity, about 20 dB from the softest to the hardest,
-  and darker the softer they are. The FM-1's own keys play at full.
-- CC 20 to 23 turn the four knobs. CC 123 stops every note.
-- The loop and the step sequencer record the velocity and play it back.
-
-**MIDI out,** over USB only, on channel 1:
-
-- The notes of the keys, the arpeggiator and the sequencer, so a DAW can record what you play as
-  MIDI, or h1 can play another synth.
-- CC 20 to 23 as the four knobs turn.
-- A note that came in over MIDI isn't sent back out, so a DAW that echoes its input doesn't loop.
-
-**A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB
-port turns host: plug in a USB-MIDI keyboard or controller and play h1 from it. The screen shows its
-name when it connects. The FM-1 gives the port no power, so the keyboard needs its own, or goes through
-a powered hub or a powered OTG adapter. While it's a host there's no computer: no USB audio and no MIDI
-to a DAW. Hold both again to go back. It's never kept, so the FM-1 always starts as a USB device.
+The tape, the step sequencer, the arpeggiator and MIDI out all get the chord's notes, so what was recorded
+plays back as heard. A key lets go of the chord it started even if the settings changed while it was held, and
+two chords sharing a note hold it until both are let go. Notes coming in over MIDI are not made into chords.
+MONO is monophonic and plays the chord's root alone. A chord takes a voice a note, out of eight.
 
 ## Hotkeys
 
 | Control | What it does |
 |---|---|
-| PRESETS | Instrument |
-| ALGORITHM | One of the instrument's eight algorithms. Each keeps its own four knob settings |
-| KNOB 1–4 | Home screen: the instrument's four live modulations. Settings page: its four columns |
-| SELECT | Home screen: tempo. Settings page: next page. Writing steps: moves the cursor |
-| FX SEL ENV LFO GLO ARP SEQ | Open that settings page. Press it again, or HOME, to go back |
-| REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it, and the loop is kept through a power-off. Step: REC turns step-write on and off, PLAY runs the pattern |
-| EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
-| OCT − / + | Octave, two each way. Press both for the middle octave |
-| MASTER | Volume of everything. A ring in the middle of the screen shows it while it turns, marked GLOBAL |
-| hold EDIT, turn MASTER or SELECT | Volume of the instrument in hand. The same ring, marked INSTRUMENT. MASTER sets it to where the knob stands, SELECT moves it a step a click. Holding EDIT alone shows where it stands |
-| hold SEQ | Swap LOOP and STEP |
+| PRESETS | Engine. **Hold EDIT:** the track in hand, T1 to T4 |
+| ALGORITHM | One of the engine's eight algorithms. On the FX page: the effect. On the SEQ page, or with EDIT held: the sequencer mode |
+| KNOB 1–4 | Home screen: the engine's four knobs. On a page: its four columns. On the MIX volume subpage with EDIT held: mute T1 to T4 |
+| SELECT | Home screen: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
+| MASTER | Volume of everything. **Hold EDIT:** the track's volume |
+| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back |
+| EDIT | Pins the knob strip on the home screen. Writing steps or Riff: a rest |
+| EDIT + FX | Effect on or bypassed |
+| EDIT + SEL | Mute the track in hand |
+| EDIT + ARP | Hold (latch) on and off |
+| EDIT + GLO | With keys held: store them as the chord. With none: chords off, or on again |
+| SAVE + white key 1–8 | Load that snapshot, or save to it if it is empty. **SAVE + EDIT + key** saves over it. The keys are the eight white keys from the lowest F |
+| hold SAVE | Reset the algorithm's knobs. Longer (about two seconds): reset the engine. Four seconds: reset every engine and the GLOBAL and KEYS pages |
+| hold SEQ | Swap TAPE and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
-| SEQ + REC | LAYERS on and off (on by default): with it on, each take keeps its own instrument, algorithm and settings |
-| hold REC | Clear the loop or the pattern. With LAYERS on: clear what was recorded on the instrument in hand, and keep holding to three seconds to clear everything |
-| hold HOME | Silence everything |
-| hold OCT − and OCT + | USB host for a keyboard, or back to the computer (a tap of both is the middle octave) |
-| hold SAVE | Reset the algorithm in hand: its four knobs go back to how they came (everything else saves by itself) |
-| hold SAVE for two seconds | Reset this instrument: every algorithm's knobs, and its FX, ENV, LFO and ARP pages |
-| hold SAVE for four seconds | Reset every instrument, and the KEYS and GLOBAL pages. The sequencer and what it holds are left alone |
+| hold HOME | Silence everything (and send CC 123) |
+| OCT − / + | Octave, two each way. Both together: the middle octave |
+| hold OCT − and OCT + | USB host for a keyboard, or back to the computer |
 
-A button with a hold does its tap when you let go, so holding SEQ or GLO never opens the page, and
-holding EDIT never pins the strip.
+A button with a hold does its tap when you let go.
 
-MASTER is one knob for two volumes, and it can only say where it stands. After you have turned it
-with EDIT held it is no longer where the volume of everything was left, so that volume stays put
-until you turn MASTER, without EDIT, back through it. Until then the ring shows the volume that is
-held, and a small dot outside the ring shows where the knob is.
+## USB audio and MIDI
 
-While the sequencer runs, the sixteen white keys light as the pattern, left to right: lit where
-there are notes, with the playing step flipped. Up to sixteen steps each key is a step, up to
-thirty-two each key is two. A step holds up to eight notes.
+Plug the FM-1 into a computer or a phone with a USB cable that carries data. It shows up as one device
+with two parts.
 
-The four knobs belong to the algorithm. Turn ALGORITHM and they stand where you last left them on
-that algorithm, not where they were on the one before. The settings pages and the instrument's
-volume belong to the instrument: the volume is saved with it, and resetting the instrument puts it
-back to full.
+**Audio.** An audio input, like a USB microphone: the whole mix at the MASTER volume. Nothing plays back
+through it.
 
-**LAYERS** gives the sequencer more than one instrument, and it's on unless you turn it off with
-SEQ + REC. Record a loop, change the instrument (or just its knobs), press REC and play over it:
-that take is a new layer. Changing the instrument over a loop says `REC: NEW LAYER`, each take
-says `LAYER 2`, `LAYER 3` and so on, and a dot for each layer sits by the loop's progress line. A
-take started over a stopped loop joins it, and nothing is erased until you hold REC. Steps work
-the same way: each run of step-write is a layer.
+**MIDI in,** over USB or the TRS jack, on any channel: notes play the engine in hand at their velocity
+(softer is quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
 
-Each layer keeps its own instrument, algorithm, four knobs, ENV and LFO, as they stood when its
-take ended. Record a bass on COZY, turn COZY into a pad and record over it: the bass stays a bass.
-Up to sixteen layers. The effects are one chain that follows the instrument in hand, and the
-instrument's volume is shared by its layers (hold EDIT and turn MASTER or SELECT to sit one
-instrument under another). The eight voices are shared by all the layers, and a step holds eight
-notes in all. With the ARP on, the loop records the notes the arpeggiator played.
-A loop is 1 to 128 bars (BARS on the SEQ page) and holds 1,024 notes across all its layers; a note
-that doesn't fit says `LOOP FULL` on the screen instead of going missing. The picture is
-the instrument in hand. With LAYERS off, everything recorded plays on the instrument in hand.
-The SEQ page's top line scrolls through the sequencer hotkeys and shows which way LAYERS is set.
+**MIDI out,** over USB only, on channel 1: the notes of the keys, the arpeggiator and the tape, and
+CC 20 to 23 as the knobs turn. A note that came in over MIDI isn't sent back out.
 
-The loop is saved as soon as a take is closed, while it goes on playing, and comes back after a
-restart (power off a second or two after closing a take; a long loop takes a little longer). The step pattern and every instrument's settings save by themselves.
+**A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB port
+turns host for a USB-MIDI keyboard. The keyboard needs its own power or a powered hub. Hold both again to
+go back. It's never kept, so the FM-1 always starts as a USB device.
 
-In the simulator: <kbd>A</kbd>–<kbd>'</kbd> are the white keys from F and <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd>
-the black keys. <kbd>Z</kbd> <kbd>X</kbd> change the octave, <kbd>←</kbd> <kbd>→</kbd> change the
-instrument, and <kbd>↑</kbd> <kbd>↓</kbd> change the algorithm. <kbd>1</kbd>–<kbd>4</kbd> turn a knob
-up, or down with <kbd>Shift</kbd>.
+## Install
+
+A22 has no release and no listing on The Firmware Hub yet.
+
+### Before you install
+
+- **Back up first.** Every firmware keeps its work in the FM-1's flash in its own way. Save what the
+  firmware you are leaving has made with its own backup. The Firmware Hub's notes on this are
+  [here](https://thefirmwarehub.com/kb/#data).
+- Charge the FM-1 and use a USB cable that carries data.
+- A22 is community firmware with no warranty, and it has nothing to do with M-VAVE. You install it at
+  your own risk.
+
+### Get the package
+
+Until there is a release, every push to `main` builds a development package: open the latest successful
+run under **Actions**, download the `a22-dev-build` artifact and unzip it for `a22.fwsc` (identity
+`FM-1_412200`). The `a22-release-test` artifact is the next release built as it will be.
+
+### From a terminal
+
+From a clone of this repo (`git clone --recurse-submodules`), with the FM-1 on USB:
+
+```
+pip3 install mido python-rtmidi
+python3 base/tools/fm1_install.py a22.fwsc
+```
+
+It works from the stock firmware (V15) and from other custom firmwares, asks before it writes, and checks
+what the FM-1 answers afterwards. If the FM-1 runs something older than V15, update it with M-VAVE's
+updater first.
+
+## Leave A22 again
+
+A22's package carries fm1-base's update loader, so other installers can replace it:
+
+- **Another custom firmware:** use its own installer, or its card on
+  [The Firmware Hub](https://thefirmwarehub.com).
+- **Back to stock:** press **Back to official V15** in the Hub's
+  [Official firmware](https://thefirmwarehub.com/#official) box.
+
+A22 only saves its own settings. Leaving it doesn't bring back what an earlier firmware saved.
+
+## If something goes wrong
+
+These come from fm1-base, which A22 is built on:
+
+- **An install stopped halfway:** plug the FM-1 back in and install again. The loader picks up where it
+  stopped.
+- **A22 doesn't start:** after two failed starts it comes up in SAFE MODE. There is no sound, but USB
+  works, so A22, another firmware or V15 can be installed.
+- **Nothing reaches it:** hold **REC** while you switch it on. That is the chip's own update mode, and the
+  Hub's [rescue page](https://thefirmwarehub.com/tools/rescue/) takes it from there. The chip's
+  bootloader is in ROM and can't be overwritten.
+
+## Compatibility
+
+- **M-VAVE FM-1 only.** Not the SMK-37.
+- **Both flash chips:** the original Puya P25Q80 (JEDEC ID `0x856014`) and the UC25HQ80 (`0xB36014`).
+- USB audio out, USB MIDI in and out, or USB host for a keyboard. MIDI in over the TRS jack. No MIDI out
+  over TRS and no Bluetooth.
+- A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, the
+  algorithm, the page and each control's value as it changes.
+- Package identity `FM-1_4122`. A release X.Y.Z answers `FM-1_4122XXYYZZ`.
+- The development build's image is 252 KB and uses 437 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 
@@ -238,45 +234,42 @@ up, or down with <kbd>Shift</kbd>.
 core/    the whole firmware: portable C99, no libc, no malloc
 app/     the device: fm1-base's app, a thin pass-through to core/
 base/    fm1-base (a git submodule, with felucca-bsp inside it)
-port/    other builds of the same core: host (pictures, WAVs), rfm1 (the browser simulator)
-tests/   the device app in fm1-base's host simulator, LAYERS, the knobs and two cores on the core alone, and the crash hunt
+port/    other builds of the same core: host (pictures, WAVs), rfm1 (browser simulators)
+tests/   the device app in fm1-base's host simulator, the core alone, and the crash hunt
 ```
 
-- `./build.sh` builds `app/build/h1.fwsc`, a development build with identity `FM-1_48100`. It
-  needs JieLi's toolchain and the AC79 SDK (see `base/README.md`). `./build.sh --release X.Y.Z`
-  builds the release package.
-- `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`, then
-  runs `tests/layers.c`, `tests/knobs.c`, `tests/cores.c` and `tests/lines.c` on the core alone. It needs only a C
-  compiler and Pillow.
-- The chip's second core renders half the voices. `FM1B_CPU2=0 ./build.sh` builds the firmware
-  without it: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- `sh tests/run_fuzz.sh` is the crash hunt: the core under the compiler's address and
-  undefined-behaviour checkers, fed any saved state and any panel input.
-- `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes
-  pictures and WAVs.
-- CI (`.github/workflows/ci.yml`) runs the tests and the crash hunt and builds the firmware on every pull request.
-- A tag `vX.Y.Z` runs `.github/workflows/release.yml`: the shared
-  [fm1-build](https://github.com/zvenson/fm1-build) builder builds the package, runs the tests,
-  signs build provenance and publishes the release. Go through
-  [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) before tagging.
-- `fmhub.json` is h1's card on The Firmware Hub; its picture, `docs/img/hub-card.webp`, comes from
-  `python3 tools/hub_card.py` (rerun it when instruments are added). `firmware.json` is written by the build from
-  `app/fm1.toml`.
+- `./build.sh` builds `app/build/a22.fwsc`, a development build with identity `FM-1_412200`. It needs
+  JieLi's toolchain and the AC79 SDK (see `base/README.md`). `./build.sh --release X.Y.Z` builds the
+  release package.
+- `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`,
+  `tests/usbhost.txt` and `tests/looppower.txt` in it, then on the core alone: `tests/a22_test.c`
+  (two cores, the tape, snapshots, varispeed, Riff, Shake), `tests/basics.c` (the limiter, velocity,
+  MIDI out), `tests/mixer.c`, `tests/looper.c`, `tests/echo.c`, `tests/cores.c` and `tests/lines.c`. It
+  needs only a C compiler and Pillow.
+- `sh tests/run_fuzz.sh` is the crash hunt: the core under the address and undefined-behaviour checkers,
+  fed any saved state and any panel input.
+- The chip's second core renders half the voices. `FM1B_CPU2=0 ./build.sh` builds the firmware without
+  it: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes pictures
+  and WAVs. `tools/build_rfm1.sh` builds `dist/a22.rfm1` for `.rfm1` hosts such as
+  [fm1-browser-simulator](https://github.com/jakehandy/fm1-browser-simulator).
+- CI (`.github/workflows/ci.yml`) runs the tests and the crash hunt and builds the firmware on every push
+  to `main` and every pull request. A tag `vX.Y.Z` runs `.github/workflows/release.yml`, which builds,
+  tests, attests and publishes the release through the shared
+  [fm1-build](https://github.com/zvenson/fm1-build) builder.
+- `firmware.json` is written by the build from `app/fm1.toml`.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is laid out and
-[docs/RESEARCH.md](docs/RESEARCH.md) for the hardware and what was learned from other firmwares.
-`python3 tools/guide_media.py` renders the pictures in `docs/img` from the current build. Add
-`--site <path to jakehandynew>` to also copy them, and the simulator from a clone of
-fm1-browser-simulator, to the guide site.
+`docs/ARCHITECTURE.md` and `docs/RESEARCH.md` come from h1 and describe its instruments, but the
+platform, the two cores and the hardware notes still apply.
 
 ## Licence
 
-h1 is [MIT](LICENSE). The recordings BARD, TWANG and PLUNK are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
+A22 is [MIT](LICENSE), as h1 is.
 
-The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by
-Charles Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from
-[Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. Both are
-MPL-2.0, unchanged, and their source is the `base` submodule at the commit a release was built
-from. Their notices are in `base/LICENSING.md` and `base/bsp/NOTICE`.
+The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles
+Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from
+[Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. Both are MPL-2.0,
+unchanged, and their source is the `base` submodule at the commit a release was built from. Their
+notices are in `base/LICENSING.md` and `base/bsp/NOTICE`.
 
-M-VAVE and FM-1 are trademarks of their owners. h1 is not affiliated with M-VAVE.
+M-VAVE and FM-1 are trademarks of their owners. A22 is not affiliated with M-VAVE.

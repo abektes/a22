@@ -1,6 +1,6 @@
 # The loop kept through a power-off while it plays (#39): it goes into its ring in the data area a page a frame
 # (app.c, ring_step), so a loop never stopped is there after a power-off. Run by tests/run_tests.sh in fm1-base's
-# host simulator: ./build.sh --host, then app/build/host/h1_host tests/looppower.txt app/build/host
+# host simulator: ./build.sh --host, then app/build/host/a22_host tests/looppower.txt app/build/host
 wait 600
 # a take: REC arms, a key starts it, REC closes it and the loop plays on
 tap REC
@@ -14,11 +14,11 @@ wait 300
 key 16 up
 wait 400
 tap REC
-# it plays; meanwhile the ring takes it (slot 0's header: "H1LR")
+# it plays; meanwhile the ring takes it (slot 0's header: "A22R", app.c RING_MAGIC)
 wait 3000
-expect data.0xC8000 0x48
-expect data.0xC8001 0x31
-expect data.0xC8002 0x4C
+expect data.0xC8000 0x41
+expect data.0xC8001 0x32
+expect data.0xC8002 0x32
 expect data.0xC8003 0x52
 # a power-off while it still plays, and on again: the loop is there, and PLAY plays it
 power
@@ -36,7 +36,7 @@ key 19 up
 wait 1500
 tap REC
 wait 3000
-expect data.0xCD000 0x48
+expect data.0xCD000 0x41
 power
 wait 600
 tap PLAY

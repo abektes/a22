@@ -125,8 +125,8 @@ static uint8_t image[FLASH_SIZE];
 static uint8_t led_pos[NB + NKEY];       /* (column << 2) | line for each label, then each key; 0xFF none */
 static uint32_t booted, flash_writes, ms_now;
 
-/* ---- the flash image: h1's saved state at 0, framed so a foreign image reads as empty -------- */
-#define MAGIC 0x31534831u                /* "1HS1" */
+/* ---- the flash image: A22's saved state at 0, framed so a foreign image reads as empty -------- */
+#define MAGIC 0x31323241u                /* "A221" */
 
 static uint32_t crc32(const uint8_t *p, uint32_t n)
 {
@@ -371,12 +371,12 @@ static void c_shutdown(void)
 static int c_halted(void) { return 0; }
 
 static const core_t core = {
-    ABI, "h1", "h1", H1_RELEASE, H1_SOURCE_URL, "h1", "MIT", 0, FLASH_SIZE,
+    ABI, "a22", "A22", H1_RELEASE, H1_SOURCE_URL, "a22", "MIT", 0, FLASH_SIZE,
     {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"},
     0, 0, &panel, &KEYMAP[0][0],
     c_options, c_boot_options, c_init, c_tick, c_frame, c_idle, c_audio, c_midi_in, c_midi_out_take, c_dump,
     c_stats, c_ui_info, c_shutdown, c_halted, c_flash_stage, c_flash, c_flash_dirty, c_flash_sync, 0, 0,
-    "h1 by Jake Handy.",
+    "A22 FM workstation (derived from h1 by Jake Handy).",
 };
 
 /* ---- the format's exports ------------------------------------------------------------------- */

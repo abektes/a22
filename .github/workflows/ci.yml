@@ -1,6 +1,6 @@
 # Every pull request and every push to main: the host tests (no toolchain), then the firmware itself with
 # JieLi's toolchain, the same way the release builds it. The package is kept as the run's artifact for
-# looking at sizes and the map; it is a development build (identity FM-1_48100), not a release and not
+# looking at sizes and the map; it is a development build (identity FM-1_412200), not a release and not
 # attested. Releases come from release.yml.
 name: CI
 
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: h1-ci-${{ github.ref }}
+  group: a22-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -76,22 +76,22 @@ jobs:
       # for reading a crash record: its pc and rets are addresses in this table
       - name: Hashes, and where every function is
         run: |
-          sha256sum app/build/h1.fwsc app/build/h1.bin
-          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
-          wc -l app/build/h1.sym
-          cat app/build/h1.sym
+          sha256sum app/build/a22.fwsc app/build/a22.bin
+          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/a22.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/a22.sym
+          wc -l app/build/a22.sym
+          cat app/build/a22.sym
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
-          name: h1-dev-build
+          name: a22-dev-build
           path: |
-            app/build/h1.fwsc
-            app/build/h1.bin
-            app/build/h1.elf
-            app/build/h1.dis
-            app/build/h1.sym
+            app/build/a22.fwsc
+            app/build/a22.bin
+            app/build/a22.elf
+            app/build/a22.dis
+            app/build/a22.sym
             app/build/firmware.json
           if-no-files-found: error
-      # The next release, built as it will be (identity FM-1_481XXYYZZ, from the newest heading of CHANGELOG.md)
+      # The next release, built as it will be (identity FM-1_4122XXYYZZ, from the newest heading of CHANGELOG.md)
       # with "-test" on its name, to try on an FM-1 before the tag. Not attested and not a release: The Firmware
       # Hub only takes releases.
       - name: Build the next release's test package
@@ -99,12 +99,12 @@ jobs:
           version=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' CHANGELOG.md | head -1)
           test -n "$version"
           ./build.sh --release "$version-test"
-          sha256sum "app/build/h1-$version-test.fwsc"
+          sha256sum "app/build/a22-$version-test.fwsc"
           mkdir -p build/test-package
-          cp "app/build/h1-$version-test.fwsc" app/build/firmware.json build/test-package/
+          cp "app/build/a22-$version-test.fwsc" app/build/firmware.json build/test-package/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
-          name: h1-release-test
+          name: a22-release-test
           path: build/test-package/
           if-no-files-found: error
       # The same firmware without the chip's second core (FM1B_CPU2=0: the first core renders every voice). Not what
@@ -114,18 +114,18 @@ jobs:
         run: FM1B_CPU2=0 ./build.sh
       - name: Hashes, and where every function is (one core)
         run: |
-          sha256sum app/build/h1.fwsc app/build/h1.bin
-          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/h1.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/h1.sym
-          wc -l app/build/h1.sym
-          cat app/build/h1.sym
+          sha256sum app/build/a22.fwsc app/build/a22.bin
+          "$JIELI_TOOLCHAIN/common/bin/objdump" -t app/build/a22.elf | awk '$4 == ".text" || $4 == ".ram_text" {print $1, $NF}' | sort > app/build/a22.sym
+          wc -l app/build/a22.sym
+          cat app/build/a22.sym
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
         with:
-          name: h1-dev-build-one-core
+          name: a22-dev-build-one-core
           path: |
-            app/build/h1.fwsc
-            app/build/h1.bin
-            app/build/h1.elf
-            app/build/h1.dis
-            app/build/h1.sym
+            app/build/a22.fwsc
+            app/build/a22.bin
+            app/build/a22.elf
+            app/build/a22.dis
+            app/build/a22.sym
             app/build/firmware.json
           if-no-files-found: error

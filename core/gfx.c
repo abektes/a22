@@ -1,19 +1,23 @@
 /* h1 - graphics primitives. See gfx.h. */
 #include "gfx.h"
 
-#ifdef H1_DEVICE
+#if defined(H1_DEVICE) && !defined(__APPLE__)   /* (see H1_POOL in internal.h) */
 uint32_t g_fb_w[FB_W * FB_H / 4] __attribute__((section(".pool")));
 #else
 uint32_t g_fb_w[FB_W * FB_H / 4];
 #endif
 
 static int gm = G_MAX;
-static int glevel = 255;      /* the ink level of the primitive being drawn, 0..255 */
+static int gbank = 0;         /* active color bank << 5 (0..7 << 5) */
+static int glevel = 255;      /* alpha level of primitive, 0..255 */
+static int glevel5 = 31;      /* 5-bit intensity level, 0..31 */
 static f32 gdim = 1.0f;
 static f32 gox, goy;
 void (*g_poll_fn)(void);
 
 void g_mode(int mode) { gm = mode; }
+void g_color(int bank) { gbank = (bank & 7) << 5; }
+int g_color_get(void) { return gbank >> 5; }
 void g_dim(f32 k) { gdim = sat(k); }
 void g_origin(f32 ox, f32 oy) { gox = ox; goy = oy; }
 
@@ -28,37 +32,72 @@ void g_clear(void)
 void g_fade(int mul256)
 {
     uint32_t i;
-    for (i = 0; i < FB_W * FB_H; i++)
-        g_fb[i] = (uint8_t)((g_fb[i] * mul256) >> 8);
+    for (i = 0; i < FB_W * FB_H; i++) {
+        uint8_t px = g_fb[i];
+        if (px) {
+            int lv = ((px & 31) * mul256) >> 8;
+            g_fb[i] = lv > 0 ? (uint8_t)((px & 0xE0) | lv) : 0;
+        }
+    }
 }
 
 static inline void set_level(f32 a)
 {
     a *= gdim;
     glevel = a <= 0.0f ? 0 : (a >= 1.0f ? 255 : (int)(a * 255.0f + 0.5f));
+    glevel5 = a <= 0.0f ? 0 : (a >= 1.0f ? 31 : (int)(a * 31.0f + 0.5f));
+}
+
+/* one pixel that is on the screen, coverage 1..256, 8-color x 32-shade indexed pixel */
+static inline void ink(uint8_t *p, int cov, int mode, int lev, int lev5, int bank)
+{
+    uint8_t old;
+    int old_lv, v;
+    if (cov > 256)
+        cov = 256;
+    old = *p;
+    old_lv = old & 31;
+    if (mode == G_MAX) {
+        v = (cov * lev5 + 128) >> 8;
+        if (v > 31) v = 31;
+        if (v > old_lv)
+            *p = (uint8_t)(bank | v);
+    } else if (mode == G_ADD) {
+        v = (cov * lev5 + 128) >> 8;
+        if (v > 0) {
+            int nv = old_lv + v;
+            if (nv > 31) nv = 31;
+            *p = (uint8_t)((v >= old_lv ? bank : (old & 0xE0)) | nv);
+        }
+    } else {
+        if (lev == 0) {
+            int nv = old_lv - ((old_lv * cov + 128) >> 8);
+            *p = nv > 0 ? (uint8_t)((old & 0xE0) | nv) : 0;
+        } else if (cov >= 240) {
+            *p = lev5 > 0 ? (uint8_t)(bank | lev5) : 0;
+        } else if ((old & 0xE0) == bank || old_lv == 0) {
+            int nv = old_lv + (((lev5 - old_lv) * cov + 128) >> 8);
+            if (nv > 31) nv = 31;
+            *p = nv > 0 ? (uint8_t)(bank | nv) : 0;
+        } else if (cov >= 128) {
+            int nv = (lev5 * cov + old_lv * (256 - cov) + 128) >> 8;
+            if (nv > 31) nv = 31;
+            *p = nv > 0 ? (uint8_t)(bank | nv) : 0;
+        } else {
+            v = (cov * lev5 + 128) >> 8;
+            if (v > 31) v = 31;
+            if (v > old_lv)
+                *p = (uint8_t)(bank | v);
+        }
+    }
 }
 
 /* one pixel, coverage 0..256 */
 static inline void put(int x, int y, int cov)
 {
-    uint8_t *p;
-    int v;
     if ((unsigned)x >= FB_W || (unsigned)y >= FB_H || cov <= 0)
         return;
-    if (cov > 256)
-        cov = 256;
-    p = &g_fb[y * FB_W + x];
-    if (gm == G_MAX) {
-        v = (cov * glevel) >> 8;
-        if (v > *p)
-            *p = (uint8_t)v;
-    } else if (gm == G_ADD) {
-        v = *p + ((cov * glevel) >> 8);
-        *p = (uint8_t)(v > 255 ? 255 : v);
-    } else {
-        v = glevel - *p;
-        *p = (uint8_t)(*p + (v * cov) / 256);
-    }
+    ink(&g_fb[y * FB_W + x], cov, gm, glevel, glevel5, gbank);
 }
 
 static inline int cov_of(f32 c) { return c <= 0.0f ? 0 : (c >= 1.0f ? 256 : (int)(c * 256.0f)); }
@@ -110,6 +149,16 @@ void g_rect(f32 x, f32 y, f32 w, f32 h, f32 a)
     for (yy = y0 + 1; yy < y1; yy++)
         hspan(yy, x, x + w, 256);
     hspan(y1, x, x + w, cov_of(yb - ((f32)y1 - 0.5f)));
+}
+
+void g_box(f32 x, f32 y, f32 w, f32 h, f32 lw, f32 a)
+{
+    f32 xy[8];
+    xy[0] = x;     xy[1] = y;
+    xy[2] = x + w; xy[3] = y;
+    xy[4] = x + w; xy[5] = y + h;
+    xy[6] = x;     xy[7] = y + h;
+    g_poly(xy, 4, 1, lw, a);
 }
 
 void g_disc(f32 cx, f32 cy, f32 r, f32 a)
@@ -232,41 +281,14 @@ void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
     }
 }
 
-/* one pixel that is on the screen, coverage 1 and up */
-static inline void ink(uint8_t *p, int cov, int mode, int lev)
-{
-    int v;
-    if (cov > 256)
-        cov = 256;
-    if (mode == G_MAX) {
-        v = (cov * lev) >> 8;
-        if (v > *p)
-            *p = (uint8_t)v;
-    } else if (mode == G_ADD) {
-        v = *p + ((cov * lev) >> 8);
-        *p = (uint8_t)(v > 255 ? 255 : v);
-    } else {
-        v = lev - *p;
-        *p = (uint8_t)(*p + (v * cov) / 256);
-    }
-}
-
 /* A line as the pixels within R of it. It goes along its major axis m a column at a time (a column
  * is a row when the line is steep: the strides say which), and down each column over the pixels the
- * line can reach. How far a pixel is from the line (S) and how far along it (T) are straight in m
- * and in n, so they are set once in floats and then stepped as integers, S with 20 bits of fraction
- * and T with 16. No float per pixel or per column, but in the round ends, and none there either
- * where the end is solid or empty: on the FM-1 a line costs about what its pixels do. Against a
- * distance worked out in floats at every pixel, no pixel is more than one ink level of 255 off
- * (tests/lines.c). line_seg hands over only what the integers hold: a line shorter than 2048 that
- * starts within 2048 of the corner, R under 16.
- * skip: 1 leaves out the round end at (m0, n0), 2 the one at (m1, n1), for a path whose
- * neighbouring stroke covers it. */
+ * line can reach. */
 #define Q18(v) ((int32_t)((v) * 262144.0f + ((v) < 0.0f ? -0.5f : 0.5f)))
 static void line_scan(f32 m0, f32 n0, f32 m1, f32 n1, f32 um, f32 un, f32 len, f32 R,
                       int mlim, int nlim, int mstride, int nstride, int skip)
 {
-    const int mode = gm, lev = glevel;
+    const int mode = gm, lev = glevel, lev5 = glevel5, bank = gbank;
     const f32 slope = (n1 - n0) / (m1 - m0), reach = R / um + 0.01f;
     const f32 RR = R * R, solid = R > 1.0f ? (R - 1.0f) * (R - 1.0f) : -1.0f;
     const int32_t R20 = (int32_t)(R * 1048576.0f), LEN = (int32_t)(len * 65536.0f);
@@ -302,7 +324,7 @@ static void line_scan(f32 m0, f32 n0, f32 m1, f32 n1, f32 um, f32 un, f32 len, f
                 for (n = na; n <= nb; n++, p += nstride, s -= UM20) {   /* all of it beside the line */
                     int c = (R20 - (s < 0 ? -s : s)) >> 12;
                     if (c > 0)
-                        ink(p, c, mode, lev);
+                        ink(p, c, mode, lev, lev5, bank);
                 }
             } else {
                 for (n = na; n <= nb; n++, p += nstride, s -= UM20, t += UN16) {
@@ -328,7 +350,7 @@ static void line_scan(f32 m0, f32 n0, f32 m1, f32 n1, f32 um, f32 un, f32 len, f
                         c = d2 <= solid ? 256 : cov_of(R - sqrtfx(d2));
                     }
                     if (c > 0)
-                        ink(p, c, mode, lev);
+                        ink(p, c, mode, lev, lev5, bank);
                 }
             }
         }
@@ -461,7 +483,7 @@ void g_line(f32 x0, f32 y0, f32 x1, f32 y1, f32 w, f32 a) { line_seg(x0, y0, x1,
  * go. However often the path crosses itself, each pixel is cleared once: a 9-wide g_line with no ink
  * went over every pixel of a tangled cord five and six times, and that was most of its frame. */
 #define BED_WORDS ((FB_W + 31) / 32)
-#ifdef H1_DEVICE
+#if defined(H1_DEVICE) && !defined(__APPLE__)
 static uint32_t bed[FB_H * BED_WORDS] __attribute__((section(".pool")));
 #else
 static uint32_t bed[FB_H * BED_WORDS];
@@ -650,17 +672,19 @@ static void fill_poly(const f32 *xy, int n, f32 a, f32 ya, f32 b, f32 yb)
             f32 d = 1e9f;
             if (x >= i0 && x <= i1) {            /* the inside of the row in one run */
                 uint8_t *p = &g_fb[y * FB_W + x], *e = p + (i1 - x);
+                uint8_t px = glevel5 > 0 ? (uint8_t)(gbank | glevel5) : 0;
                 if (gm == G_MAX) {
                     for (; p <= e; p++)
-                        if (glevel > *p) *p = (uint8_t)glevel;
+                        if (glevel5 > (*p & 31)) *p = px;
                 } else if (gm == G_ADD) {
                     for (; p <= e; p++) {
-                        int v = *p + glevel;
-                        *p = (uint8_t)(v > 255 ? 255 : v);
+                        int old_lv = *p & 31, nv = old_lv + glevel5;
+                        if (nv > 31) nv = 31;
+                        if (nv > 0) *p = (uint8_t)((glevel5 >= old_lv ? gbank : (*p & 0xE0)) | nv);
                     }
                 } else {
                     for (; p <= e; p++)
-                        *p = (uint8_t)glevel;
+                        *p = px;
                 }
                 x = i1;
                 continue;
@@ -688,22 +712,27 @@ static const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7,
 static inline void put_soft(int x, int y, int v)
 {
     uint8_t *p = &g_fb[y * FB_W + x];
-    int q;
+    uint8_t old;
+    int q, old_lv;
     if (v <= 0)
         return;
+    old = *p;
+    old_lv = old & 31;
     if (gm == G_PAINT) {
-        *p = (uint8_t)((*p * (65536 - v)) >> 16);
+        int nv = (old_lv * (65536 - v)) >> 16;
+        *p = nv > 0 ? (uint8_t)((old & 0xE0) | nv) : 0;
         return;
     }
-    q = ((v + (BAYER[(y & 3) * 4 + (x & 3)] << 5)) >> 9) << 1;        /* to every other level: about what the panel can show */
-    if (q > 255) q = 255;
+    q = (v + (BAYER[(y & 3) * 4 + (x & 3)] << 7)) >> 11;    /* dithered 5-bit intensity (0..31) */
+    if (q > 31) q = 31;
     if (!q)
         return;
     if (gm == G_MAX) {
-        if (q > *p) *p = (uint8_t)q;
+        if (q > old_lv) *p = (uint8_t)(gbank | q);
     } else {
-        q += *p;
-        *p = (uint8_t)(q > 255 ? 255 : q);
+        int nv = old_lv + q;
+        if (nv > 31) nv = 31;
+        *p = (uint8_t)((q >= old_lv ? gbank : (old & 0xE0)) | nv);
     }
 }
 

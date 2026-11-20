@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "plat.h"
 
-#define APP_NAME "h1"
+#define APP_NAME "A22"
 #define APP_SPLASH                       /* no paper splash: the screen stays the bezel's black until the */
 void app_splash(void);                   /* instrument comes up */
 #define APP_SPLASH_RGB RGB(0, 0, 0)
