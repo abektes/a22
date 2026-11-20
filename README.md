@@ -19,7 +19,7 @@ the details and the manual `.fwsc` route.
 <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
 <img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
 <img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/tilt.webp" width="104" alt="TILT">
-<img src="docs/img/vibe.webp" width="104" alt="VIBE">
+<img src="docs/img/plunk.webp" width="104" alt="PLUNK">
 </p>
 
 **The full guide is at [jakehandy.com/h1](https://jakehandy.com/h1).** It covers every instrument's
@@ -42,7 +42,7 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
 | **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
 | **TILT** | electronic drum kits, 8-bit first, on a pinball table that is a drum kit: the kick is the flippers, the snare and toms are the bumpers, the crash fires the plunger | TUNE, DECAY, BOUNCE, BITS |
-| **VIBE** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a steel tongue drum in a garden in the rain | TUNE, DECAY, WIND, STORM |
+| **PLUNK** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a steel tongue drum in the grass of a garden in the rain, by a stone lantern | TUNE, DECAY, WIND, STORM |
 
 <p>
 <img src="docs/img/page.png" width="200" alt="A settings page: four columns, one per knob"> <img src="docs/img/step.png" width="200" alt="A step pattern, the notches along the bottom"> <img src="docs/img/hud.png" width="200" alt="TIDE with the knob strip pinned">
@@ -261,7 +261,7 @@ fm1-browser-simulator, to the guide site.
 
 ## Licence
 
-h1 is [MIT](LICENSE). The recordings BARD, TWANG and VIBE are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
+h1 is [MIT](LICENSE). The recordings BARD, TWANG and PLUNK are built on are public domain (CC0); [docs/SAMPLES.md](docs/SAMPLES.md) credits each one.
 
 The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by
 Charles Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from

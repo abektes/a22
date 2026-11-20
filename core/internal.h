@@ -227,7 +227,7 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt,
-                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_tilt, inst_vibe;
+                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_tilt, inst_plunk;
 extern const InstDef *const insts[NINST];
 /* how many algorithms an instrument has: eight, or nine where it names a ninth */
 #define NALGOS(i) (insts[i]->algo[NALGO - 1] ? NALGO : NALGO - 1)

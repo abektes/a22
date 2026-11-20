@@ -167,7 +167,7 @@ BANKS = [
 ]
 
 
-# VIBE's hits: (C name, what it is, options, source). One recording each, kept short, stored as 4-bit ADPCM
+# PLUNK's hits: (C name, what it is, options, source). One recording each, kept short, stored as 4-bit ADPCM
 # by tools/samples/drums.py. Options: rate (Hz it is stored at: as low as the recording's top allows),
 # ms (how much of the hit is kept), loop_ms (a ringing thing: a stretch after that which repeats, while the
 # player lets it die away), ring (seconds that takes), f0 (a pitched ring's note in Hz, so the stretch is

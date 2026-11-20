@@ -1,11 +1,11 @@
 # The recordings in h1
 
-BARD, TWANG and VIBE are built on recordings of real instruments. Every one of them is CC0: the people
+BARD, TWANG and PLUNK are built on recordings of real instruments. Every one of them is CC0: the people
 who made them gave them to the public domain, so they can be used in anything, sold or not, with no
 credit owed. They are credited here all the same.
 
 This file is written by `tools/samples/build.py` from `tools/samples/sources.py`, with
-`core/smp_data.c`. To change a recording, change the sources and run it again. (VIBE's hits are
+`core/smp_data.c`. To change a recording, change the sources and run it again. (PLUNK's hits are
 at the end, and `tools/samples/drums.py` cuts those.)
 
 In the firmware BARD's and TWANG's come to 162,048 bytes: 56 cuts, 8-bit mu-law at 22.05 kHz.
@@ -198,11 +198,11 @@ to the recording's decay. A held bank keeps a note's start and a short stretch t
 | 44.9 | [a2_vl3_rr1.wav](https://raw.githubusercontent.com/sfzinstruments/karoryfer.meatbass/master/Samples/pizz/a2_vl3_rr1.wav) | Meatbass |
 | 56.9 | [a3_vl3_rr1.wav](https://raw.githubusercontent.com/sfzinstruments/karoryfer.meatbass/master/Samples/pizz/a3_vl3_rr1.wav) | Meatbass |
 
-## VIBE's hits
+## PLUNK's hits
 
-VIBE's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian
+PLUNK's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian
 Community Sample Library (CC0 1.0, credited above). `tools/samples/drums.py` cuts them from
-`sources.DRUMS` into `core/vibe_data.c`: 33 hits, about 25,692 bytes, 4-bit ADPCM at the rate
+`sources.DRUMS` into `core/plunk_data.c`: 33 hits, about 25,692 bytes, 4-bit ADPCM at the rate
 each one's top allows. A ringing hit keeps its start and a short stretch that repeats.
 
 | Hit | What it is | Kept | Recording |

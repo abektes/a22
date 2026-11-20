@@ -1,8 +1,8 @@
-/* h1 - VIBE's hits, cut down. Written by tools/samples/drums.py from sources.DRUMS in
+/* h1 - PLUNK's hits, cut down. Written by tools/samples/drums.py from sources.DRUMS in
  * tools/samples/sources.py: do not edit. Where each came from and its licence: docs/SAMPLES.md. */
-#include "vibe_data.h"
+#include "plunk_data.h"
 
-const uint16_t vibe_steps[89] = {
+const uint16_t plunk_steps[89] = {
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31,
     34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143,
     157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658,
@@ -12,7 +12,7 @@ const uint16_t vibe_steps[89] = {
 };
 
 /* offset, length, loop start, rate, the decoder at loop, its first step and its step at loop, tau, gain */
-const VibeZone vibe_zones[VZ_N] = {
+const PlunkZone plunk_zones[VZ_N] = {
     {0u, 3306, 1874, 11025, -23661, 24, 60, 0.3768f, 0.600f},    /* GONG */
     {1653u, 1520, 992, 22050, 298, 76, 73, 0.1304f, 0.962f},    /* BELL */
     {2413u, 1278, 793, 22050, -4654, 48, 72, 0.1884f, 1.255f},    /* ZILL */
@@ -48,7 +48,7 @@ const VibeZone vibe_zones[VZ_N] = {
     {25151u, 1090, 800, 16000, 1853, 56, 51, 0.2899f, 1.014f},    /* CHIME */
 };
 
-const uint8_t vibe_data[25696] = {
+const uint8_t plunk_data[25696] = {
     189,136,250,159,17,251,235,222,187,137,66,68,35,19,34,35,34,129,202,154,48,70,83,34,129,201,221,219,203,187,171,137,
     17,52,37,36,35,50,34,184,188,187,202,187,187,171,9,51,55,50,34,84,51,35,19,176,237,187,172,170,154,49,71,68,
     67,50,17,128,153,169,236,219,203,203,187,172,154,32,69,83,51,51,34,129,186,204,187,154,8,34,17,145,204,187,203,188,
