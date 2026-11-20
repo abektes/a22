@@ -89,6 +89,14 @@ int h1_loop_dirty(void);
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 3084u
 
+/* USB host: OCT- and OCT+ held together for a second turn the USB port into a host for a USB-MIDI keyboard,
+ * and again back to the computer. The core keeps the choice (not saved: every start is a device) and calls
+ * fn(on) from h1_frame; the port switches the port and tells the core what it found with h1_toast. With no
+ * fn the hold says NO USB HOST. h1_usb_host: 1 while the core has asked for host. */
+void h1_usb_host_fn(void (*fn)(int on));
+int h1_usb_host(void);
+void h1_toast(const char *text);                 /* a word from the port, shown as a toast (upper case, 16 at most) */
+
 /* introspection for the simulator and tests */
 int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current instrument, 0..7 */

@@ -19,6 +19,9 @@ vendored = ["hw/"]
 cpu2 = true
 cpu2_fallback = true
 ble = false
+# OCT- and OCT+ held: the USB port as a host for a USB-MIDI keyboard or synth (powered hub or adapter: the FM-1 gives
+# the port no power). Boot is always a device, so a computer can always reach it after a restart.
+usb_host = true
 # what a crash leaves behind is kept in flash (read with base/tools/fm1_remote.py crashes), with each stack's
 # room at the crash; the stacks are painted at every start, so their unused bytes can be read (app.c's PERF)
 crash_history = true

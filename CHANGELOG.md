@@ -4,6 +4,11 @@
 
 Identity `FM-1_481000203`. Fixes from the GitHub issues.
 
+**USB**
+- Hold OCT− and OCT+ for a second: the USB port plays host to a USB-MIDI keyboard (#23), which needs its own
+  power or a powered hub. The screen and the screen reader name it when it connects. Hold again to go back
+  to the computer. Never saved: every start is a USB device.
+
 **Sound**
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
   float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,

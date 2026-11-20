@@ -115,6 +115,38 @@ static void midi_in(void)
 
 static void speak(void);
 
+/* USB host (fm1.toml usb_host): the core asks with OCT- and OCT+ held (h1_usb_host_fn), the platform switches
+ * the port, and what it finds is told as a toast. A device lost, or the mode changed: its notes let go. */
+static void usb_host(int on) { plat_usb_host(on); }
+static void usb_tell(const char *s)             /* on the screen, and to the reader */
+{
+    h1_toast(s);
+    if (ann_on())
+        ann_say(s, 0, ANN_NOW);
+}
+static void usb_news(void)
+{
+    static int host_was;
+    if (h1_usb_host() != host_was) {             /* (the core's own toast says it on the screen) */
+        host_was = h1_usb_host();
+        if (ann_on())
+            ann_say(host_was ? "USB HOST" : "USB COMPUTER", 0, ANN_NOW);
+    }
+    switch (plat_usb_host_msg()) {
+    case USBH_MSG_MIDI: {
+        const char *nm = plat_usb_host_name();
+        usb_tell(nm && nm[0] ? nm : "KEYBOARD");
+        break;
+    }
+    case USBH_MSG_NOMIDI: usb_tell("NOT MIDI"); break;
+    case USBH_MSG_LOW: usb_tell("NOT SUPPORTED"); break;
+    case USBH_MSG_LOST: usb_tell("UNPLUGGED"); break;
+    default: break;
+    }
+    if (plat_usb_lost())
+        h1_midi(0xB0, 123, 0);
+}
+
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), k;
@@ -192,6 +224,7 @@ void app_init(void)
     h1_init(44100);
     h1_while_drawing(send_some);
     h1_midi_out(midi_send);
+    h1_usb_host_fn(usb_host);
 #if TWO_CORES
     if (plat_cpu2_set(1) == 0)                              /* (app_init is the one moment it can start) */
         h1_two_cores(core2_run, core2_wait);
@@ -238,6 +271,7 @@ void app_frame(void)
 {
     uint32_t t0, t1, t2;
     input();
+    usb_news();
     h1_master((int)(plat_master() * 1000u / 4096u));        /* shown while it turns; the gain is app_render's */
     t0 = plat_ticks24();
     h1_frame(plat_ms());                                    /* (and most of the last frame goes out meanwhile) */
