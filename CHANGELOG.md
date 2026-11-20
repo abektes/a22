@@ -4,6 +4,11 @@
 
 Identity `FM-1_481000203`. Fixes from the GitHub issues.
 
+**Room**
+- fm1-base's system fonts (the update, crash and safe-mode screens) are stored trimmed and compressed:
+  the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
+  little slower.
+
 **Sound**
 - LAVA has a ninth algorithm, **HOOVER** (#24): two PWM saws (a saw plus a copy of it swept along, the old
   Juno trick) a little apart, a swoop up into every note, and a light fold. FOLD sets how far the sweep goes
