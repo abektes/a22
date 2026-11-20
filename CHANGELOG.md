@@ -15,6 +15,12 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   little slower.
 
 **Loop**
+- Takes layered on the loop no longer go missing. The loop held 384 events (a press and a release a note),
+  across every layer, and quietly dropped whatever came after: three light layers on eight bars filled it
+  and the fourth was lost. It now holds 2,048 (1,024 notes), a note never goes in without room for its
+  release, and when the loop is full the screen says **LOOP FULL** instead of dropping notes in silence.
+- BARS goes up to **128** (1, 2, 4, 8, 16, 32, 64, 128). The bound on a loop is now its notes, not its bars:
+  1,024 notes across all layers, so 128 bars holds eight notes a bar.
 - A loop that is still playing is kept through a power-off (#39). It used to be saved only once it had been
   stopped with PLAY, because a save erases flash and that stalls the sound; a loop left playing was lost.
   It now goes into flash erased ahead of time (at start, or while nothing sounds), a little at a time while it
