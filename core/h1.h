@@ -91,7 +91,7 @@ void h1_loop_saved(void);
 
 /* introspection for the simulator and tests */
 int h1_instrument(void);
-int h1_algorithm(void);                          /* of the current instrument, 0..7 */
+int h1_algorithm(void);                          /* of the current instrument, 0..7 (LAVA 0..8) */
 int h1_page(void);                               /* 0 = home, else a settings page */
 int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
 int h1_instrument_volume(int inst);              /* 0..100: the instrument's own volume (EDIT held, and SELECT) */
