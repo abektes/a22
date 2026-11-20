@@ -2,7 +2,7 @@
 
 ## 0.3.0
 
-Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE join it.
+Identity `FM-1_481000300`. Fixes from the GitHub issues so far; TILT and VIBE join it.
 
 **USB**
 - Hold OCT− and OCT+ for a second: the USB port plays host to a USB-MIDI keyboard (#23), which needs its own
