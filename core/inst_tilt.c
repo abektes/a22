@@ -270,7 +270,7 @@ static const uint8_t KIT_AT[NALGO][4][2] = {
     {{46, 54}, {29, 72}, {63, 72}, {46, 36}},    /* ANALOG: the snare in the middle of the three */
     {{46, 72}, {26, 48}, {66, 48}, {46, 40}},    /* HOUSE: three in a row over it */
     {{56, 72}, {30, 42}, {60, 48}, {35, 60}},    /* FM: a zigzag */
-    {{46, 44}, {31, 60}, {61, 60}, {46, 70}},    /* ZAP */
+    {{46, 44}, {31, 60}, {61, 60}, {46, 76}},    /* ZAP */
     {{36, 68}, {31, 46}, {62, 44}, {60, 66}},    /* GLITCH: a square, not quite */
     {{46, 72}, {28, 60}, {46, 50}, {64, 40}},    /* CLICK: a stair */
     {{46, 58}, {27, 44}, {65, 44}, {46, 76}},    /* RAVE */
@@ -496,6 +496,12 @@ SMALL static void physics(f32 dt, f32 rad, f32 size, f32 rest, f32 hop)
             b->z += b->vz * h;
             if (b->z < 0.0f)
                 b->z = b->vz = 0.0f;
+            if (b->x < 88.0f && b->vx * b->vx + b->vy * b->vy < 16.0f) {      /* wedged somewhere: knocked loose */
+                M.side ^= 1;
+                b->vx = M.side ? 45.0f : -45.0f;
+                b->vy = -45.0f;
+                b->vz = 35.0f;
+            }
             if (b->y > 157.0f || b->y < -20.0f || !(b->x > -20.0f && b->x < 120.0f))
                 b->on = 0;
         }
@@ -848,7 +854,7 @@ SMALL static void mosaic(int q)
 SMALL static void tilt_draw(const Vis *vis)
 {
     f32 dt = vis->dt, tune = vis->k[0], decay = vis->k[1], bounce = vis->k[2], bits = vis->k[3];
-    f32 size = 1.25f - 0.5f * tune, rad = 3.1f - 1.3f * tune, glow_k = 1.0f / (0.1f + 0.8f * decay * decay);
+    f32 size = 1.25f - 0.5f * tune, rad = 2.9f - 1.1f * tune, glow_k = 1.0f / (0.1f + 0.8f * decay * decay);
     f32 pulse = (1.0f - vis->beat) * (1.0f - vis->beat), tail = 8.0f - 6.6f * decay, c, sn, yp, strobe;
     int algo = vis->algo & 7, i, j, tails = (int)(decay * 3.4f), q = 1 + (int)(maxf(bits - 0.2f, 0.0f) * 5.6f), done = 0;
     const uint8_t *wp;
