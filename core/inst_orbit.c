@@ -423,6 +423,50 @@ static const uint8_t FLYKIND[NALGO][4] = {
     {ROCK, GATE, ROCK, RINGED}, {PROBE, ROCK, PROBE, MAN}, {GATE, GATE, ROCK, GATE}, {MAN, ROCK, ROCK, RINGED},
 };
 
+/* (hidden) hold one note, alone, for five seconds: a call going out. Something comes to see who is calling,
+ * has a look, and is gone. */
+static f32 ufo;
+static int ufo_done;
+
+static APART void saucer(const Vis *vis)
+{
+    f32 t = vis->t, c, x, y, near;
+    int i;
+    {
+        int held = 0;
+        f32 age = 0.0f;
+        for (i = 0; i < NVOICE; i++)
+            if (vis->v[i].on && vis->v[i].gate && !vis->v[i].seq) {
+                held++;
+                age = vis->v[i].age;
+            }
+        if (!held)
+            ufo_done = 0;
+        if (held == 1 && age > 5.0f && !ufo_done) {
+            ufo_done = 1;
+            ufo = 1.0f;
+            eng_cue(CUE_ORBIT);
+        }
+    }
+    if (ufo <= 0.0f)
+        return;
+    ufo -= vis->dt * 0.19f;
+    c = 1.0f - 2.0f * ufo;
+    x = 120.0f + 170.0f * c * c * c;
+    y = 58.0f + 30.0f * c * c + 2.5f * sin_turns(t * 1.1f);
+    near = sat(1.0f - absf(c) * 2.5f);
+    if (near > 0.0f)                             /* its light, on whatever is in the middle */
+        g_beam(x, y + 5.0f, x, y + 62.0f, 10.0f, 44.0f, 0.4f * near, 0.0f, 1.0f);
+    g_mode(G_PAINT);
+    g_ellipse(x, y, 21.0f, 6.5f, 0.0f, 0.0f);
+    g_disc(x, y - 4.0f, 9.0f, 0.0f);
+    g_mode(G_MAX);
+    g_arc(x, y - 4.0f, 9.0f, 0.5f, 1.0f, 1.4f, 1.0f);
+    g_ellipse(x, y, 21.0f, 6.5f, 1.5f, 1.0f);
+    for (i = 0; i < 5; i++)                      /* the lights round its rim, running */
+        g_disc(x - 14.0f + 7.0f * (f32)i, y + 1.0f - (i == 0 || i == 4 ? 1.5f : 0.0f), 1.5f, ((int)(t * 9.0f) + i) % 5 ? 0.3f : 1.0f);
+}
+
 static void orbit_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, sweep = vis->k[0], spin = vis->k[1], shimmer = vis->k[2], grav = vis->k[3], mt = smooth01(vis->algo_t);
@@ -439,7 +483,7 @@ static void orbit_draw(const Vis *vis)
         for (i = 0; i < 4; i++)
             ping[i] = 1.0f;
         seen = vis->notes;
-        pop = popv = 0.0f;
+        pop = popv = ufo = 0.0f;
         idle_t = 1.0f;
         ready = 1;
     }
@@ -525,6 +569,7 @@ static void orbit_draw(const Vis *vis)
         }
         body(fly[i].kind, x, y, 5.5f / fly[i].z, fly[i].rot, fly[i].seed, sat((3.2f - fly[i].z) * 2.0f), fly[i].ang);
     }
+    saucer(vis);
 }
 
 const InstDef inst_orbit = {

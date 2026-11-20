@@ -154,6 +154,14 @@ void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs 
 
 extern H1State st;
 
+#ifdef __clang__
+#define SMALL __attribute__((minsize))           /* a picture's own code built small: its time goes in the primitives */
+#define APART __attribute__((minsize, noinline)) /* and kept out of a caller that is built for speed */
+#else
+#define SMALL
+#define APART
+#endif
+
 /* ---- what an instrument's DSP gets every control block -------------------------------- */
 typedef struct Blk {
     f32 k[4];                    /* the four knobs, 0..1: smoothed, with the LFO on its target */
@@ -171,6 +179,7 @@ typedef struct Blk {
 typedef struct VVoice {
     uint8_t on, gate, note;
     uint8_t vel;                 /* 1..127 */
+    uint8_t seq;                 /* the sequencer played it, not a hand */
     uint32_t serial;
     f32 pitch, env, age;
 } VVoice;
@@ -188,6 +197,8 @@ typedef struct Vis {
     f32 beat;                    /* 0..1 within the beat */
     uint32_t notes;              /* note-ons so far, all voices */
     f32 last_pitch;              /* of the newest note */
+    uint32_t hand;               /* the note-ons of those that were played: the keys, MIDI in, the arpeggiator */
+    f32 hand_pitch;              /* (what is hidden in a picture answers to these, not to a loop going round) */
     const f32 *scope;            /* the last SCOPE_N mono samples, scope_pos = the oldest */
     int scope_pos;
     uint32_t *rng;
@@ -238,7 +249,8 @@ enum { EV_NOTE_ON = 1, EV_NOTE_OFF, EV_PANIC, EV_INST, EV_UNLATCH, EV_REC, EV_PL
        EV_CLEAR,                 /* a = 0: everything recorded; a = 1 + an instrument: only what was played on it */
        EV_STEP_MOVE,             /* the step cursor: a = detents + 128 */
        EV_STEP_REST,             /* empty the step under the cursor and move on */
-       EV_SEQ_MODE };            /* loop <-> step: stop whichever was running */
+       EV_SEQ_MODE,              /* loop <-> step: stop whichever was running */
+       EV_CUE };                 /* a: one of the cues below */
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 enum { SEQ_LOOP, SEQ_STEP };
 enum { CLICK_REC, CLICK_ON, CLICK_OFF };       /* the metronome: while recording, always, never */
@@ -256,6 +268,25 @@ void eng_seq_info(SeqInfo *si);
 int seq_bar_ticks(void);                         /* 96 ticks to the quarter note */
 int seq_grid_ticks(void);
 int seq_accent(int tick_in_bar);                 /* 2 the bar's first beat, 1 another beat, 0 between */
+
+/* A cue: the short noise of something hidden in a picture (TILT's buzzer when the table tilts, and the
+ * others' below). The picture asks for it from the main loop; it is mixed in where the metronome is,
+ * after the effects. It is not a note: nothing of it is recorded, and nothing goes out over MIDI.
+ *
+ * What is hidden, and what brings it out:
+ *   TILT   hammer the table until it tilts                       the buzzer
+ *   PIP    a run of eight notes, each higher than the last       one up
+ *   TURBO  play fast enough for long enough                      a siren, and what is in the mirror
+ *   ORBIT  hold one note, alone, for five seconds                something answers
+ *   COZY   the same note over and over walks the pot off the sill
+ *   KOI    five notes down at once: a stone in the pond          the frog
+ *   HAUNT  hold a tritone                                        thunder, and what was behind the dark
+ * Only what is played counts (the keys, MIDI in, the arpeggiator): a loop or a pattern going round sets
+ * nothing off. And each goes off once, and is ready again when the playing has stopped for a moment or
+ * the keys are let go, so the arpeggiator does not set it off every time round either. */
+enum { CUE_TILT, CUE_PIP, CUE_TURBO, CUE_ORBIT, CUE_COZY, CUE_KOI, CUE_HAUNT, NCUE };
+#define eng_cue(i) eng_post(EV_CUE, (i))
+uint32_t eng_cues(void);                         /* cues started so far (tests/eggs.c) */
 
 void eng_init(uint32_t sample_rate);
 void eng_post(int type, int a);                  /* main loop -> audio, lock-free */

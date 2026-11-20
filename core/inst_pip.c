@@ -213,6 +213,10 @@ static struct { f32 x, y, vx, vy, life; } bits[NBIT];
 static f32 hop, hopv, str, strv, mouth_o, blink, look_x, look_v, wob_ph, zflash;
 static uint32_t seen;
 static int dance;
+/* (hidden) a run of eight notes, each higher than the last and none of them late: one up */
+static f32 run_p, run_t, up_t;
+static int run_n;
+static uint32_t run_seen;
 
 static uint32_t hash2(int x, int y) { uint32_t h = (uint32_t)x * 374761393u + (uint32_t)y * 668265263u; h = (h ^ (h >> 13)) * 1274126177u; return h ^ (h >> 16); }
 
@@ -252,6 +256,40 @@ static void sprite(int algo, uint8_t m[12][12], const Vis *vis, int mouth_w, int
     }
 }
 
+static APART void one_up(const Vis *vis)
+{
+    int i;
+    if (vis->hand != run_seen) {
+        run_seen = vis->hand;
+        if (run_t > 3.0f)                        /* (ready again once the playing has stopped) */
+            run_n = 0;
+        if (run_n >= 0)
+            run_n = vis->hand_pitch > run_p && run_t < 0.5f ? run_n + 1 : 1;
+        run_p = vis->hand_pitch;
+        run_t = 0.0f;
+        if (run_n == 8) {
+            run_n = -1;
+            up_t = 1.0f;
+            hopv = -620.0f;
+            eng_cue(CUE_PIP);
+        }
+    }
+    run_t += vis->dt;
+    if (up_t > 0.0f) {                           /* one up: it goes up from his head, and he throws everything he has */
+        f32 u = 1.0f - up_t;
+        up_t -= vis->dt * 0.45f;
+        g_text(206.0f, 44.0f - 34.0f * ease_out(u), "1UP", 15.0f, 2.6f, sat(up_t * 4.0f), 1);
+        for (i = 0; i < NBIT && u < 0.3f; i++)
+            if (bits[i].life <= 0.0f) {
+                bits[i].x = 120.0f + 60.0f * rng_s(vis->rng);
+                bits[i].y = 130.0f;
+                bits[i].vx = 190.0f * rng_s(vis->rng);
+                bits[i].vy = -(160.0f + 220.0f * rng_f(vis->rng));
+                bits[i].life = 1.0f;
+            }
+    }
+}
+
 static void pip_draw(const Vis *vis)
 {
     uint8_t ma[12][12], mb[12][12];
@@ -259,7 +297,9 @@ static void pip_draw(const Vis *vis)
     int x, y, i, res, bs, mouth_w, open, blinking, lookr;
 
     if (vis->fresh) {
-        hop = hopv = str = strv = mouth_o = zflash = 0.0f;
+        hop = hopv = str = strv = mouth_o = zflash = up_t = 0.0f;
+        run_n = 0;
+        run_seen = vis->hand;
         seen = vis->notes;
         for (i = 0; i < NBIT; i++)
             bits[i].life = 0.0f;
@@ -368,6 +408,8 @@ static void pip_draw(const Vis *vis)
                 g_rect(cx + 6.0f, cy - dir * 4.0f - 2.0f, 4.0f, 4.0f, a0 * 0.8f);
             }
     }
+
+    one_up(vis);
 
     /* bits */
     for (i = 0; i < NBIT; i++) {

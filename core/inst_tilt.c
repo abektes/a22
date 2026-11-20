@@ -227,12 +227,6 @@ static void tilt_render(Voice *v, const Blk *b, f32 *out, int n)
  * The table is 100 units across and 160 long, 0 at its far end, and it is seen from the player's end:
  * a unit is PS pixels wide where it lies (fewer far off), and what stands on the table stands straight
  * up on the screen. The balls are worked out flat on the table, as real ones, and drawn through that. */
-#ifdef __clang__
-#define SMALL __attribute__((minsize))           /* the picture's own code is built small: its time goes in the primitives */
-#else
-#define SMALL
-#endif
-
 #define PF 858.0f
 #define PD 536.5f
 #define PH 276.5f
@@ -996,7 +990,12 @@ SMALL static void tilt_draw(const Vis *vis)
     for (i = 0; i < NVOICE; i++)
         if (vis->v[i].serial != seen_serial[i]) {
             seen_serial[i] = vis->v[i].serial;
-            hit(vis->v[i].note % 12, (f32)vis->v[i].vel * (1.0f / 127.0f), vis->rng);
+            {
+                f32 heat = M.heat;
+                hit(vis->v[i].note % 12, (f32)vis->v[i].vel * (1.0f / 127.0f), vis->rng);
+                if (vis->v[i].seq)               /* (a loop going round plays the table, and does not tilt it) */
+                    M.heat = heat;
+            }
         }
 
     /* time */
@@ -1070,6 +1069,7 @@ SMALL static void tilt_draw(const Vis *vis)
     else if (M.heat > 24.0f) {                   /* hammered: TILT */
         M.tilt = 1.5f;
         M.heat = 0.0f;
+        eng_cue(CUE_TILT);
         M.sv[LEAN] = rng_next(vis->rng) & 1u ? 150.0f : -150.0f;
         for (i = 0; i < NBALL; i++)
             ball[i].vx += M.sv[LEAN];

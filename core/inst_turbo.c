@@ -241,6 +241,54 @@ static void thing(int kind, f32 x, f32 y, f32 s, f32 a, f32 seed, f32 t, int lit
     }
 }
 
+/* (hidden) play fast enough for long enough and somebody notices: a mirror comes down, and what is in it
+ * has a light bar going */
+static f32 fast, fast_t, cop;
+static int cop_done;
+static uint32_t cop_seen;
+
+static APART void mirror(const Vis *vis)
+{
+    f32 u, y, q[8];
+    int i, side = (int)(vis->t * 5.0f) & 1;
+    if (vis->hand != cop_seen) {
+        cop_seen = vis->hand;
+        if (fast_t > 3.0f)                       /* (ready again once the playing has stopped) */
+            cop_done = 0;
+        fast_t = 0.0f;
+        fast += 1.0f;
+        if (fast > 14.0f && !cop_done) {         /* a dozen notes a second, kept up for a couple of seconds */
+            cop_done = 1;
+            cop = 1.0f;
+            eng_cue(CUE_TURBO);
+        }
+    }
+    fast_t += vis->dt;
+    fast -= fast * minf(1.0f, vis->dt * 0.8f);
+    if (cop <= 0.0f)
+        return;
+    cop -= vis->dt * 0.3f;
+    u = cop > 0.88f ? (1.0f - cop) * 8.4f : sat(cop * 6.0f);
+    y = -30.0f + 38.0f * smooth01(u);
+    g_line(120.0f, -2.0f, 120.0f, y, 2.0f, 0.9f);
+    g_mode(G_PAINT);
+    g_rect(78.0f, y, 84.0f, 24.0f, 0.0f);
+    g_mode(G_MAX);
+    g_line(80.0f, y, 160.0f, y, 1.6f, 1.0f); g_line(80.0f, y + 24.0f, 160.0f, y + 24.0f, 1.6f, 1.0f);
+    g_arc(80.0f, y + 12.0f, 12.0f, 0.25f, 0.75f, 1.6f, 1.0f); g_arc(160.0f, y + 12.0f, 12.0f, 0.75f, 1.25f, 1.6f, 1.0f);
+    q[0] = 104.0f; q[1] = y + 21.0f; q[2] = 136.0f; q[3] = y + 21.0f; q[4] = 132.0f; q[5] = y + 11.0f; q[6] = 108.0f; q[7] = y + 11.0f;
+    g_poly(q, 4, 1, 1.2f, 0.9f);                                /* the car behind: nose on */
+    g_line(111.0f, y + 11.0f, 113.0f, y + 6.0f, 1.2f, 0.9f); g_line(129.0f, y + 11.0f, 127.0f, y + 6.0f, 1.2f, 0.9f);
+    g_line(113.0f, y + 6.0f, 127.0f, y + 6.0f, 1.2f, 0.9f);
+    g_disc(108.5f, y + 16.0f, 2.2f, 1.0f); g_disc(131.5f, y + 16.0f, 2.2f, 1.0f);
+    for (i = 0; i < 2; i++) {                    /* its bar: one side, then the other, and the light it throws */
+        f32 x = i ? 121.0f : 113.0f, on = i == side ? 1.0f : 0.15f;
+        g_rect(x, y + 2.5f, 6.0f, 3.0f, on);
+        if (i == side)
+            g_glow(x + 3.0f + (i ? 18.0f : -18.0f), y + 8.0f, 26.0f, 0.5f);
+    }
+}
+
 static void turbo_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, chorus = vis->k[0], tape = vis->k[1], glare = vis->k[2], drive = vis->k[3], mt = smooth01(vis->algo_t);
@@ -256,7 +304,9 @@ static void turbo_draw(const Vis *vis)
             ob[i].lit = 0;
             ob[i].seed = hsh((uint32_t)i + 5u);
         }
-        curve = curvev = steer = steerv = bounce = bouncev = flash = 0.0f;
+        curve = curvev = steer = steerv = bounce = bouncev = flash = fast = cop = 0.0f;
+        cop_done = 0;
+        cop_seen = vis->hand;
     }
     want = clampf((vis->last_pitch - 65.0f) * (1.0f / 13.0f), -1.0f, 1.0f);
     if (vis->notes != seen) {
@@ -455,6 +505,8 @@ static void turbo_draw(const Vis *vis)
                 g_line(x + (f32)i * 15.0f, y + 2.0f, x + (f32)i * 15.0f, y + 2.0f + fl, 2.5f, 0.9f);
             }
     }
+
+    mirror(vis);
 
     /* TAPE: a band of the picture slips sideways and crawls up the screen, with dropouts in it */
     if (tape > 0.03f) {
