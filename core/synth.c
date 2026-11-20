@@ -453,9 +453,10 @@ int seq_accent(int tick)
 }
 
 static int step_per_bar(void) { return seq_bar_ticks() / seq_grid_ticks(); }
+static int loop_bars(void) { return 1 << (st.seq[1] < 8 ? st.seq[1] : 1); }   /* 1, 2, 4 ... 128 */
 static int step_bars(void)
 {
-    int bars = 1 << (st.seq[1] & 3), pb = step_per_bar();
+    int bars = loop_bars(), pb = step_per_bar();
     while (bars > 1 && bars * pb > NSTEP)
         bars >>= 1;
     return bars;
@@ -465,11 +466,56 @@ static int step_count(void) { return imin(NSTEP, step_bars() * step_per_bar()); 
 /* ---- loop recorder -------------------------------------------------------------------- */
 /* on: bit 0 = on, bit 7 = recorded this pass; part: what it was played on; lay: the layer (0 none); vel: 1..127 */
 typedef struct LEv { uint16_t tick; uint8_t note; uint8_t on; uint8_t part, lay, vel, rsv; } LEv;
-#define NLEV 384
-static LEv lev[NLEV];
+/* The events are kept in order of tick (a new one goes in after those of its tick), so a block finds the
+ * ones it plays by halving instead of reading them all: with 2048 of them, reading every one in every
+ * block would cost the sound more than the loop itself. */
+static struct { uint8_t head[12]; LEv ev[NLEV]; } loop_mem;   /* the saved loop's own bytes (eng_loop_blob) */
+#define lev loop_mem.ev
 static int nlev;
+typedef char loop_max_is_h1s[H1_LOOP_MAX == 12u + 8u * NLEV ? 1 : -1];
+typedef char lev_is_8_bytes[sizeof(LEv) == 8 && sizeof loop_mem == 12 + 8 * NLEV ? 1 : -1];
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "the loop's events are saved as they lie in RAM: little-endian only"
+#endif
 static volatile uint32_t loop_gen;               /* changes with what is recorded: the loop is saved when it moves */
+static volatile uint32_t loop_full;              /* counts the note-ons a full loop turned away (the UI says so) */
 static uint8_t rec_part[128], rec_lay[128];      /* where each note held in a take went in, for its note-off */
+static uint32_t rec_open[4];                     /* notes whose note-on went in and whose note-off has room kept */
+static int nopen;
+
+static void rec_forget(void)
+{
+    rec_open[0] = rec_open[1] = rec_open[2] = rec_open[3] = 0;
+    nopen = 0;
+}
+
+/* the first event at or after tick t */
+static int lev_find(f32 t)
+{
+    int lo = 0, hi = nlev;
+    while (lo < hi) {
+        int mid = (lo + hi) >> 1;
+        if ((f32)lev[mid].tick < t)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo;
+}
+
+/* room for one more, in order: after every event of its tick or before (0: no room) */
+static LEv *lev_insert(uint16_t tick)
+{
+    int i = nlev;
+    if (nlev >= NLEV)
+        return 0;
+    while (i > 0 && lev[i - 1].tick > tick) {
+        lev[i] = lev[i - 1];
+        i--;
+    }
+    nlev++;
+    return &lev[i];
+}
 
 /* ---- layers ----------------------------------------------------------------------------------
  * With LAYERS on, every take on a part is a layer of its own (st.layer): the part, and once the take is over
@@ -582,9 +628,8 @@ static void loop_release(void)
 static void loop_play_range(f32 a, f32 b)
 {
     int i;
-    for (i = 0; i < nlev; i++) {
-        f32 t = (f32)lev[i].tick;
-        if (t >= a && t < b && !(lev[i].on & 0x80)) {
+    for (i = lev_find(a); i < nlev && (f32)lev[i].tick < b; i++) {
+        if (!(lev[i].on & 0x80)) {
             int n = lev[i].note, vel = lev[i].vel ? lev[i].vel : 127;
             if (layers()) {                      /* each note on the part it was played on, past the arpeggiator */
                 int part = lev[i].part ? lev[i].part : live_part(), lay = layer_of(lev[i].lay, part);
@@ -624,6 +669,7 @@ static void loop_tick(f32 dticks)
             lev[i].on &= 0x7F;
         if (s == LOOP_REC) {
             loop_state = LOOP_PLAY;
+            rec_forget();
             layers_close();
         }
         click_at = -1;
@@ -636,10 +682,18 @@ static void loop_record(int note, int on, int vel)
 {
     static const f32 Q[3] = {0.0f, 24.0f, 48.0f};
     f32 t = loop_pos, q = Q[st.seq[3] < 3 ? st.seq[3] : 0];
-    int part, lay;
-    if (nlev >= NLEV)
-        return;
+    int part, lay, kept;
+    LEv *e;
     note &= 127;
+    kept = (rec_open[note >> 5] >> (note & 31)) & 1;
+    if (on) {                                    /* a note-on keeps room for its note-off: none ever goes missing */
+        if (kept || nlev + nopen + 2 > NLEV) {
+            if (!kept)
+                loop_full++;
+            return;
+        }
+    } else if (!kept && nlev + nopen + 1 > NLEV)
+        return;
     if (on) {                                    /* (its note-off goes in where it did, whatever is in hand by then) */
         part = live_part();
         lay = layers() ? layer_take() : 0;
@@ -654,14 +708,24 @@ static void loop_record(int note, int on, int vel)
         if (t >= loop_len)
             t -= loop_len;
     }
-    lev[nlev].tick = (uint16_t)t;
-    lev[nlev].note = (uint8_t)note;
-    lev[nlev].on = (uint8_t)((on ? 1 : 0) | 0x80);
-    lev[nlev].part = (uint8_t)part;
-    lev[nlev].lay = (uint8_t)lay;
-    lev[nlev].vel = (uint8_t)(on ? iclamp(vel, 1, 127) : 0);
-    lev[nlev].rsv = 0;
-    nlev++;
+    if (kept) {                                  /* (the room it kept is the room it takes) */
+        rec_open[note >> 5] &= ~(1u << (note & 31));
+        nopen--;
+    }
+    e = lev_insert((uint16_t)t);
+    if (!e)
+        return;
+    e->tick = (uint16_t)t;
+    e->note = (uint8_t)note;
+    e->on = (uint8_t)((on ? 1 : 0) | 0x80);
+    e->part = (uint8_t)part;
+    e->lay = (uint8_t)lay;
+    e->vel = (uint8_t)(on ? iclamp(vel, 1, 127) : 0);
+    e->rsv = 0;
+    if (on) {
+        rec_open[note >> 5] |= 1u << (note & 31);
+        nopen++;
+    }
     loop_gen++;
 }
 
@@ -676,6 +740,7 @@ static void arp_take(int note, int on, int vel)
 
 static void loop_stop(void)
 {
+    rec_forget();
     loop_release();
     loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY;
     loop_pos = 0.0f;
@@ -892,9 +957,10 @@ static void eff_note(int note, int on, int vel, int from_midi)
     if (on && loop_state == LOOP_ARMED) {
         if (loop_fresh) {
             nlev = 0;
+            rec_forget();
             loop_gen++;
         }
-        loop_len = (f32)((1 << (st.seq[1] & 3)) * seq_bar_ticks());
+        loop_len = (f32)(loop_bars() * seq_bar_ticks());
         loop_pos = 0.0f;
         click_at = -1;
         if (free_on && free_pos < (f32)(seq_bar_ticks() - 48)) {
@@ -1030,9 +1096,9 @@ static void handle(uint32_t e)
             loop_state = LOOP_ARMED;
             break;
         case LOOP_ARMED: loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY; break;
-        case LOOP_REC: loop_state = LOOP_PLAY; layers_close(); break;
+        case LOOP_REC: loop_state = LOOP_PLAY; rec_forget(); layers_close(); break;
         case LOOP_PLAY: loop_state = LOOP_DUB; break;
-        default: loop_state = LOOP_PLAY; layers_close(); break;
+        default: loop_state = LOOP_PLAY; rec_forget(); layers_close(); break;
         }
         break;
     case EV_PLAY:
@@ -1078,6 +1144,7 @@ static void handle(uint32_t e)
                 if (tag_inst(lev[i].part) != inst)
                     lev[k++] = lev[i];
             nlev = k;
+            rec_forget();
             loop_gen++;
             if (!nlev) {
                 loop_pos = 0.0f;
@@ -1095,6 +1162,7 @@ static void handle(uint32_t e)
         }
         loop_release();
         nlev = 0;
+        rec_forget();
         loop_gen++;
         loop_pos = 0.0f;
         loop_state = LOOP_EMPTY;
@@ -1793,6 +1861,7 @@ void eng_init(uint32_t sample_rate)
     }
     loop_state = LOOP_EMPTY;
     nlev = 0;
+    rec_forget();
     loop_pos = 0.0f;
     loop_held[0] = loop_held[1] = loop_held[2] = loop_held[3] = 0;
     latched[0] = latched[1] = latched[2] = latched[3] = 0;
@@ -1886,30 +1955,26 @@ uint32_t eng_voices(void)
 static void put16(uint8_t *d, uint32_t v) { d[0] = (uint8_t)v; d[1] = (uint8_t)(v >> 8); }
 static uint32_t get16(const uint8_t *b) { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
 
-uint32_t eng_loop_save(uint8_t *dst, uint32_t max)
+/* The loop as it is saved: the header, then the events as they lie in RAM, so no copy of 16 KB is kept for
+ * it. An event's bytes are tick (little-endian), note, on, part, layer, velocity, 0; bit 7 of on (played
+ * this pass) is left as it is, since eng_loop_load masks it.
+ * Main loop only. The events change only while a take records; bit 7 of on may still drop at the next
+ * round after one, which a load ignores. */
+const uint8_t *eng_loop_blob(uint32_t *size)
 {
-    int i, ne = nlev;
-    uint32_t n = LOOP_HEAD + (uint32_t)ne * 8u;
-    if (ne < 0 || ne > NLEV || n > max)
-        return 0;
-    put16(dst, LOOP_MAGIC & 0xFFFFu);
-    put16(dst + 2, LOOP_MAGIC >> 16);
-    dst[4] = 2;                                  /* the version: 2 since parts are counted (PART), 1 before */
-    dst[5] = 0;
-    put16(dst + 6, (uint32_t)ne);
-    put16(dst + 8, (uint32_t)loop_len);
-    put16(dst + 10, 0);
-    for (i = 0; i < ne; i++) {
-        uint8_t *e = dst + LOOP_HEAD + (uint32_t)i * 8u;
-        put16(e, lev[i].tick);
-        e[2] = lev[i].note;
-        e[3] = lev[i].on & 1u;
-        e[4] = lev[i].part;
-        e[5] = lev[i].lay;
-        e[6] = lev[i].vel;
-        e[7] = 0;
-    }
-    return n;
+    int ne = nlev, i;
+    uint8_t *h = loop_mem.head;
+    for (i = 0; i < ne; i++)                     /* a layer let go since is no layer (as it plays already) */
+        lev[i].lay = (uint8_t)layer_of(lev[i].lay, lev[i].part);
+    put16(h, LOOP_MAGIC & 0xFFFFu);
+    put16(h + 2, LOOP_MAGIC >> 16);
+    h[4] = 2;                                    /* the version: 2 since parts are counted (PART), 1 before */
+    h[5] = 0;
+    put16(h + 6, (uint32_t)ne);
+    put16(h + 8, (uint32_t)loop_len);
+    put16(h + 10, 0);
+    *size = LOOP_HEAD + (uint32_t)ne * 8u;
+    return h;
 }
 
 /* After the state (h1_state_load), before the audio starts. Anything that does not read as a loop is refused
@@ -1921,7 +1986,7 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         return -1;
     ne = get16(b + 6);
     len = get16(b + 8);
-    if (ne > NLEV || n < LOOP_HEAD + ne * 8u || len < 24u || len > 8u * 480u)
+    if (ne > NLEV || n < LOOP_HEAD + ne * 8u || len < 24u || len > 128u * 480u)
         return -1;
     loop_release();                              /* (what the loop it replaces held: let go) */
     for (i = 0; i < ne; i++) {
@@ -1929,16 +1994,22 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         uint32_t tick = get16(e);
         if (tick >= len)
             continue;
-        lev[k].tick = (uint16_t)tick;
-        lev[k].note = e[2] & 127u;
-        lev[k].on = e[3] & 1u;
-        lev[k].part = b[4] == 1 ? PART_V8(e[4]) : part_ok(e[4]) ? e[4] : 0u;
-        lev[k].lay = (uint8_t)layer_of(e[5], lev[k].part);
-        lev[k].vel = e[6] & 127u;
-        lev[k].rsv = 0;
+        {                                        /* in order of tick: 0.2.2 and 0.3.0's first saves kept them as played */
+            LEv *d;
+            nlev = (int)k;
+            d = lev_insert((uint16_t)tick);
+            d->tick = (uint16_t)tick;
+            d->note = e[2] & 127u;
+            d->on = e[3] & 1u;
+            d->part = b[4] == 1 ? PART_V8(e[4]) : part_ok(e[4]) ? e[4] : 0u;
+            d->lay = (uint8_t)layer_of(e[5], d->part);
+            d->vel = e[6] & 127u;
+            d->rsv = 0;
+        }
         k++;
     }
     nlev = (int)k;
+    rec_forget();
     loop_len = (f32)len;
     loop_pos = 0.0f;
     loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY;
@@ -1990,3 +2061,5 @@ int eng_layer_rec(void)
             return i + 1;
     return 0;
 }
+int eng_loop_used(void) { return nlev; }
+uint32_t eng_loop_full(void) { return loop_full; }

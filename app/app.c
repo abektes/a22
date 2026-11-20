@@ -242,7 +242,9 @@ static struct {
     int to;                              /* the slot being written, -1 none */
     uint32_t len, at, crc;               /* what is being written: its length, how far, its CRC */
     uint32_t wait;                       /* frames the loop has been dirty: a save begins a moment after */
-} ring = {-1, 0, {0}, -1, 0, 0, 0, 0};
+    uint32_t gen;                        /* h1_loop_gen when it began: h1_loop is the engine's own memory, so a
+                                          * take recorded meanwhile moves its events, and that save is dropped */
+} ring = {-1, 0, {0}, -1, 0, 0, 0, 0, 0};
 #define RING_WAIT 20u                    /* (a third of a second: the save keeps clear of the take's own close) */
 static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
                                           * records again (then the loop is dirty again, and saved anew) */
@@ -341,6 +343,8 @@ static void ring_step(void)
                 return;
             }
             ring.at += n;
+            if (h1_loop_gen() != ring.gen)
+                ring.to = -1;                    /* (a take moved the events under it: no header, tried anew) */
         } else {
             static uint8_t head[16];
             wr32(head, RING_MAGIC);
@@ -364,7 +368,7 @@ static void ring_step(void)
     else if (++ring.wait > RING_WAIT) {
         for (i = 0; i < (int)RING_SLOTS; i++)
             if (ring.clean[i] && i != ring.cur) {
-                uint32_t size;
+                uint32_t size, gen = h1_loop_gen();
                 const uint8_t *p = (const uint8_t *)h1_loop(&size);
                 if (!size || size > RING_MAX)
                     return;
@@ -372,6 +376,7 @@ static void ring_step(void)
                 ring.to = i;
                 ring.clean[i] = 0;
                 ring.len = size;
+                ring.gen = gen;
                 ring.at = 0;
                 ring.crc = 0xFFFFFFFFu;
                 return;

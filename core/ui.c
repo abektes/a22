@@ -33,7 +33,7 @@ static const char *const O_TIME[] = {"1/32", "1/16", "1/8T", "1/8", "3/16", "1/4
 static const char *const O_ROOT[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const O_SCALE[] = {"CHROM", "MAJOR", "MINOR", "PENTA", "MPENT", "BLUES", "DORIAN", "WHOLE"};
 static const char *const O_ONOFF[] = {"OFF", "ON"};
-static const char *const O_BARS[] = {"1", "2", "4", "8"};
+static const char *const O_BARS[] = {"1", "2", "4", "8", "16", "32", "64", "128"};
 static const char *const O_QUANT[] = {"FREE", "1/16", "1/8"};
 static const char *const O_SEQMODE[] = {"LOOP", "STEP"};
 static const char *const O_METER[] = {"4/4", "3/4", "5/4", "6/8", "7/8"};
@@ -55,7 +55,7 @@ const PageDef pages[NPAGE] = {
                 {"TUNE", PK_PCT, 100, 0, -50, 0}, {"BRIGHT", PK_PCT, 100, 20, 0, 0}}},
     {"ARP", {{"MODE", PK_ENUM, 6, 0, 0, O_ARPMODE}, {"RATE", PK_ENUM, 5, 0, 0, O_RATE},
              {"RANGE", PK_INT, 4, 1, 0, 0}, {"GATE", PK_PCT, 100, 5, 0, 0}}},
-    {"SEQ", {{"MODE", PK_ENUM, 1, 0, 0, O_SEQMODE}, {"BARS", PK_ENUM, 3, 0, 0, O_BARS},
+    {"SEQ", {{"MODE", PK_ENUM, 1, 0, 0, O_SEQMODE}, {"BARS", PK_ENUM, 7, 0, 0, O_BARS},
              {"METER", PK_ENUM, 4, 0, 0, O_METER}, {"SNAP", PK_ENUM, 2, 0, 0, O_QUANT}}},
 };
 static const ParamDef P_GRID = {"GRID", PK_ENUM, 2, 0, 0, O_GRID};
@@ -99,6 +99,7 @@ static f32 knob_touch[4] = {9.0f, 9.0f, 9.0f, 9.0f};
 static int active_col = 0;
 static f32 col_v[4], col_vv[4];                  /* the gauges, eased */
 static char toast_s[24];
+static uint32_t loop_full_was;
 static f32 toast_t = 9.0f;
 static f32 vol_t = 9.0f;                         /* seconds since MASTER last moved */
 static int vol_seen = -1;
@@ -488,6 +489,8 @@ void h1_usb_host_fn(void (*fn)(int on)) { usb_fn = fn; }
 int h1_usb_host(void) { return usb_host; }
 
 /* a word from the port, shown as a toast: upper case, what the font has, at most 16 characters */
+const char *h1_toast_now(void) { return toast_t < 1.25f ? toast_s : ""; }
+
 void h1_toast(const char *text)
 {
     int i = 0;
@@ -1133,6 +1136,10 @@ void ui_frame(uint32_t now_ms)
         if (lr && !layer_rec_was)
             toast("LAYER ", layers_n, 1, 0, -1);
         layer_rec_was = lr;
+    }
+    if (eng_loop_full() != loop_full_was) {          /* the loop has no room for another note: say so, every */
+        loop_full_was = eng_loop_full();             /* time one is turned away, rather than lose it quietly */
+        toast("LOOP FULL", 0, 0, 0, -1);
     }
     for (i = 0; i < 4; i++) {
         if (vis.fresh) {

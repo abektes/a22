@@ -80,16 +80,20 @@ const void *h1_state(uint32_t *size);
 int h1_state_load(const void *blob, uint32_t size);   /* 0 = taken */
 int h1_state_dirty(void);
 void h1_state_saved(void);
-/* The loop recorder's loop, as a blob of its own (at most H1_LOOP_MAX bytes), so that what was recorded is there
+/* The loop recorder's loop, as a blob of its own (at most H1_LOOP_MAX bytes: 2,048 events, a note-on
+ * and a note-off a note), so that what was recorded is there
  * after a power-off. Load it after h1_state_load (which empties the loop). dirty() is 1 when it changed and no take
  * is going into it, whether it plays or not; then h1_loop gives it, and saved() takes the dirt off what was given.
- * h1_loop is the main loop's, and may be called while the loop plays: it only reads what is recorded. */
+ * h1_loop is the main loop's, and may be called while the loop plays: it only reads what is recorded. The blob
+ * is the engine's own memory, not a copy, and stays a loadable loop until a take records again. */
 const void *h1_loop(uint32_t *size);
 int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else leaves the loop empty */
 int h1_loop_dirty(void);
 int h1_loop_quiet(void);                         /* 1: the loop is stopped (or empty), no take going */
 void h1_loop_saved(void);
-#define H1_LOOP_MAX 3084u
+#define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */
+uint32_t h1_loop_gen(void);                     /* moves whenever what is recorded changes */
+int h1_loop_room(void);                          /* notes that still fit in the loop (0: full) */
 
 /* USB host: OCT- and OCT+ held together for a second turn the USB port into a host for a USB-MIDI keyboard,
  * and again back to the computer. The core keeps the choice (not saved: every start is a device) and calls
@@ -103,6 +107,7 @@ void h1_toast(const char *text);                 /* a word from the port, shown 
 int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current instrument, 0..7 (LAVA 0..8) */
 int h1_page(void);                               /* 0 = home, else a settings page */
+const char *h1_toast_now(void);                  /* the toast showing, "" when none */
 int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
 int h1_instrument_volume(int inst);              /* 0..100: the instrument's own volume (EDIT held, and SELECT) */
 int h1_volume_ring(void);                        /* the volume ring: 0 not up, 1 GLOBAL (MASTER), 2 INSTRUMENT */
