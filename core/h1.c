@@ -7,7 +7,7 @@ void knobs_default(int inst, int algo)
     for (a = 0; a < NALGO; a++)
         if (algo < 0 || a == algo)
             for (k = 0; k < 4; k++)
-                st.knob[inst][a][k] = insts[inst]->def.knob0[k];
+                KNOBS(inst, a)[k] = insts[inst]->def.knob0[k];
 }
 
 static void inst_default(int i)
@@ -34,6 +34,7 @@ static void defaults(void)
     st.seq[3] = 1;                               /* the loop snaps to 1/16 */
     st.seq[4] = 1;                               /* steps of 1/16 */
     st.seq[6] = 1;                               /* LAYERS: record, change instrument, record over it */
+    st.ninst = NINST;
     for (i = 0; i < NINST; i++)
         inst_default(i);
 }
@@ -56,7 +57,7 @@ const void *h1_state(uint32_t *size)
 }
 
 /* Take a saved blob. Call it right after h1_init, before the audio starts. Anything that does not
- * look like a state of this version or of the three before it is refused, and every value is clamped to
+ * look like a state of this version or of one it can read (4, 5, 6 and 8) is refused, and every value is clamped to
  * its range.
  *
  * The blob is bytes at any address: it is copied out a byte at a time and nothing is read from it as
@@ -66,9 +67,10 @@ typedef char v4_is_664_bytes[H1_VERSION_4_SIZE == 664u ? 1 : -1];   /* what the 
 typedef char v5_is_920_bytes[H1_VERSION_5_SIZE == 920u ? 1 : -1];   /* must not move with the layout */
 typedef char v6_is_1880_bytes[H1_VERSION_6_SIZE == 1880u ? 1 : -1];
 typedef char v8_is_3160_bytes[H1_VERSION_8_SIZE == 3160u ? 1 : -1];
-typedef char state_fits_a_store_object[sizeof(H1State) <= 3840u ? 1 : -1];
+typedef char v9_is_3344_bytes[sizeof(H1State) == 3344u ? 1 : -1];
 typedef char old_head_is_the_same[offsetof(H1Old, ip) == offsetof(H1State, ip) ? 1 : -1];
-
+typedef char the_slots_hold_the_instruments[NINST <= NSLOT && NSLOT * NALGO < 255 ? 1 : -1];
+typedef char v9_fits_a_store_object[sizeof(H1State) <= 3840u ? 1 : -1];
 static void bytes(void *to, const uint8_t *from, uint32_t n)
 {
     uint8_t *d = (uint8_t *)to;
@@ -81,7 +83,7 @@ int h1_state_load(const void *blob, uint32_t size)
     const uint8_t *b = (const uint8_t *)blob;
     uint8_t *d = (uint8_t *)&st;
     uint32_t magic = 0, was, n;
-    int i, j, pg, a;
+    int i, j, pg, a, had;
     if (!blob)
         return -1;
     was = size == sizeof st ? H1_VERSION : size == H1_VERSION_8_SIZE ? 8u : size == H1_VERSION_6_SIZE ? 6u
@@ -92,26 +94,29 @@ int h1_state_load(const void *blob, uint32_t size)
         ((uint8_t *)&magic)[n] = b[n];
     if (magic != H1_MAGIC || b[offsetof(H1State, version)] != was)
         return -1;                               /* (refused: nothing has been touched) */
-    if (was == H1_VERSION)
-        for (n = 0; n < sizeof st; n++)
-            d[n] = b[n];
-    else {
-        /* An older state, of fourteen instruments: each of its tables goes to the start of this one's, and
-         * the instruments that came after are as new. Before version 8 a step's notes have no velocity
+    if (was == H1_VERSION) {
+        bytes(d, b, (uint32_t)sizeof st);
+        had = st.ninst < NINST ? st.ninst : NINST;
+    } else {
+        /* An older state, of fourteen instruments of eight algorithms: each of its tables goes to the start
+         * of this one's, and its parts are counted now. Before version 8 a step's notes have no velocity
          * (they play at full, as they did) and no layer (they follow their part, as they did), and LAYERS
          * comes on: recording over a loop on another instrument is what h1 does now. Before version 6 a
          * step held four notes, with in version 5 the part of each after all the notes, and an
          * instrument's algorithms shared four knobs, so every algorithm starts from where those stood and
-         * nothing sounds different after the update. */
+         * nothing sounds different after the update. The ninth algorithm (HOOVER) starts as new. */
         const uint8_t *notes = b + offsetof(H1Old, steps);
+        for (n = 0; n < sizeof st; n++)
+            d[n] = 0;
         bytes(d, b, (uint32_t)offsetof(H1Old, ip));
         bytes(st.ip, b + offsetof(H1Old, ip), H1_OLD_NINST * (uint32_t)sizeof(InstParams));
         bytes(st.ink, b + offsetof(H1Old, ink), H1_OLD_NINST * 3u);
-        bytes(st.rsv, b + offsetof(H1Old, rsv), (uint32_t)sizeof st.rsv);
         if (was >= 6u) {
             bytes(st.steps, notes, (uint32_t)sizeof st.steps);
             bytes(st.step_part, b + offsetof(H1Old, step_part), (uint32_t)sizeof st.step_part);
-            bytes(st.knob, b + offsetof(H1Old, knob), H1_OLD_NINST * NALGO * 4u);
+            for (i = 0; i < (int)H1_OLD_NINST; i++)
+                for (a = 0; a < (int)H1_OLD_NALGO; a++)
+                    bytes(st.knob[i][a], b + offsetof(H1Old, knob) + ((uint32_t)i * H1_OLD_NALGO + (uint32_t)a) * 4u, 4u);
         } else {
             const uint8_t *parts = was >= 5u ? notes + NSTEP * H1_OLD_SNOTE : 0;
             for (i = 0; i < NSTEP; i++)
@@ -120,7 +125,7 @@ int h1_state_load(const void *blob, uint32_t size)
                     st.step_part[i][j] = parts && j < (int)H1_OLD_SNOTE ? parts[(uint32_t)i * H1_OLD_SNOTE + (uint32_t)j] : 0;
                 }
             for (i = 0; i < (int)H1_OLD_NINST; i++)
-                for (a = 0; a < NALGO; a++)
+                for (a = 0; a < (int)H1_OLD_NALGO; a++)
                     for (j = 0; j < 4; j++)
                         st.knob[i][a][j] = st.ip[i].knob0[j];
         }
@@ -128,15 +133,34 @@ int h1_state_load(const void *blob, uint32_t size)
             bytes(st.step_vel, b + offsetof(H1Old, step_vel), (uint32_t)sizeof st.step_vel);
             bytes(st.step_lay, b + offsetof(H1Old, step_lay), (uint32_t)sizeof st.step_lay);
             bytes(st.layer, b + offsetof(H1Old, layer), (uint32_t)sizeof st.layer);
-        } else {
-            for (n = (uint32_t)offsetof(H1State, step_vel); n < sizeof st; n++)
-                d[n] = 0;
+        } else
             st.seq[6] = 1;
-        }
-        for (i = (int)H1_OLD_NINST; i < NINST; i++)
-            inst_default(i);
-        st.version = H1_VERSION;
+        for (i = 0; i < NSTEP; i++)
+            for (j = 0; j < NSNOTE; j++)
+                st.step_part[i][j] = PART_V8(st.step_part[i][j]);
+        for (i = 0; i < NLAYER; i++)
+            st.layer[i].part = PART_V8(st.layer[i].part);
+        for (i = 0; i < (int)H1_OLD_NINST && i < NINST; i++)
+            for (a = (int)H1_OLD_NALGO; a < NALGO; a++)
+                knobs_default(i, a);
+        had = (int)H1_OLD_NINST < NINST ? (int)H1_OLD_NINST : NINST;
     }
+    for (i = had; i < NSLOT; i++) {              /* instruments that came after the state was saved: as new */
+        uint8_t *p = (uint8_t *)&st.ip[i];
+        for (n = 0; n < sizeof st.ip[i]; n++)
+            p[n] = 0;
+        for (n = 0; n < 3u; n++)
+            st.ink[i][n] = 0;
+        for (a = 0; a < NALGO; a++)
+            for (j = 0; j < 4; j++)
+                st.knob[i][a][j] = 0;
+        if (i < NINST)
+            inst_default(i);
+    }
+    for (n = 0; n < sizeof st.rsv; n++)
+        st.rsv[n] = 0;
+    st.ninst = NINST;
+    st.version = H1_VERSION;
     if (st.inst >= NINST) st.inst = 0;
     st.octave = (int8_t)iclamp(st.octave, -2, 2);
     st.hud &= 1;
@@ -146,9 +170,9 @@ int h1_state_load(const void *blob, uint32_t size)
         for (j = 0; j < 4; j++) {
             if (st.ip[i].knob0[j] > 100) st.ip[i].knob0[j] = 100;
             for (a = 0; a < NALGO; a++)
-                if (st.knob[i][a][j] > 100) st.knob[i][a][j] = 100;
+                if (KNOBS(i, a)[j] > 100) KNOBS(i, a)[j] = 100;
         }
-        if (st.ip[i].algo >= NALGO) st.ip[i].algo = 0;
+        if (st.ip[i].algo >= NALGOS(i)) st.ip[i].algo = 0;
         if (st.ip[i].mix[IP_CUT] > 100) st.ip[i].mix[IP_CUT] = 0;           /* (not a volume: full, rather than an instrument gone quiet) */
         for (pg = 1; pg < NPAGE; pg++)
             for (j = 0; j < 4; j++) {
@@ -167,10 +191,11 @@ int h1_state_load(const void *blob, uint32_t size)
             if (st.steps[i][j] > 128) st.steps[i][j] = 0;
             if (st.step_vel[i][j] > 127) st.step_vel[i][j] = 127;
             if (st.step_lay[i][j] > NLAYER) st.step_lay[i][j] = 0;
+            if (!part_ok(st.step_part[i][j])) st.step_part[i][j] = 0;
         }
     for (i = 0; i < NLAYER; i++) {
         Layer *l = &st.layer[i];
-        if (!(l->part & 0x80u) || ((l->part >> 3) & 15u) >= NINST) {
+        if (!part_ok(l->part)) {
             uint8_t *p = (uint8_t *)l;
             for (n = 0; n < sizeof *l; n++)
                 p[n] = 0;
@@ -198,7 +223,7 @@ int h1_instrument_volume(int inst) { return inst >= 0 && inst < NINST ? INST_VOL
 void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
 int h1_instrument_count(void) { return NINST; }
 const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
-const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }
+const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGOS(inst) ? insts[inst]->algo[a] : ""; }
 uint32_t h1_voices_active(void) { return eng_voices(); }
 
 void h1_ink(int inst, uint8_t rgb[3])

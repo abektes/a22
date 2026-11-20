@@ -9,7 +9,7 @@
 #define NSTEP 64                 /* the step sequencer's pattern, at most */
 #define NSNOTE 8                 /* notes a step holds, at most */
 #define NINST 16
-#define NALGO 8
+#define NALGO 9                  /* algorithms an instrument may have: eight each, and LAVA a ninth (HOOVER) */
 #define NLAYER 16                /* recorded layers, each with its own settings */
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
@@ -75,14 +75,17 @@ typedef struct InstParams {
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
 #define H1_VERSION 9u
-/* Versions 4, 5, 6 and 8 are of the fourteen instruments there were before TILT and VIBE (H1Old below:
- * this state with fourteen where it has NINST; 7 was never released). Version 8 is that and no more.
- * Version 6 is it up to the knob table: the steps' velocities, their layers and the layers came with
- * version 8. Versions 4 and 5 are the same up to steps: there a step held four notes, not eight
+/* Version 9 has room for NSLOT instruments of NALGO algorithms, and says in ninst how many it was saved
+ * with: the slots from there on are taken as new when it is loaded, so instruments can be added without a
+ * new version. Versions 4, 5, 6 and 8 are of fourteen instruments of eight algorithms (H1Old, below: only
+ * its offsets are used), their parts packed in bits (PART_V8); 7 was never released. Version 8 is H1Old
+ * and no more. Version 6 is it up to the steps' velocities: those, the steps' layers and the layers came
+ * with version 8. Versions 4 and 5 are the same up to steps: there a step held four notes, not eight
  * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an instrument's
- * algorithms shared InstParams.knob0. h1_state_load reads all four, and the two new instruments come up
- * as new. */
+ * algorithms shared InstParams.knob0. h1_state_load reads all of them. */
+#define NSLOT 16                 /* instruments the saved state has room for */
 #define H1_OLD_NINST 14u
+#define H1_OLD_NALGO 8u
 #define H1_OLD_SNOTE 4u
 #define H1_VERSION_4_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
 #define H1_VERSION_5_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
@@ -112,7 +115,7 @@ typedef struct H1Old {           /* what versions 4 to 8 saved: only its offsets
     uint8_t rsv[5];
     uint8_t steps[NSTEP][NSNOTE];
     uint8_t step_part[NSTEP][NSNOTE];
-    uint8_t knob[H1_OLD_NINST][NALGO][4];
+    uint8_t knob[H1_OLD_NINST][H1_OLD_NALGO][4];
     uint8_t step_vel[NSTEP][NSNOTE];
     uint8_t step_lay[NSTEP][NSNOTE];
     Layer layer[NLAYER];
@@ -127,19 +130,20 @@ typedef struct H1State {
     uint8_t keys[4];             /* root, scale, glide, hold */
     uint8_t glo[4];              /* tempo, swing, tune, bright */
     uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid, click, layers */
-    InstParams ip[NINST];
-    uint8_t ink[NINST][3];
-    uint8_t rsv[5];
+    InstParams ip[NSLOT];        /* (NSLOT: room for instruments to come, see H1_VERSION) */
+    uint8_t ink[NSLOT][3];
+    uint8_t ninst;               /* the instruments it was saved with */
+    uint8_t rsv[4];
     uint8_t steps[NSTEP][NSNOTE];       /* the step pattern: up to eight notes a step, note + 1, 0 = none */
     uint8_t step_part[NSTEP][NSNOTE];   /* the part each of those notes was played on (PART), 0 = none kept */
-    uint8_t knob[NINST][NALGO][4];   /* 0..100: the four live modulations of the home screen, each algorithm its own */
+    uint8_t knob[NSLOT][NALGO][4];      /* 0..100: the four live modulations of the home screen, each algorithm its own */
     uint8_t step_vel[NSTEP][NSNOTE];    /* each step note's velocity, 0 = 127 (version 8) */
     uint8_t step_lay[NSTEP][NSNOTE];    /* each step note's layer, 0 = none (it follows its part as it is now) */
     Layer layer[NLAYER];
 } H1State;
 
 /* the four home knobs of an instrument's algorithm, and of the algorithm it is on */
-#define KNOBS(inst, algo) (st.knob[inst][(algo) < NALGO ? (algo) : 0])
+#define KNOBS(inst, algo) (st.knob[inst][(uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u])
 #define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
 void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs as new; algo < 0: all of the instrument's */
 
@@ -147,10 +151,14 @@ void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs 
 #define INST_VOL(inst) (100 - (st.ip[inst].mix[IP_CUT] <= 100 ? st.ip[inst].mix[IP_CUT] : 0))
 
 /* A part: an instrument and one of its algorithms, in a byte. What a recorded note remembers, so that
- * with LAYERS on it goes on sounding as it was played when another instrument is in hand. */
-#define PART(inst, algo) ((uint8_t)(0x80u | ((uint32_t)(inst) << 3) | ((uint32_t)(algo) & 7u)))
-#define PART_INST(p) ((((p) >> 3) & 15) < NINST ? (((p) >> 3) & 15) : 0)
-#define PART_ALGO(p) ((p) & 7)
+ * with LAYERS on it goes on sounding as it was played when another instrument is in hand. Counted from
+ * 1 (0 is none): 1 + inst * NALGO + algo, so sixteen instruments of nine fit. Until version 9 (and in a
+ * loop saved as version 1) it was 0x80 | inst << 3 | algo: PART_V8 reads that. */
+#define PART(inst, algo) ((uint8_t)(1u + (uint32_t)(inst) * NALGO + ((uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u)))
+#define PART_SOME(p) ((uint32_t)(p) - 1u < (uint32_t)(NINST * NALGO))
+#define PART_INST(p) (PART_SOME(p) ? (int)(((uint32_t)(p) - 1u) / NALGO) : 0)
+#define PART_ALGO(p) (PART_SOME(p) ? (int)(((uint32_t)(p) - 1u) % NALGO) : 0)
+#define PART_V8(p) ((uint8_t)(((p) & 0x80u) && (((p) >> 3) & 15u) < H1_OLD_NINST ? PART(((p) >> 3) & 15u, (p) & 7u) : 0u))
 
 extern H1State st;
 
@@ -221,6 +229,10 @@ typedef struct InstDef {
 extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt,
                      inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_tilt, inst_vibe;
 extern const InstDef *const insts[NINST];
+/* how many algorithms an instrument has: eight, or nine where it names a ninth */
+#define NALGOS(i) (insts[i]->algo[NALGO - 1] ? NALGO : NALGO - 1)
+/* a part that names an instrument and one of the algorithms it has */
+static inline int part_ok(uint32_t p) { return PART_SOME(p) && PART_ALGO(p) < NALGOS(PART_INST(p)); }
 
 /* ---- settings pages ------------------------------------------------------------------- */
 enum { PG_HOME, PG_FX, PG_KEYS, PG_ENV, PG_LFO, PG_GLO, PG_ARP, PG_SEQ, NPAGE };

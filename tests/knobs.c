@@ -14,6 +14,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include "../core/internal.h"
+/* a part as states before version 9 kept it (internal.h, PART_V8) */
+#define OLD_PART(inst, algo) ((uint8_t)(0x80u | ((uint32_t)(inst) << 3) | ((uint32_t)(algo) & 7u)))
 #include "../core/h1.h"
 
 static uint32_t ms;
@@ -69,7 +71,7 @@ static void to(int inst, int algo)
 static int all_as_new(int inst)                  /* every algorithm of the instrument */
 {
     int a, ok = 1;
-    for (a = 0; a < NALGO; a++) {
+    for (a = 0; a < NALGOS(inst); a++) {
         to(inst, a);
         ok &= as_new();
     }
@@ -154,7 +156,7 @@ int main(void)
     CHECK(are(91, 100, 73, 64), "a MIDI knob turns the algorithm in hand's");
     to(2, 0);
     CHECK(are(11, 22, 33, 44), "and no other's");
-    for (a = 2; a < NALGO; a++) {
+    for (a = 2; a < NALGOS(2); a++) {
         to(2, a);
         CHECK(as_new(), "an algorithm nobody touched is as new");
     }
@@ -187,17 +189,17 @@ int main(void)
         memset(blob5 + body, 0, NSTEP * 8u);
         for (j = 0; j < 4; j++) {                /* step 3: two notes; step 63: four */
             blob5[body + 63u * 4u + (size_t)j] = (uint8_t)(50 + j);
-            blob5[body + NSTEP * 4u + 63u * 4u + (size_t)j] = PART(j, j + 1);
+            blob5[body + NSTEP * 4u + 63u * 4u + (size_t)j] = OLD_PART(j, j + 1);
         }
         blob5[body + 3u * 4u] = 61;
         blob5[body + 3u * 4u + 1u] = 65;
-        blob5[body + NSTEP * 4u + 3u * 4u] = PART(2, 1);
-        blob5[body + NSTEP * 4u + 3u * 4u + 1u] = PART(4, 6);
+        blob5[body + NSTEP * 4u + 3u * 4u] = OLD_PART(2, 1);
+        blob5[body + NSTEP * 4u + 3u * 4u + 1u] = OLD_PART(4, 6);
         h1_init(44100);
         CHECK(H1_VERSION_5_SIZE == 920u, "a version 5 state is 920 bytes");
         CHECK(h1_state_load(blob5, (uint32_t)H1_VERSION_5_SIZE) == 0, "a version 5 state loads");
         for (i = 0; i < (int)H1_OLD_NINST; i += 5)
-            for (a = 0; a < NALGO; a++) {
+            for (a = 0; a < (int)H1_OLD_NALGO; a++) {
                 to(i, a);
                 CHECK(are(10 + i * 5, 11 + i * 5, 12 + i * 5, 13 + i * 5), "every algorithm starts from the instrument's old knobs");
             }
@@ -224,27 +226,28 @@ int main(void)
         int ok = 1, k;
         s->version = 6;
         for (i = 0; i < (int)H1_OLD_NINST; i++)
-            for (a = 0; a < NALGO; a++)
+            for (a = 0; a < (int)H1_OLD_NALGO; a++)
                 for (k = 0; k < 4; k++)
                     s->knob[i][a][k] = (uint8_t)((i * 7 + a * 3 + k) % 101);
         s->ip[13].algo = 5;
         s->ink[13][1] = 77;
         s->steps[9][7] = 64;
-        s->step_part[9][7] = PART(13, 5);
+        s->step_part[9][7] = OLD_PART(13, 5);
         memset(blob6, 0xFF, sizeof blob6);
         memcpy(blob6 + 1, blob, offsetof(H1Old, ip) + H1_OLD_NINST * sizeof(InstParams));
         memcpy(blob6 + 1 + offsetof(H1Old, ink), s->ink, H1_OLD_NINST * 3u);
         memcpy(blob6 + 1 + offsetof(H1Old, rsv), s->rsv, sizeof s->rsv);
         memcpy(blob6 + 1 + offsetof(H1Old, steps), s->steps, sizeof s->steps);
         memcpy(blob6 + 1 + offsetof(H1Old, step_part), s->step_part, sizeof s->step_part);
-        memcpy(blob6 + 1 + offsetof(H1Old, knob), s->knob, H1_OLD_NINST * NALGO * 4u);
+        for (i = 0; i < (int)H1_OLD_NINST; i++)               /* (eight algorithms to an instrument then) */
+            memcpy(blob6 + 1 + offsetof(H1Old, knob) + (size_t)i * H1_OLD_NALGO * 4u, s->knob[i], H1_OLD_NALGO * 4u);
         h1_init(44100);
         st.knob[14][2][1] = 3;                   /* (what is there now must not show through) */
         st.ip[15].algo = 6;
         CHECK(H1_VERSION_6_SIZE == 1880u, "a version 6 state is 1880 bytes");
         CHECK(h1_state_load(blob6 + 1, 1880u) == 0, "a version 6 state loads, from an odd address");
         for (i = 0; i < (int)H1_OLD_NINST; i++)
-            for (a = 0; a < NALGO; a++)
+            for (a = 0; a < (int)H1_OLD_NALGO; a++)
                 for (k = 0; k < 4; k++)
                     ok &= st.knob[i][a][k] == (uint8_t)((i * 7 + a * 3 + k) % 101);
         CHECK(ok, "every algorithm of the fourteen has its knobs");
@@ -265,7 +268,7 @@ int main(void)
         memset(blob6 + 1 + offsetof(H1Old, step_vel), 0, sizeof(H1Old) - offsetof(H1Old, step_vel));
         blob6[1 + offsetof(H1Old, step_vel) + 9 * NSNOTE + 7] = 40;
         blob6[1 + offsetof(H1Old, step_lay) + 9 * NSNOTE + 7] = 3;
-        blob6[1 + offsetof(H1Old, layer) + 2 * sizeof(Layer)] = PART(13, 5);
+        blob6[1 + offsetof(H1Old, layer) + 2 * sizeof(Layer)] = OLD_PART(13, 5);
         blob6[1 + offsetof(H1Old, layer) + 2 * sizeof(Layer) + 2] = 61;
         h1_init(44100);
         CHECK(H1_VERSION_8_SIZE == 3160u, "a version 8 state is 3160 bytes");
@@ -322,7 +325,7 @@ int main(void)
     /* (a reset says the algorithm's or the instrument's name and " RESET": it must fit the toast) */
     for (i = 0; i < NINST; i++) {
         if ((int)strlen(insts[i]->name) > longest) longest = (int)strlen(insts[i]->name);
-        for (a = 0; a < NALGO; a++)
+        for (a = 0; a < NALGOS(i); a++)
             if ((int)strlen(insts[i]->algo[a]) > longest) longest = (int)strlen(insts[i]->algo[a]);
     }
     CHECK(longest + 6 < 24, "the longest name and RESET fit the toast");
