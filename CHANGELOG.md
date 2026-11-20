@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.2.3
+## 0.3.0
 
-Identity `FM-1_481000203`. Fixes from the GitHub issues.
+Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE join it.
 
 **Sound**
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
