@@ -1841,7 +1841,7 @@ void eng_render(int32_t *lr, uint32_t n)
     }
 }
 
-void eng_init(uint32_t sample_rate)
+SMALL void eng_init(uint32_t sample_rate)
 {
     int i;
     if (sample_rate) {                           /* 0: keep the rate (a state load) */
