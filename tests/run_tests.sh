@@ -36,6 +36,9 @@ ASAN_OPTIONS=detect_leaks=0 build/h1v022
 "${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/ninth.c -o build/h1ninth -lm
 ASAN_OPTIONS=detect_leaks=0 build/h1ninth
+# BARD's drone holds a moment after the playing stops and dies away, never cut off
+"${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/drone.c -o build/h1drone -lm
+build/h1drone | tail -1
 # ECHO the same after 25 minutes on as at start (issue #31: it went grainy the longer the unit was on)
 "${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/h1echo -lm
 build/h1echo

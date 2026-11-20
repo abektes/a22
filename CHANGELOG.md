@@ -35,6 +35,9 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   instruments and the loop's layers jumped louder (at half way, by about 12 dB) until the knob came back
   through it. The held volume is now the knob's own, and it is held from the moment EDIT goes down, so a
   nudge too small to count does not move it either.
+- BARD's drone no longer cuts out when the playing stops. It went within about a tenth of a second of the
+  last note dying away; it now holds for a little over a second (a rest between phrases keeps it going)
+  and then dies away over a few seconds, the way a wheel runs down or a bag empties.
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
   float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
   then whole samples, and only a restart brought it back. It now sounds the same after hours as at
