@@ -16,7 +16,7 @@ uint32_t eng_rng = 0x2F6E2B1u;
 
 const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_haunt, &inst_tide,
                                      &inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
-                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo};
+                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo, &inst_tilt, &inst_plunk};
 
 /* Each algorithm against the rest, so that turning the encoder through the instruments is not a ride on
  * the volume: measured on the same phrase played on every one of them (the order is insts[]'s). */
@@ -35,6 +35,8 @@ static const f32 algo_gain[NINST][NALGO] = {           /* (0: an algorithm the i
     /* INK    */ {1.122f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 1.000f, 0.841f, 0.000f},
     /* BARD   */ {1.000f, 1.000f, 1.000f, 1.000f, 1.189f, 1.122f, 1.334f, 1.189f, 0.000f},
     /* TURBO  */ {1.189f, 1.000f, 1.000f, 1.189f, 1.585f, 1.000f, 1.259f, 1.000f, 0.000f},
+    /* TILT   */ {0.750f, 0.668f, 0.750f, 0.750f, 1.059f, 1.000f, 1.189f, 0.447f, 0.000f},
+    /* PLUNK  */ {1.000f, 1.189f, 1.000f, 1.122f, 1.000f, 0.891f, 1.334f, 1.122f, 0.000f},
 };
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
@@ -78,7 +80,8 @@ static int lay_was;
 static f32 run_time;
 static uint32_t stamp_ctr;
 static f32 last_pitch = 60.0f;
-static volatile uint32_t note_count;
+static volatile uint32_t note_count, hand_count;
+static volatile f32 hand_pitch;
 static volatile f32 level_out;
 static volatile f32 lfo_out;
 static volatile f32 beat_out;
@@ -242,8 +245,13 @@ static void voice_on_part(int note, int part, int seq, int lay, int vel)
     b = part_set(part);
     insts[inst]->note(v, b);
     v->serial++;
-    if (inst == cur_i)
+    if (inst == cur_i) {
         note_count++;                            /* (the picture's count: the notes of the instrument it shows) */
+        if (!seq) {
+            hand_pitch = (f32)note;
+            hand_count++;
+        }
+    }
 }
 
 static void voice_off_part(int note, int part, int lay)   /* the sequencer lets go of a note it started */
@@ -592,6 +600,84 @@ static uint32_t click_rng = 0x7407C0DEu;
 static int click_at = -1;
 static f32 free_pos;                             /* the metronome's own bar, when nothing is running under it */
 static int free_on;
+
+/* ---- cues (internal.h): one at a time, a few segments each. A segment is a wave that slides from one
+ * note to another while its level goes from one value to another; the noise takes its note as where it is
+ * cut off. ------------------------------------------------------------------------------------------- */
+enum { CW_SIN, CW_SQR, CW_SAW, CW_NOISE, CW_CHOP = 4, CW_VIB = 8, CW_END = 255 };
+/* wave, from note, to note, hundredths of a second, level: from << 4 | to */
+static const uint8_t CUES[] = {
+    CW_SAW | CW_CHOP, 38, 38, 75, 0xEE, CW_SAW, 38, 33, 12, 0xE0, CW_END,                        /* TILT: the buzzer */
+    CW_SQR, 72, 72, 6, 0x99, CW_SQR, 76, 76, 6, 0x99, CW_SQR, 79, 79, 6, 0x99,                   /* PIP: one up */
+    CW_SQR, 84, 84, 6, 0x99, CW_SQR, 88, 88, 32, 0x90, CW_END,
+    CW_SQR, 69, 76, 28, 0x66, CW_SQR, 76, 69, 28, 0x66, CW_SQR, 69, 76, 28, 0x66,                /* TURBO: the siren */
+    CW_SQR, 76, 69, 28, 0x66, CW_SQR, 69, 76, 28, 0x64, CW_SQR, 76, 69, 44, 0x40, CW_END,
+    CW_SIN | CW_VIB, 86, 74, 60, 0x4B, CW_SIN | CW_VIB, 74, 93, 130, 0xB0, CW_END,               /* ORBIT: the answer */
+    CW_NOISE, 112, 86, 9, 0xF6, CW_SIN, 98, 98, 5, 0xA3, CW_SIN, 105, 105, 5, 0x92,              /* COZY: the pot */
+    CW_SIN, 93, 93, 24, 0x80, CW_END,
+    CW_SQR | CW_CHOP, 45, 43, 13, 0xCC, CW_SQR, 43, 43, 7, 0x00,                                 /* KOI: the frog */
+    CW_SQR | CW_CHOP, 47, 44, 22, 0xD0, CW_END,
+    CW_NOISE, 112, 98, 5, 0xB8, CW_NOISE, 74, 52, 60, 0xF9, CW_NOISE, 52, 40, 170, 0x90, CW_END, /* HAUNT: thunder */
+};
+#define CUE_AMP 0.3f
+static const uint8_t *cue_p;                     /* the segment sounding, 0: none */
+static uint32_t cue_n, cue_count, cue_rng = 0xC0E5EEDu;
+static f32 cue_ph, cue_mod, cue_g, cue_lp;
+
+static APART void cue_start(int i)
+{
+    const uint8_t *p = CUES;
+    if (i >= NCUE)
+        return;
+    for (; i; i--) {
+        while (*p != CW_END)
+            p += 5;
+        p++;
+    }
+    cue_p = p;
+    cue_n = 0;
+    cue_count++;
+}
+uint32_t eng_cues(void) { return cue_count; }
+
+static APART void cue_block(f32 *L, f32 *R)
+{
+    const uint8_t *s = cue_p;
+    f32 len = (f32)s[3] * 0.01f * SR, u = (f32)cue_n / len, note = (f32)s[1] + (f32)((int)s[2] - (int)s[1]) * u;
+    f32 amp = ((f32)(s[4] >> 4) + (f32)((int)(s[4] & 15) - (int)(s[4] >> 4)) * u) * (CUE_AMP / 15.0f), inc, g = cue_g, ph = cue_ph, x;
+    int n, wave = s[0] & 3;
+    cue_mod = fractf(cue_mod + (s[0] & CW_VIB ? 9.0f : 32.0f) * (f32)CTRL * ISR);
+    if (s[0] & CW_VIB)
+        note += 1.5f * tsin(cue_mod);
+    if ((s[0] & CW_CHOP) && cue_mod > 0.5f)
+        amp *= 0.15f;
+    inc = mtof(note) * ISR;
+    if (wave == CW_NOISE) {                      /* (cut low, it is brought back up to be heard) */
+        inc = minf(1.0f, H1_TAU * inc);
+        amp *= minf(4.0f, rsqrtf(inc));
+    }
+    for (n = 0; n < CTRL; n++) {
+        g += (amp - g) * 0.02f;                  /* (no step in level is a click) */
+        if (wave == CW_NOISE) {
+            cue_lp += (noise_s(&cue_rng) - cue_lp) * inc;
+            x = cue_lp;
+        } else {
+            ph += inc;
+            if (ph >= 1.0f) ph -= 1.0f;
+            x = wave == CW_SIN ? tsin(ph) : (wave == CW_SQR ? (ph < 0.5f ? 0.6f : -0.6f) : ph * 1.4f - 0.7f);
+        }
+        x *= g;
+        L[n] += x;
+        R[n] += x;
+    }
+    cue_ph = ph;
+    cue_g = g;
+    cue_n += CTRL;
+    if ((f32)cue_n >= len) {
+        cue_n = 0;
+        cue_p = s[5] == CW_END ? 0 : s + 5;
+    }
+}
 
 /* ---- the metronome: a soft knock on the meter's beats, a little higher on the one ------------- */
 static int click_mode(void) { return st.seq[5] < 3 ? st.seq[5] : CLICK_REC; }
@@ -1033,7 +1119,8 @@ static void handle(uint32_t e)
     switch (type) {
     case EV_NOTE_ON: live_note(a & 127, 1, vel ? vel : 127, midi); break;
     case EV_NOTE_OFF: live_note(a & 127, 0, 0, midi); break;
-    case EV_PANIC: panic(a & 1); break;
+    case EV_PANIC: panic(a & 1); cue_p = 0; break;
+    case EV_CUE: cue_start(a); break;
     case EV_UNLATCH: unlatch(); phys_down = 0; break;
     case EV_INST:
         if (a < NINST && a != cur_i) {
@@ -1711,6 +1798,8 @@ static void block(f32 *L, f32 *R)
 
     fx_block(L, R, &st.ip[cur_i], bpm);
 
+    if (cue_p)
+        cue_block(L, R);
     if (click_env > 0.001f) {
         for (n = 0; n < CTRL; n++) {
             f32 c;                               /* wood, not a beep: the pitch drops as it lands, and it is gone in a twentieth of a second */
@@ -1820,7 +1909,7 @@ void eng_render(int32_t *lr, uint32_t n)
     }
 }
 
-void eng_init(uint32_t sample_rate)
+SMALL void eng_init(uint32_t sample_rate)
 {
     int i;
     if (sample_rate) {                           /* 0: keep the rate (a state load) */
@@ -1874,6 +1963,7 @@ void eng_init(uint32_t sample_rate)
     free_on = 0;
     click_at = -1;
     ev_r = ev_w;                                 /* (and whatever the panel had asked for is not done) */
+    cue_p = 0;
     pending_i = -1;
     fade_blocks = 0;
 }
@@ -1887,6 +1977,8 @@ void eng_snapshot(Vis *vis)
         vis->v[i].on = v->stage != 0;
         vis->v[i].gate = v->gate;
         vis->v[i].note = v->note;
+        vis->v[i].vel = v->vel;
+        vis->v[i].seq = v->seq;
         vis->v[i].serial = v->serial;
         vis->v[i].pitch = v->pitch;
         vis->v[i].env = v->env;
@@ -1899,6 +1991,8 @@ void eng_snapshot(Vis *vis)
     vis->beat = beat_out;
     vis->notes = note_count;
     vis->last_pitch = last_pitch;
+    vis->hand = hand_count;
+    vis->hand_pitch = hand_pitch;
     if (layers())                                /* the picture is the instrument in hand: its own notes move it */
         for (i = 0; i < NVOICE; i++)
             if (PART_INST(voices[i].part) != cur_i)

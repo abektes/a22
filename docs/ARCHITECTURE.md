@@ -9,6 +9,7 @@ core/        the whole firmware: portable C99, single-precision float, no libc, 
   ui.c         what every control does, the name flash, the knob strip, the settings pages
   inst_*.c     one file per instrument: its sound and its picture, side by side
   smp.c        plays the recordings BARD and TWANG are built on (smp_data.c, written by tools/samples)
+  plunk_data.c  PLUNK's recorded hits (written by tools/samples/drums.py; inst_plunk.c plays them)
   str.h        the string those recordings' plucks are fed into
 port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the FM-1 browser simulator
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
@@ -182,15 +183,16 @@ echoes its input does not loop. A note-on or a knob goes out only while the USB 
 
 The saved state is version 9 (3344 bytes; 7 was never released). It has room for 16 instruments
 (`NSLOT`) of nine algorithms each, and keeps in `ninst` how many instruments it was saved with: on a
-load, the slots from there on come up as new, so adding an instrument (TILT and VIBE) needs no new
-version. Every older state is of fourteen instruments of eight algorithms (`H1Old`, read by offsets
+load, the slots from there on come up as new, so adding an instrument (TILT and PLUNK) needs no new
+version; they are last in PRESETS so that an instrument's number, which a recorded note's part holds,
+never changed. Every older state is of fourteen instruments of eight algorithms (`H1Old`, read by offsets
 only): each of its tables goes to the start of version 9's, its parts are read the old way, HOOVER's
 knobs and the instruments past the fourteen come up as new. Version 8 (3160 bytes) is version 6 and,
 after the knob table, each step note's velocity and layer and the sixteen layers. A loop saved by 0.2.2 is loop version 1, read the same way; h1 now writes version 2. A version 6 state (1880 bytes)
 loads with its steps at full velocity on no layer, and LAYERS on. Versions 4 and 5 are the same up to the steps, where
 a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
 shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.
-`h1_state_load` takes all of them, straight from the bytes: a version 4 state comes up with LAYERS
+`h1_state_load` takes all of them, straight from the bytes (`H1Old` in `internal.h` is the old layout): a version 4 state comes up with LAYERS
 on (since 0.2.2) and no parts kept, and in both older ones every algorithm starts from where the instrument's
 knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
 to whichever instrument is in hand. An instrument's volume took a spare byte of version 6, so a
@@ -225,6 +227,14 @@ that repeats, a whole number of periods long and crossfaded into itself.
 
 Every cut is stored with its highs lifted and the player (`smp_read`) lowers them again, which puts the
 8 bits' noise under the sound instead of over it.
+
+PLUNK's kits are another matter: 33 single hits (`sources.DRUMS`, all from VCSL), cut by
+`tools/samples/drums.py` into `core/plunk_data.c`, 25.7 KB. A drum is short and can take some grit, so
+they are 4-bit IMA ADPCM, each at the lowest rate its top allows (5.5 to 22.05 kHz), a tenth of a second
+or so. The hit's own dying away is divided out before it is stored and the player multiplies it back,
+longer or shorter with DECAY; a ringing hit (gong, bells, cymbal) keeps a short stretch that repeats
+while the player lets it fade. Five kits are picks and tunings from that pool, and three more are
+treatments of it (slowed, small, shuffled): eight separate sampled kits would not have fitted the flash.
 
 ## RAM and flash on the device
 

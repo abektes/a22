@@ -551,7 +551,7 @@ static void creature(int kind, f32 gy, const Vis *vis, f32 lev)
     }
 }
 
-static void bard_draw(const Vis *vis)
+static SMALL void bard_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, drone = vis->k[0], course = vis->k[1], bite = vis->k[2], age = vis->k[3], mt = smooth01(vis->algo_t);
     f32 lev, nib = 4.0f + 3.4f * bite, shake = age * age, want[12] = {0}, gy = 221.0f;

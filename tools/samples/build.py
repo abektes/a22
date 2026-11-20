@@ -372,12 +372,13 @@ def main():
 
     with open(os.path.join(ROOT, "docs", "SAMPLES.md"), "w") as f:
         f.write("# The recordings in h1\n\n"
-                "BARD and TWANG are built on recordings of real instruments. Every one of them is CC0: the people\n"
+                "BARD, TWANG and PLUNK are built on recordings of real instruments. Every one of them is CC0: the people\n"
                 "who made them gave them to the public domain, so they can be used in anything, sold or not, with no\n"
                 "credit owed. They are credited here all the same.\n\n"
                 "This file is written by `tools/samples/build.py` from `tools/samples/sources.py`, with\n"
-                "`core/smp_data.c`. To change a recording, change the sources and run it again.\n\n"
-                f"In the firmware they come to {len(blob):,} bytes: {len(zones)} cuts, 8-bit mu-law at 22.05 kHz.\n\n"
+                "`core/smp_data.c`. To change a recording, change the sources and run it again. (PLUNK's hits are\n"
+                "at the end, and `tools/samples/drums.py` cuts those.)\n\n"
+                f"In the firmware BARD's and TWANG's come to {len(blob):,} bytes: {len(zones)} cuts, 8-bit mu-law at 22.05 kHz.\n\n"
                 "## Libraries\n\n| Library | By | Licence |\n|---|---|---|\n")
         used = []
         for z in zones:
@@ -396,6 +397,8 @@ def main():
             for z in rows:
                 fn = urllib.parse.unquote(z["url"].rsplit("/", 1)[1])
                 f.write(f"| {z['key']:.1f} | [{fn}]({urllib.parse.quote(z['url'], safe=':/')}) | {sources.LIBRARIES[z['lib']]['name']} |\n")
+        import drums
+        f.write(drums.doc())
     print(f"{len(zones)} zones, {len(blob)} bytes")
 
 

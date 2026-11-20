@@ -290,11 +290,14 @@ static void part_state(int rounds)
             odd[1 + 4] = 5;
             if (h1_state_load(odd + 1, 920u) != 0)
                 die("a version 5 state was refused", n, 0, 0, 0);
-        } else if (n % 5 == 3) {                             /* the one before velocities and layers' settings:
-                                                              * version 6, 1880 bytes */
+        } else if (n % 5 == 1) {                             /* the one of fourteen instruments: version 6, 1880 bytes */
             odd[1 + 4] = 6;
             if (h1_state_load(odd + 1, 1880u) != 0 || !h1_layers())
                 die("a version 6 state was refused, or came back with LAYERS off", n, 0, 0, 0);
+        } else if (n % 5 == 3) {                             /* and that with velocities and layers: version 8, 3160 bytes */
+            odd[1 + 4] = 8;
+            if (h1_state_load(odd + 1, 3160u) != 0)
+                die("a version 8 state was refused", n, 0, 0, 0);
         } else if (h1_state_load(odd + 1, size) != 0)
             die("a state with the right magic and version was refused", n, 0, 0, 0);
         if (n % 2 == 0) {                                    /* and a saved loop: any bytes after its head, from an

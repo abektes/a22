@@ -34,12 +34,12 @@ crash_history = true
 usb_audio_in = true
 usb_audio_out = false
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
-tagline = "Fourteen animated instruments for the FM-1"
+tagline = "Sixteen animated instruments for the FM-1"
 repo = "https://github.com/jakehandy/h1"
 licence = "MIT"
 credits = "h1 is built on fm1-base by Charles Vestal and felucca-bsp, which come from Felucca by Leo Kuroshita, Hügelton Instruments."
 author = "Jake Handy"
-description = "Fourteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome."
+description = "Sixteen instruments, each a full-screen animated picture you play. PRESETS changes the instrument, ALGORITHM changes its character, and the four knobs always shape the sound and the picture together. With a loop recorder, a step sequencer, an arpeggiator and a metronome."
 tags = ["synth", "sequencer", "experimental"]
 install = "https://github.com/jakehandy/h1#install"
 site = "https://jakehandy.com/h1"

@@ -133,7 +133,8 @@ int main(void)
     CHECK(st.layer[2].part == PART(LAVA, 3), "a layer's part read the old way");
     CHECK(!memcmp(st.knob[LAVA][8], insts[LAVA]->def.knob0, 4), "HOOVER's knobs as new");
     CHECK(st.knob[13][7][2] == 42, "the knob table read across, instrument by instrument");
-    CHECK(st.knob[14][1][0] == 0 && st.ninst == NINST, "the slots past the fourteen empty, and the count saved");
+    CHECK(st.knob[14][1][0] == (NINST > 14 ? insts[NINST > 14 ? 14 : 0]->def.knob0[0] : 0) && st.ninst == NINST,
+          "the slot past the fourteen as new (or empty), and the count saved");
     for (i = 0; i < NLAYER; i++)
         if (i != 2)
             CHECK(st.layer[i].part == 0 || part_ok(st.layer[i].part), "every other layer empty or a real part");

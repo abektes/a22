@@ -197,7 +197,7 @@ static void fit_text(f32 cx, f32 y, const char *s, f32 size, f32 max_w, f32 a)
     g_text(cx, y, s, size, maxf(1.3f, size * 0.13f), a, 1);
 }
 
-static void value_text(int pg, int i, char *out)
+static APART void value_text(int pg, int i, char *out)
 {
     const ParamDef *p = page_param(pg, i);
     int v = *page_value(pg, i);
@@ -234,7 +234,7 @@ static int accel(int enc, int d)
     return d * m;
 }
 
-static void set_instrument(int i)
+static APART void set_instrument(int i)
 {
     int hint = seq.mode == SEQ_LOOP && (seq.loop_state == LOOP_PLAY || seq.loop_state == LOOP_IDLE);
     st.inst = (uint8_t)i;
@@ -254,7 +254,7 @@ static void set_instrument(int i)
     mark_dirty();
 }
 
-static void open_page(int pg)
+static APART void open_page(int pg)
 {
     int i;
     if (page == pg)
@@ -405,7 +405,7 @@ static void octave(int d)
     mark_dirty();
 }
 
-void h1_button(int btn, int down)
+SMALL void h1_button(int btn, int down)
 {
     if (btn < 0 || btn >= H1_NBTN)
         return;
@@ -652,7 +652,7 @@ static void set_knob(int i, int v)
         eng_midi_fn(0xB0u, (uint8_t)(20 + i), (uint8_t)((*k * 127 + 50) / 100));
 }
 
-static void set_param(int i, int v)
+static APART void set_param(int i, int v)
 {
     const ParamDef *p = page_param(page, i);
     uint8_t *q = page_value(page, i);
@@ -672,7 +672,7 @@ static void set_param(int i, int v)
 
 static int step_cursor_live(void) { return page == PG_HOME && seq.mode == SEQ_STEP && seq.write; }
 
-void h1_encoder(int enc, int d)
+SMALL void h1_encoder(int enc, int d)
 {
     if (!d || enc < 0 || enc >= H1_NENC)
         return;
@@ -710,7 +710,7 @@ void h1_encoder(int enc, int d)
 
 /* ---- every knob as a number: what it is tied to right now, and setting it outright. The
  * simulator's sliders use this; the device only ever turns encoders. -------------------------- */
-int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
+SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
 {
     static char buf[H1_NENC][20];
     int v = 0, a = 0, b = 0;
@@ -762,7 +762,7 @@ int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
     return v;
 }
 
-void h1_control_set(int enc, int v)
+SMALL void h1_control_set(int enc, int v)
 {
     if (enc < 0 || enc >= H1_NENC)
         return;
@@ -1188,7 +1188,7 @@ void ui_frame(uint32_t now_ms)
     vis.enter += dt;
 }
 
-void ui_init(void)
+SMALL void ui_init(void)
 {
     vis.fresh = 1;
     vis.algo = vis.algo_prev = st.ip[st.inst].algo;

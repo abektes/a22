@@ -39,7 +39,7 @@ static void defaults(void)
         inst_default(i);
 }
 
-void h1_init(uint32_t sample_rate)
+SMALL void h1_init(uint32_t sample_rate)
 {
     defaults();
     eng_init(sample_rate);
@@ -78,7 +78,7 @@ static void bytes(void *to, const uint8_t *from, uint32_t n)
         *d++ = *from++;
 }
 
-int h1_state_load(const void *blob, uint32_t size)
+SMALL int h1_state_load(const void *blob, uint32_t size)
 {
     const uint8_t *b = (const uint8_t *)blob;
     uint8_t *d = (uint8_t *)&st;

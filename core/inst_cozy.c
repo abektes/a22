@@ -336,6 +336,64 @@ static void glass(int w, f32 a, const Vis *vis)
     }
 }
 
+/* (hidden) the same note over and over walks the plant along the sill, a little each time. It walks back
+ * when it is left alone. Keep on and it goes off the end. */
+static f32 pot_x, pot_y, pot_v, pot_t, pot_p, pot_idle;
+static uint32_t pot_seen;
+static int pot_done;
+
+static APART void pot(const Vis *vis)
+{
+    f32 t = vis->t;
+    int i;
+    if (vis->hand != pot_seen) {
+        pot_seen = vis->hand;
+        if (pot_idle > 3.0f)                     /* (ready again once the playing has stopped) */
+            pot_done = 0;
+        if (vis->hand_pitch == pot_p && !pot_done && pot_v == 0.0f)
+            pot_x += 2.6f;
+        pot_p = vis->hand_pitch;
+        pot_idle = 0.0f;
+    }
+    pot_idle += vis->dt;
+    pot_x = maxf(0.0f, pot_x - vis->dt * (pot_v == 0.0f ? 1.2f : 0.0f));
+    if (pot_x > 24.0f || pot_v != 0.0f) {        /* over the end: down onto the desk, and that is that */
+        pot_v += 600.0f * vis->dt;
+        pot_y += pot_v * vis->dt;
+        if (pot_y > 58.0f) {
+            pot_v = pot_x = pot_y = 0.0f;
+            pot_t = 1.0f;
+            pot_done = 1;
+            ear = 1.0f;
+            eng_cue(CUE_COZY);
+        }
+    }
+    pot_t = maxf(0.0f, pot_t - vis->dt * 0.14f);
+    if (pot_t > 0.86f) {                         /* what is left of it, on the desk */
+        for (i = 0; i < 7; i++) {
+            f32 u = (1.0f - pot_t) * 7.0f, an = -0.05f - 0.4f * hsh((uint32_t)i + 640u), r = (10.0f + 30.0f * hsh((uint32_t)i + 650u)) * u;
+            f32 x = 231.0f + cos_turns(an) * r, y = 206.0f + sin_turns(an) * r + 60.0f * u * u;
+            if (y < 207.0f)
+                g_line(x, y, x + 4.0f * cos_turns(an * 3.0f + u), y + 4.0f * sin_turns(an * 3.0f + u), 1.6f, 1.0f - u * 0.7f);
+        }
+    }
+    if (pot_t < 0.25f) {                         /* the plant (and after a while somebody puts another one there) */
+        f32 bx = WX1 - 18.0f + pot_x + 130.0f * pot_t, by = WY1 - 1.0f + pot_y, q[8];
+        q[0] = bx - 7.0f; q[1] = by - 11.0f; q[2] = bx + 7.0f; q[3] = by - 11.0f; q[4] = bx + 5.0f; q[5] = by; q[6] = bx - 5.0f; q[7] = by;
+        g_mode(G_PAINT);
+        g_rect(bx - 8.0f, by - 12.0f, 16.0f, 12.0f, 0.0f);
+        g_mode(G_MAX);
+        g_fill(q, 4, 0.95f);
+        for (i = 0; i < 5; i++) {
+            f32 an = -0.42f + (f32)i * 0.085f + lamp_a * 0.6f + 0.01f * sin_turns(t * 0.3f + (f32)i), L = 16.0f + 7.0f * hsh((uint32_t)i + 600u);
+            f32 mx = bx + cos_turns(an) * L * 0.6f, my = by - 11.0f + sin_turns(an) * L * 0.7f, ex = bx + cos_turns(an) * L * 1.1f, ey = by - 11.0f + sin_turns(an) * L * 0.85f + 3.0f;
+            g_line(bx, by - 11.0f, mx, my, 1.6f, 0.95f);
+            g_line(mx, my, ex, ey, 1.2f, 0.95f);
+            g_disc(mx, my, 2.0f, 0.9f);
+        }
+    }
+}
+
 static void cozy_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, dust = vis->k[0], wow = vis->k[1], muffle = vis->k[2], sway = vis->k[3], mt = smooth01(vis->algo_t);
@@ -348,6 +406,9 @@ static void cozy_draw(const Vis *vis)
         for (i = 0; i < 4; i++) fw[i].age = 1.0f;
         ear = bolt = 0.0f;
         cur_c = muffle;
+        pot_x = pot_y = pot_v = pot_t = 0.0f;
+        pot_seen = vis->hand;
+        pot_done = 0;
     }
     for (i = 0; i < NVOICE; i++)
         if (vis->v[i].on) {
@@ -452,21 +513,7 @@ static void cozy_draw(const Vis *vis)
     g_disc(WX0 - 11.0f, WY0 - 6.0f, 2.5f, 0.9f); g_disc(WX1 + 11.0f, WY0 - 6.0f, 2.5f, 0.9f);
 
     /* a plant on the sill */
-    {
-        f32 bx = WX1 - 18.0f, by = WY1 - 1.0f, q[8];
-        q[0] = bx - 7.0f; q[1] = by - 11.0f; q[2] = bx + 7.0f; q[3] = by - 11.0f; q[4] = bx + 5.0f; q[5] = by; q[6] = bx - 5.0f; q[7] = by;
-        g_mode(G_PAINT);
-        g_rect(bx - 8.0f, by - 12.0f, 16.0f, 12.0f, 0.0f);
-        g_mode(G_MAX);
-        g_fill(q, 4, 0.95f);
-        for (i = 0; i < 5; i++) {
-            f32 an = -0.42f + (f32)i * 0.085f + lamp_a * 0.6f + 0.01f * sin_turns(t * 0.3f + (f32)i), L = 16.0f + 7.0f * hsh((uint32_t)i + 600u);
-            f32 mx = bx + cos_turns(an) * L * 0.6f, my = by - 11.0f + sin_turns(an) * L * 0.7f, ex = bx + cos_turns(an) * L * 1.1f, ey = by - 11.0f + sin_turns(an) * L * 0.85f + 3.0f;
-            g_line(bx, by - 11.0f, mx, my, 1.6f, 0.95f);
-            g_line(mx, my, ex, ey, 1.2f, 0.95f);
-            g_disc(mx, my, 2.0f, 0.9f);
-        }
-    }
+    pot(vis);
     /* the cat: sitting, looking out, back to you. Its ear turns to each note and its tail keeps time. */
     {
         f32 cx = WX0 + 36.0f, by = WY1 - 1.0f, tri[6], sw = sin_turns(tail_ph), xy[2 * 9];

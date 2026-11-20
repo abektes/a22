@@ -339,7 +339,53 @@ static void minster(f32 gy, f32 t, f32 lev, f32 dim)
     }
 }
 
-static void haunt_draw(const Vis *vis)
+/* (hidden) hold a tritone, bare, the interval they would not have in a church: lightning, thunder, and for a
+ * moment you can see what has been standing behind the dark the whole time, looking at you */
+static f32 tri_t, eyes;
+static int eyes_done;
+
+static APART void eyes_run(const Vis *vis)
+{
+    f32 t = vis->t, u, open, look;
+    int i;
+    {
+        int held = 0, n0 = 0, n1 = 0;
+        for (i = 0; i < NVOICE; i++)
+            if (vis->v[i].on && vis->v[i].gate && !vis->v[i].seq) {
+                n1 = n0;
+                n0 = vis->v[i].note;
+                held++;
+            }
+        if (held == 2 && (n0 - n1 + 120) % 12 == 6)
+            tri_t += vis->dt;
+        else
+            tri_t = 0.0f, eyes_done = 0;
+        if (tri_t > 1.0f && !eyes_done && eyes <= 0.0f) {
+            eyes_done = 1;
+            eyes = 1.0f;
+            eng_cue(CUE_HAUNT);
+        }
+    }
+    if (eyes <= 0.0f)
+        return;
+    eyes -= vis->dt * 0.24f;
+    u = 1.0f - eyes;
+    open = sat(u * 9.0f) * sat((1.0f - u) * 4.0f) * (fractf(t * 0.4f) > 0.94f ? 0.15f : 1.0f);
+    look = 5.0f * sin_turns(t * 0.23f);
+    if (u < 0.05f || (u > 0.09f && u < 0.11f))   /* the flash, and its second stroke */
+        g_rect(0.0f, 0.0f, 240.0f, 240.0f, 0.55f);
+    for (i = -1; i <= 1; i += 2) {
+        f32 cx = 120.0f + 36.0f * (f32)i, cy = 34.0f;
+        g_mode(G_PAINT);
+        g_ellipse(cx, cy, 19.0f, 10.0f * open, 0.0f, 0.0f);
+        g_mode(G_MAX);
+        g_ellipse(cx, cy, 19.0f, 10.0f * open, 1.5f, 0.9f);
+        g_line(cx + look, cy - 8.0f * open, cx + look, cy + 8.0f * open, 4.0f, 1.0f);
+        g_line(cx + 22.0f * (f32)i, cy - 18.0f * open, cx - 12.0f * (f32)i, cy - 9.0f * open, 2.0f, 0.8f * open);
+    }
+}
+
+static SMALL void haunt_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, fog = vis->k[0], dread = vis->k[1], shiver = vis->k[2], depth = vis->k[3], mt = smooth01(vis->algo_t);
     f32 fine, water = 232.0f - 46.0f * depth, dim = 0.15f + 0.85f * absf(2.0f * mt - 1.0f), tall = 84.0f + 80.0f * dread, vx = 120.0f, vy = 78.0f;
@@ -352,7 +398,7 @@ static void haunt_draw(const Vis *vis)
             gh[i].y = gh[i].home = 60.0f;
             seen_g[i] = vis->v[i].serial;
         }
-        lev_h = 0.0f;
+        lev_h = eyes = tri_t = 0.0f;
         thin = 0.0f;
     }
     lev_h += (minf(1.0f, vis->level * 4.0f) - lev_h) * minf(1.0f, dt * 5.0f);
@@ -442,6 +488,7 @@ static void haunt_draw(const Vis *vis)
         break;
     }
 
+    eyes_run(vis);
     /* something small is always out there */
     {
         f32 gx = 120.0f + 86.0f * sin_turns(t * 0.013f), gy = water - 56.0f + 5.0f * sin_turns(t * 0.05f);

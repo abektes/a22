@@ -471,6 +471,57 @@ static void stone(const f32 *xy, int n, f32 cx, f32 cy)
     g_poly(xy, n, 1, 1.5f, 0.8f);
 }
 
+/* (hidden) five notes down at once is a stone in the pond. The frog that was under a pad all along has had
+ * enough: it comes up, says so, goes over to a quieter pad, and after a while slips back in. */
+static f32 frog;
+static int frog_done;
+
+static APART void frog_run(const Vis *vis)
+{
+    f32 t = vis->t, u, j, fly, s, x, y, hx, hy, puff;
+    int i;
+    {
+        int held = 0;
+        for (i = 0; i < NVOICE; i++)
+            held += vis->v[i].on && vis->v[i].gate && !vis->v[i].seq;
+        if (held < 2)
+            frog_done = 0;
+        if (held >= 5 && !frog_done && frog <= 0.0f) {
+            frog_done = 1;
+            frog = 1.0f;
+            eng_cue(CUE_KOI);
+        }
+    }
+    if (frog <= 0.0f)
+        return;
+    frog -= vis->dt * 0.14f;
+    if (frog <= 0.0f) {                          /* gone: the ring it leaves */
+        rip[rip_i].x = PAD[3][0]; rip[rip_i].y = PAD[3][1] - 4.0f; rip[rip_i].age = 0.0f; rip[rip_i].hard = 0.0f;
+        rip_i = (rip_i + 1) % NRIP;
+        return;
+    }
+    u = 1.0f - frog; j = sat((u - 0.36f) * 7.0f); fly = sin_turns(j * 0.5f);
+    s = sat(u * 14.0f) * sat((1.0f - u) * 12.0f) * (1.3f + 0.6f * fly);
+    x = PAD[2][0] + (PAD[3][0] - PAD[2][0]) * j; y = PAD[2][1] + (PAD[3][1] - PAD[2][1]) * j - 4.0f;
+    hx = 0.19f * s; hy = 0.98f * s;
+    puff = u < 0.3f ? 0.5f + 0.5f * sin_turns(t * 3.0f) : 0.0f;
+    for (i = -1; i <= 1; i += 2) {
+        f32 px = -hy * (f32)i, py = hx * (f32)i, ax = x - 3.0f * hx + 4.0f * px, ay = y - 3.0f * hy + 4.0f * py;
+        f32 kx = ax + (6.0f * px + 3.0f * hx) * (1.0f - fly) + (1.0f * px - 6.0f * hx) * fly, ky = ay + (6.0f * py + 3.0f * hy) * (1.0f - fly) + (1.0f * py - 6.0f * hy) * fly;
+        g_line(ax, ay, kx, ky, 2.0f * s, 0.9f);                                     /* the back legs: folded, or out behind it */
+        g_line(kx, ky, kx - 7.0f * hx + 2.0f * px * fly, ky - 7.0f * hy + 2.0f * py * fly, 1.6f * s, 0.9f);
+    }
+    g_disc(x, y, 6.5f * s, 0.92f);
+    g_disc(x + 5.5f * hx, y + 5.5f * hy, (4.6f + 1.6f * puff) * s, 0.92f);
+    for (i = -1; i <= 1; i += 2) {               /* its eyes stand out of its head */
+        f32 ex = x + 7.0f * hx - 3.6f * hy * (f32)i, ey = y + 7.0f * hy + 3.6f * hx * (f32)i;
+        g_disc(ex, ey, 2.3f * s, 1.0f);
+        g_mode(G_PAINT);
+        g_disc(ex, ey, 1.0f * s, 0.0f);
+        g_mode(G_MAX);
+    }
+}
+
 static void koi_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, mallet = vis->k[0], ripple = vis->k[1], linger = vis->k[2], sink = vis->k[3], mt = smooth01(vis->algo_t);
@@ -485,6 +536,7 @@ static void koi_draw(const Vis *vis)
         for (i = 0; i < NVOICE; i++) vser[i] = vis->v[i].serial;
         for (i = 0; i < 5; i++) pad_kick[i] = 0.0f;
         bloom = mallet;
+        frog = 0.0f;
     }
     kR += (FK[algo].R - kR) * minf(1.0f, dt * 2.5f);
     for (i = 0; i < NVOICE; i++)
@@ -573,6 +625,7 @@ static void koi_draw(const Vis *vis)
     /* the pads, over the fish */
     for (i = 0; i < 5; i++)
         pad_draw(i, t, ripple);
+    frog_run(vis);
     /* MALLET: the lotus. A bud for felt, wide open for wood. */
     {
         f32 cx = PAD[0][0] - 5.0f + (0.6f + 2.0f * ripple) * sin_turns(t * 0.11f), cy = PAD[0][1] + 4.0f + (0.6f + 2.0f * ripple) * sin_turns(t * 0.09f), o = bloom;
