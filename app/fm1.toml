@@ -34,6 +34,8 @@ crash_history = true
 usb_audio_in = true
 usb_audio_out = false
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
+# the name people see on a listing; name above stays "h1" (file names, id, USB names)
+title = "handy-1 (h1)"
 tagline = "Sixteen animated instruments for the FM-1"
 repo = "https://github.com/jakehandy/h1"
 licence = "MIT"
