@@ -20,21 +20,21 @@ const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_h
 
 /* Each algorithm against the rest, so that turning the encoder through the instruments is not a ride on
  * the volume: measured on the same phrase played on every one of them (the order is insts[]'s). */
-static const f32 algo_gain[NINST][NALGO] = {
-    /* COZY   */ {1.334f, 1.413f, 1.000f, 0.794f, 1.334f, 1.189f, 1.334f, 1.334f},
-    /* ORBIT  */ {1.122f, 0.794f, 0.794f, 0.794f, 0.794f, 0.668f, 0.668f, 0.750f},
-    /* KOI    */ {1.000f, 1.000f, 1.189f, 1.189f, 1.122f, 1.000f, 0.750f, 1.259f},
-    /* HAUNT  */ {0.794f, 0.841f, 0.750f, 1.679f, 0.668f, 1.413f, 1.000f, 1.000f},
-    /* TIDE   */ {1.000f, 1.000f, 1.334f, 1.259f, 0.891f, 1.334f, 1.259f, 0.841f},
-    /* PIP    */ {0.841f, 1.000f, 1.000f, 1.000f, 0.841f, 1.585f, 1.000f, 1.000f},
-    /* BONK   */ {0.794f, 1.000f, 1.000f, 1.000f, 0.668f, 0.794f, 0.708f, 1.000f},
-    /* URCHIN */ {1.000f, 1.122f, 0.891f, 1.122f, 1.413f, 1.189f, 1.189f, 1.000f},
-    /* TWANG  */ {1.000f, 1.189f, 0.841f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f},
-    /* LAVA   */ {0.841f, 0.794f, 1.000f, 0.891f, 1.000f, 0.891f, 1.496f, 1.000f},
-    /* KNOT   */ {1.000f, 0.891f, 1.000f, 0.668f, 0.841f, 1.259f, 0.841f, 0.841f},
-    /* INK    */ {1.122f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 1.000f, 0.841f},
-    /* BARD   */ {1.000f, 1.000f, 1.000f, 1.000f, 1.189f, 1.122f, 1.334f, 1.189f},
-    /* TURBO  */ {1.189f, 1.000f, 1.000f, 1.189f, 1.585f, 1.000f, 1.259f, 1.000f},
+static const f32 algo_gain[NINST][NALGO] = {           /* (0: an algorithm the instrument does not have) */
+    /* COZY   */ {1.334f, 1.413f, 1.000f, 0.794f, 1.334f, 1.189f, 1.334f, 1.334f, 0.000f},
+    /* ORBIT  */ {1.122f, 0.794f, 0.794f, 0.794f, 0.794f, 0.668f, 0.668f, 0.750f, 0.000f},
+    /* KOI    */ {1.000f, 1.000f, 1.189f, 1.189f, 1.122f, 1.000f, 0.750f, 1.259f, 0.000f},
+    /* HAUNT  */ {0.794f, 0.841f, 0.750f, 1.679f, 0.668f, 1.413f, 1.000f, 1.000f, 0.000f},
+    /* TIDE   */ {1.000f, 1.000f, 1.334f, 1.259f, 0.891f, 1.334f, 1.259f, 0.841f, 0.000f},
+    /* PIP    */ {0.841f, 1.000f, 1.000f, 1.000f, 0.841f, 1.585f, 1.000f, 1.000f, 0.000f},
+    /* BONK   */ {0.794f, 1.000f, 1.000f, 1.000f, 0.668f, 0.794f, 0.708f, 1.000f, 0.000f},
+    /* URCHIN */ {1.000f, 1.122f, 0.891f, 1.122f, 1.413f, 1.189f, 1.189f, 1.000f, 0.000f},
+    /* TWANG  */ {1.000f, 1.189f, 0.841f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 0.000f},
+    /* LAVA   */ {0.841f, 0.794f, 1.000f, 0.891f, 1.000f, 0.891f, 1.496f, 1.000f, 1.426f},
+    /* KNOT   */ {1.000f, 0.891f, 1.000f, 0.668f, 0.841f, 1.259f, 0.841f, 0.841f, 0.000f},
+    /* INK    */ {1.122f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 1.000f, 0.841f, 0.000f},
+    /* BARD   */ {1.000f, 1.000f, 1.000f, 1.000f, 1.189f, 1.122f, 1.334f, 1.189f, 0.000f},
+    /* TURBO  */ {1.189f, 1.000f, 1.000f, 1.189f, 1.585f, 1.000f, 1.259f, 1.000f, 0.000f},
 };
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
@@ -149,7 +149,7 @@ int scale_snap(int note)
 
 /* ---- voices --------------------------------------------------------------------------- */
 static int layers(void) { return st.seq[6] == 1; }
-static uint8_t live_part(void) { return PART(cur_i, st.ip[cur_i].algo < NALGO ? st.ip[cur_i].algo : 0); }
+static uint8_t live_part(void) { return PART(cur_i, st.ip[cur_i].algo < NALGOS(cur_i) ? st.ip[cur_i].algo : 0); }
 static const Blk *part_set(int part);
 
 /* Velocity: louder, and brighter. The gain is a curve with about 20 dB between the softest note and the
@@ -713,7 +713,7 @@ static void step_fire(int i, f32 len)
         if (st.steps[i][j]) {
             int n = st.steps[i][j] - 1, part = 0, lay = 0, vel = st.step_vel[i][j] ? st.step_vel[i][j] : 127;
             if (layers()) {
-                part = st.step_part[i][j] & 0x80 ? st.step_part[i][j] : live_part();
+                part = part_ok(st.step_part[i][j]) ? st.step_part[i][j] : live_part();
                 lay = layer_of(st.step_lay[i][j], part);
                 voice_on_part(n, part, 1, lay, vel);
                 mout(1, n, vel);
@@ -821,7 +821,7 @@ static void step_clear(int i)
 }
 
 /* a note's instrument: the one it was played on, or with none kept, the one in hand */
-static int tag_inst(int part) { return part & 0x80 ? PART_INST(part) : cur_i; }
+static int tag_inst(int part) { return part_ok((uint32_t)part) ? PART_INST(part) : cur_i; }
 
 /* only the notes of one instrument out of a step: the others close up */
 static void step_clear_inst(int i, int inst)
@@ -1276,7 +1276,7 @@ static const Blk *part_set(int part)
     r->b.algo = PART_ALGO(part);
     /* the part's own four knobs: the eased ones on the algorithm the instrument is on, and as they
      * stand on any other */
-    if (PART_ALGO(part) == (st.ip[i].algo < NALGO ? st.ip[i].algo : 0))
+    if (PART_ALGO(part) == (st.ip[i].algo < NALGOS(i) ? st.ip[i].algo : 0))
         for (k = 0; k < 4; k++)
             r->b.k[k] = r->knob_s[k];
     else
@@ -1894,7 +1894,7 @@ uint32_t eng_loop_save(uint8_t *dst, uint32_t max)
         return 0;
     put16(dst, LOOP_MAGIC & 0xFFFFu);
     put16(dst + 2, LOOP_MAGIC >> 16);
-    dst[4] = 1;                                  /* the version */
+    dst[4] = 2;                                  /* the version: 2 since parts are counted (PART), 1 before */
     dst[5] = 0;
     put16(dst + 6, (uint32_t)ne);
     put16(dst + 8, (uint32_t)loop_len);
@@ -1917,7 +1917,7 @@ uint32_t eng_loop_save(uint8_t *dst, uint32_t max)
 int eng_loop_load(const uint8_t *b, uint32_t n)
 {
     uint32_t ne, len, i, k = 0;
-    if (!b || n < LOOP_HEAD || get16(b) != (LOOP_MAGIC & 0xFFFFu) || get16(b + 2) != (LOOP_MAGIC >> 16) || b[4] != 1)
+    if (!b || n < LOOP_HEAD || get16(b) != (LOOP_MAGIC & 0xFFFFu) || get16(b + 2) != (LOOP_MAGIC >> 16) || b[4] < 1 || b[4] > 2)
         return -1;
     ne = get16(b + 6);
     len = get16(b + 8);
@@ -1932,7 +1932,7 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         lev[k].tick = (uint16_t)tick;
         lev[k].note = e[2] & 127u;
         lev[k].on = e[3] & 1u;
-        lev[k].part = (e[4] & 0x80u) && ((e[4] >> 3) & 15u) < (uint32_t)NINST ? e[4] : 0u;
+        lev[k].part = b[4] == 1 ? PART_V8(e[4]) : part_ok(e[4]) ? e[4] : 0u;
         lev[k].lay = (uint8_t)layer_of(e[5], lev[k].part);
         lev[k].vel = e[6] & 127u;
         lev[k].rsv = 0;

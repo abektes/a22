@@ -99,7 +99,7 @@ int h1_volume_ring(void);                        /* the volume ring: 0 not up, 1
 int h1_instrument_count(void);
 const char *h1_instrument_name(int i);
 const char *h1_knob_name(int inst, int k);       /* the four home-screen modulations */
-const char *h1_algo_name(int inst, int a);       /* eight per instrument */
+const char *h1_algo_name(int inst, int a);       /* eight per instrument, LAVA nine; "" past the last */
 void h1_ink(int inst, uint8_t rgb[3]);
 void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b);
 uint32_t h1_voices_active(void);

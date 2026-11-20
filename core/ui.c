@@ -562,7 +562,7 @@ static void holds(void)
 static void set_algo(int a)
 {
     InstParams *ip = &st.ip[st.inst];
-    a = (a % NALGO + NALGO) % NALGO;
+    a = (a % NALGOS(st.inst) + NALGOS(st.inst)) % NALGOS(st.inst);
     if (a == ip->algo)
         return;
     vis.algo_prev = ip->algo;
@@ -673,7 +673,7 @@ int h1_control(int enc, int *lo, int *hi, const char **name, const char **text)
         v = st.inst; b = NINST - 1; nm = "PRESETS"; tx = insts[st.inst]->name;
         break;
     case H1_ENC_ALGO:
-        v = st.ip[st.inst].algo; b = NALGO - 1; nm = "ALGORITHM"; tx = insts[st.inst]->algo[v];
+        v = st.ip[st.inst].algo; b = NALGOS(st.inst) - 1; nm = "ALGORITHM"; tx = insts[st.inst]->algo[v];
         break;
     case H1_ENC_SELECT:
         if ((btn_held & (1u << H1_BTN_EDIT)) && btn_fired[H1_BTN_EDIT]) {     /* (held, not on its way to a tap) */
@@ -719,7 +719,7 @@ void h1_control_set(int enc, int v)
         if (v != st.inst)
             set_instrument(v);
         break;
-    case H1_ENC_ALGO: set_algo(iclamp(v, 0, NALGO - 1)); break;
+    case H1_ENC_ALGO: set_algo(iclamp(v, 0, NALGOS(st.inst) - 1)); break;
     case H1_ENC_SELECT:
         if (btn_held & (1u << H1_BTN_EDIT)) {
             btn_fired[H1_BTN_EDIT] = 1;
@@ -830,8 +830,8 @@ static void draw_toast(void)
     g_dim(a);
     g_text(120.0f, y, toast_s, 15.0f, 2.0f, 1.0f, 1);
     if (toast_pips >= 0)
-        for (i = 0; i < NALGO; i++) {
-            f32 x = 120.0f + ((f32)i - 3.5f) * 11.0f;
+        for (i = 0; i < NALGOS(st.inst); i++) {
+            f32 x = 120.0f + ((f32)i - 0.5f * (f32)(NALGOS(st.inst) - 1)) * 11.0f;
             if (i == toast_pips) g_disc(x, y + 26.0f, 3.2f, 1.0f);
             else g_disc(x, y + 26.0f, 1.4f, 0.55f);
         }
