@@ -28,6 +28,10 @@ ASAN_OPTIONS=detect_leaks=0 build/h1volume
 "${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/v022.c -o build/h1v022 -lm
 ASAN_OPTIONS=detect_leaks=0 build/h1v022
+# LAVA's ninth algorithm (HOOVER): parts counted, state version 9, a loop saved as version 2, and 0.2.2's of both read
+"${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
+    core/*.c tests/ninth.c -o build/h1ninth -lm
+ASAN_OPTIONS=detect_leaks=0 build/h1ninth
 # ECHO the same after 25 minutes on as at start (issue #31: it went grainy the longer the unit was on)
 "${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/h1echo -lm
 build/h1echo

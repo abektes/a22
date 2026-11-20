@@ -10,6 +10,15 @@ Identity `FM-1_481000203`. Fixes from the GitHub issues.
   little slower.
 
 **Sound**
+- LAVA has a ninth algorithm, **HOOVER** (#24): two PWM saws (a saw plus a copy of it swept along, the old
+  Juno trick) a little apart, a swoop up into every note, and a light fold. FOLD sets how far the sweep goes
+  and LEAN how far apart the two saws are. Its lamp turns into a whirl that twists harder the further it
+  sweeps. Every other instrument keeps eight.
+- The saved state is version 9 and a saved loop version 2, so a recorded note can name a ninth algorithm.
+  Version 9 has room for sixteen instruments and says how many it was saved with, so instruments added
+  later come up as new without another change of format.
+  States and loops saved by 0.2.2 load as they were; an older firmware refuses a version 9 state and
+  starts fresh.
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
   float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
   then whole samples, and only a restart brought it back. It now sounds the same after hours as at

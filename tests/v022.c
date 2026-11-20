@@ -168,7 +168,7 @@ int main(void)
     {
         int32_t ceiling = (int32_t)(0.7f * 7549747.0f) + 2, worst = 0;
         for (i = 0; i < NINST; i++)
-            for (a = 0; a < NALGO; a++) {
+            for (a = 0; a < NALGOS(i); a++) {
                 Heard h = taken(chord, i, a);
                 if (h.peak > worst) worst = h.peak;
                 if (h.peak > ceiling)

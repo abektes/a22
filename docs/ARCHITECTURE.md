@@ -136,7 +136,9 @@ rest of the state. `eng_seq_info` gives the picture what it needs to draw the pr
 the notches.
 
 Every recorded note also stores its part: the instrument and algorithm it was played on, in one
-byte (`PART`). Every voice carries the part it sounds and whether the sequencer started it. With
+byte (`PART`: 1 + instrument × 9 + algorithm, 0 for none, so sixteen instruments of nine algorithms
+fit; before version 9 it was `0x80 | instrument << 3 | algorithm`, which only had room for eight, and
+`PART_V8` reads that). Every voice carries the part it sounds and whether the sequencer started it. With
 LAYERS off (`st.seq[6] == 0`) the stored parts are ignored and recorded notes go through the same
 path as a key, on the instrument in hand. With LAYERS on, the sequencer starts voices on the
 stored part directly, past the arpeggiator (the loop records what the arpeggiator played, not the
@@ -168,8 +170,13 @@ CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI
 echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
 (app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack is an input only.
 
-The saved state is version 8 (version 7 is the drum screens' branch): version 6 and, after the knob
-table, each step note's velocity and layer and the sixteen layers. A version 6 state (1880 bytes)
+The saved state is version 9 (3344 bytes; 7 was never released). It has room for 16 instruments
+(`NSLOT`) of nine algorithms each, and keeps in `ninst` how many instruments it was saved with: on a
+load, the slots from there on come up as new, so adding an instrument (TILT and VIBE) needs no new
+version. Every older state is of fourteen instruments of eight algorithms (`H1Old`, read by offsets
+only): each of its tables goes to the start of version 9's, its parts are read the old way, HOOVER's
+knobs and the instruments past the fourteen come up as new. Version 8 (3160 bytes) is version 6 and,
+after the knob table, each step note's velocity and layer and the sixteen layers. A loop saved by 0.2.2 is loop version 1, read the same way; h1 now writes version 2. A version 6 state (1880 bytes)
 loads with its steps at full velocity on no layer, and LAYERS on. Versions 4 and 5 are the same up to the steps, where
 a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
 shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.

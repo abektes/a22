@@ -7,6 +7,11 @@
  *   K2 HEAT    the filter opens                        it boils: the lines squirm, the blobs move faster
  *   K3 LEAN    the fold goes lopsided                  the whole lamp leans
  *   K4 SUB     a sine an octave down                   a big slow blob in the deep
+ *
+ * HOOVER is the rave one: two "PWM saws" (a saw and a copy of it slid along by a slow sweep, the
+ * old Juno trick) a little apart, a swoop up into each note, and the fold kept light. FOLD is how
+ * far the sweep goes, LEAN how far apart the two are. Its lamp is a vortex: the blobs are drawn into
+ * a whirl, turning harder the more it sweeps.
  */
 #include "internal.h"
 #include "dsp.h"
@@ -14,9 +19,9 @@
 /* ---- sound ------------------------------------------------------------------------------ */
 static struct {
     int algo;
-    f32 fold, cut, lean, sub, wob;
+    f32 fold, cut, lean, sub, wob, pwm;
 } V;
-static f32 wob_ph;
+static f32 wob_ph, pwm_ph;
 
 static void lava_block(const Blk *b)
 {
@@ -27,6 +32,8 @@ static void lava_block(const Blk *b)
     V.sub = b->k[3];
     wob_ph = fractf(wob_ph + b->bpm * (1.0f / 60.0f) * b->step);      /* QUAKE wobbles in time */
     V.wob = 0.5f - 0.5f * tsin(wob_ph + 0.25f);
+    pwm_ph = fractf(pwm_ph + 0.43f * b->step);   /* HOOVER's sweep: slow, and not in time */
+    V.pwm = 0.5f + (0.08f + 0.34f * b->k[0]) * tsin(pwm_ph);
 }
 
 static void lava_note(Voice *v, const Blk *b)
@@ -57,6 +64,12 @@ static void lava_render(Voice *v, const Blk *b, f32 *out, int n)
     case 1: q = 5.5f; oct = 3.6f * exp2fx(-v->age * 9.0f); gdyn *= 0.6f; break;          /* ACID */
     case 3: q = 2.2f; oct += 0.9f * tsin(v->age * 2.7f + v->r1); break;                  /* GROWL */
     case 4: q = 1.4f; break;                                                             /* REED */
+    case 8: q = 1.1f; oct = 0.8f + 1.6f * exp2fx(-v->age * 3.0f) + (pitch - 36.0f) * (1.0f / 30.0f);   /* HOOVER */
+        pitch -= 7.0f * exp2fx(-v->age * 14.0f);                                         /* the swoop up into the note */
+        d = minf(mtof(pitch) * b->isr, 0.3f);
+        d2 = d * (1.0f + 0.004f + 0.022f * V.lean);
+        bias = 0.0f;
+        break;
     case 6: hp = 0.5f; gdyn *= 1.5f; oct += 1.0f; break;                                 /* SHRED */
     case 7: q = 2.6f; oct = -1.0f + 3.4f * V.wob; break;                                 /* QUAKE */
     default: break;
@@ -73,6 +86,14 @@ static void lava_render(Voice *v, const Blk *b, f32 *out, int n)
         case 3: x = fold_sin((saw_bl(pa, d) + saw_bl(pb, d2)) * 0.5f * gdyn + bias); break;                           /* GROWL */
         case 4: x = fold_tri((4.0f * absf(pa - 0.5f) - 1.0f) * gdyn + bias); break;      /* REED: a triangle, folded square */
         case 5: x = fold_sin(tsin(pa + 0.35f * V.fold * 0.2f * s) * gdyn * 0.8f + bias); break;                       /* HOLLOW */
+        case 8: {                                                                        /* HOOVER: two PWM saws */
+            f32 qa = pa + V.pwm, qb = pb + (1.0f - V.pwm);
+            if (qa >= 1.0f) qa -= 1.0f;
+            if (qb >= 1.0f) qb -= 1.0f;
+            x = (saw_bl(pa, d) + saw_bl(qa, d) + saw_bl(pb, d2) + saw_bl(qb, d2)) * 0.25f;
+            x = fold_sin(x * (1.0f + 0.08f * V.fold));
+            break;
+        }
         case 6: x = fold_tri(fold_sin(saw_bl(pa, d) * gdyn + bias) * 2.2f); break;       /* SHRED: folded twice */
         case 7: x = fold_sin(tsin(pa) * gdyn + bias) + 0.5f * s; break;                  /* QUAKE */
         }
@@ -95,7 +116,7 @@ static void lava_render(Voice *v, const Blk *b, f32 *out, int n)
 static f32 field[GN * GN] H1_POOL;
 static struct { f32 x, y, vy, r, s, pop, popv; } bl[NBLOB];
 static uint32_t seen_s[NVOICE];
-static f32 boil, lev_s, lean_s;
+static f32 boil, lev_s, lean_s, hoov_turn;         /* (HOOVER: the vortex's turn, in turns) */
 
 static f32 key_x(f32 pitch) { return 26.0f + clampf((pitch - 41.0f) / 50.0f, 0.0f, 1.0f) * 188.0f; }
 
@@ -159,7 +180,7 @@ static void contour(f32 level, f32 w, f32 a)
 static void lava_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, fold = vis->k[0], heat = vis->k[1], lean = (vis->k[2] - 0.0f), sub = vis->k[3];
-    f32 speed = 0.35f + 1.6f * heat, nlev = 2.0f + fold * 6.0f, mt = smooth01(vis->algo_t), pool = 2.6f, strata = 0.0f;
+    f32 speed = 0.35f + 1.6f * heat, nlev = 2.0f + fold * 6.0f, mt = smooth01(vis->algo_t), pool = 2.6f, strata = 0.0f, swirl = 0.0f;
     int i, j, b, algo = mt < 0.5f ? vis->algo_prev : vis->algo, nb = 0, act[NBLOB];
     f32 ax[NBLOB], ay[NBLOB], air[NBLOB], as[NBLOB], dim = 0.2f + 0.8f * absf(2.0f * mt - 1.0f);
 
@@ -178,6 +199,7 @@ static void lava_draw(const Vis *vis)
     lev_s += (minf(1.0f, vis->level * 3.0f) - lev_s) * minf(1.0f, dt * 6.0f);
     lean_s += (lean - lean_s) * minf(1.0f, dt * 6.0f);
     boil += dt * speed;
+    hoov_turn = fractf(hoov_turn + dt * (0.05f + 0.3f * fold + 0.5f * lev_s));
 
     /* the notes: each rises to its own height, higher notes higher, and sinks when it is let go */
     for (i = 0; i < NVOICE; i++) {
@@ -222,6 +244,8 @@ static void lava_draw(const Vis *vis)
             ax[nb] = bl[i].x; ay[nb] = bl[i].y; air[nb] = 1.0f / bl[i].r; as[nb] = bl[i].s;
             nb++;
         }
+    if (algo == 8)                               /* HOOVER: how far round the vortex turns, with the sweep */
+        swirl = (0.22f + 0.5f * fold) * (0.75f + 0.25f * tsin(hoov_turn)) * (0.7f + 0.3f * lev_s) * dim;
     if (algo == 7) {                             /* QUAKE: the whole screen is ground, in layers */
         strata = 1.0f;
         pool = 0.0f;
@@ -232,9 +256,15 @@ static void lava_draw(const Vis *vis)
         f32 y = (f32)(j * CELL), py = pool * smooth01((y - 196.0f) * (1.0f / 40.0f)), shear = (lean_s - 0.0f) * (y - 150.0f) * 0.55f;
         f32 *row = &field[j * GN];
         for (i = 0; i < GN; i++) {
-            f32 x = (f32)(i * CELL) - shear, fsum = py;
+            f32 x = (f32)(i * CELL) - shear, yy = y, fsum = py;
+            if (swirl > 0.0f) {                  /* HOOVER: the lamp drawn down a drain, more the nearer the middle */
+                f32 cx = x - 120.0f, cy = y - 126.0f, an = swirl * 46.0f / (sqrtfx(cx * cx + cy * cy) + 26.0f);
+                f32 c = tsin(an + 0.25f), sn = tsin(an);
+                x = 120.0f + cx * c - cy * sn;
+                yy = 126.0f + cx * sn + cy * c;
+            }
             for (b = 0; b < nb; b++) {
-                f32 dx = x - ax[b], dy = y - ay[b];
+                f32 dx = x - ax[b], dy = yy - ay[b];
                 if (absf(dx) < 110.0f && absf(dy) < 110.0f)
                     fsum += as[b] * nearness(algo, dx, dy, air[b]);
             }
@@ -261,8 +291,16 @@ static void lava_draw(const Vis *vis)
     }
     /* an ember at the heart of every note */
     for (i = 0; i < NVOICE; i++)
-        if (bl[i].s > 0.05f)
-            g_disc(bl[i].x + lean_s * (bl[i].y - 150.0f) * 0.55f, bl[i].y, 1.5f + 3.0f * bl[i].s + 2.0f * maxf(0.0f, bl[i].pop), sat(bl[i].s * 2.0f) * dim);
+        if (bl[i].s > 0.05f) {
+            f32 ex = bl[i].x, ey = bl[i].y;
+            if (swirl > 0.0f) {                  /* (where the whirl put it: the field's turn, undone) */
+                f32 cx = ex - 120.0f, cy = ey - 126.0f, an = swirl * 46.0f / (sqrtfx(cx * cx + cy * cy) + 26.0f);
+                f32 c = tsin(an + 0.25f), sn = tsin(an);
+                ex = 120.0f + cx * c + cy * sn;
+                ey = 126.0f - cx * sn + cy * c;
+            }
+            g_disc(ex + lean_s * (ey - 150.0f) * 0.55f, ey, 1.5f + 3.0f * bl[i].s + 2.0f * maxf(0.0f, bl[i].pop), sat(bl[i].s * 2.0f) * dim);
+        }
     (void)t; (void)act;
 }
 
@@ -270,7 +308,7 @@ const InstDef inst_lava = {
     "LAVA",
     {255, 72, 168},
     {"FOLD", "HEAT", "LEAN", "SUB"},
-    {"MOLTEN", "ACID", "SQUARE", "GROWL", "REED", "HOLLOW", "SHRED", "QUAKE"},
+    {"MOLTEN", "ACID", "SQUARE", "GROWL", "REED", "HOLLOW", "SHRED", "QUAKE", "HOOVER"},
     {{35, 50, 0, 30}, 0, {0, 55, 80, 30}, {0, 55, 0, 0}, {0, 3, 10, 50}, {0, 3, 1, 60}, {0, 0, 0}},
     0.3f,
     lava_block, lava_note, lava_render, 0, lava_draw,

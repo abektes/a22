@@ -30,6 +30,9 @@
 #include <string.h>
 #include "../core/h1.h"
 
+/* how many algorithms an instrument has (eight, LAVA nine): the names it gives */
+static int nalgos(int inst) { int a = 0; while (a < 16 && *h1_algo_name(inst, a)) a++; return a; }
+
 static uint32_t rng_s = 1;
 static uint32_t rnd(void)
 {
@@ -130,7 +133,7 @@ static void frame(uint32_t ms, int with_sound)
         h1_present(blit);
         have_want = 0;
     }
-    if (h1_instrument() < 0 || h1_instrument() >= h1_instrument_count() || h1_algorithm() < 0 || h1_algorithm() > 7 ||
+    if (h1_instrument() < 0 || h1_instrument() >= h1_instrument_count() || h1_algorithm() < 0 || h1_algorithm() >= nalgos(h1_instrument()) ||
         h1_page() < 0 || h1_page() > 7)
         die("out of range", h1_instrument(), h1_algorithm(), h1_page(), 0);
     (void)h1_key_leds();
@@ -387,7 +390,7 @@ static void part_long(void)
     part = "long notes";
     fresh(0);
     for (inst = 0; inst < h1_instrument_count(); inst++) {
-        for (algo = 0; algo < 8; algo++) {
+        for (algo = 0; algo < nalgos(inst); algo++) {
             for (k = 0; k < 4; k++)                          /* the knobs at their ends, mostly */
                 h1_midi(0xB0, (uint8_t)(20 + k), below(4) ? EDGE[below(6)] : (uint8_t)below(128));
             for (k = 0; k < 3; k++)
