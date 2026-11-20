@@ -261,6 +261,9 @@ that came out of it:
   `void *` hides from it, so there are none.
 - A number that came from a float is masked or clamped before it indexes anything (`tsin`, the string
   and echo lines), and a loop that runs on a float has a bound.
+- A counter that runs for as long as the unit is on stays a whole number and is never turned into a
+  float: a float keeps 24 bits, so the fraction is gone after a few minutes. ECHO's read position did
+  that until 0.2.3 and the echo went grainy the longer the unit was on (`tests/echo.c`).
 - A rectangle sent to the panel is at most 20 rows: the device converts it in a buffer that size.
 - After a start that failed, `app_init` leaves the saved state alone and comes up as new, so one bad
   start cannot become two.

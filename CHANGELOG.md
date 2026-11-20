@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3
+
+Identity `FM-1_481000203`. Fixes from the GitHub issues.
+
+**Sound**
+- ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
+  float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
+  then whole samples, and only a restart brought it back. It now sounds the same after hours as at
+  start.
+
 ## 0.2.2
 
 Identity `FM-1_481000202`. From the first round of feedback after the launch.
