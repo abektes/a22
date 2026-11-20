@@ -216,6 +216,164 @@ static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
         plat_midi_send(pkt, TO_USB);
 }
 
+/* ---- the loop, kept through a power-off while it plays (#39) -----------------------------------
+ * A store save erases a sector first, and an erase stops the sound for about 50 ms, so the store only ever
+ * took the loop once it had been stopped: a loop left playing was lost at power-off. The loop has a ring of
+ * its own instead, in the data area: RING_SLOTS slots of RING_SECT sectors each. A slot is a header page
+ * (magic, a sequence number, the blob's length and its CRC-32) and the blob from RING_BODY on. A save goes
+ * into a slot that is already erased, a 256-byte page a frame (a page program is short, no erase), with the
+ * header written last, so a slot whose header reads right holds a whole loop. The newest such slot is the
+ * loop. Slots are erased at start (before the sound) and once the loop is stopped and nothing sounds.
+ * Before this the loop was store object OBJ_LOOP: read once, when the ring holds none. */
+#define RING_SECT 5u                     /* sectors a slot */
+#define RING_SLOTS 4u
+#define RING_SLOT_BYTES (RING_SECT * 4096u)
+#define RING_BASE (0xDC000u - RING_SLOTS * RING_SLOT_BYTES)   /* 0xC8000: just under the panel's calibration */
+#define RING_BODY 256u
+#define RING_MAGIC 0x524C3148u           /* "H1LR" */
+#define RING_PAGE 256u
+typedef char loop_fits_a_slot[H1_LOOP_MAX <= RING_SLOT_BYTES - RING_BODY ? 1 : -1];
+typedef char ring_in_the_data_area[RING_BASE >= PLAT_DATA_LO ? 1 : -1];
+
+static struct {
+    int cur;                             /* the slot that holds the loop, -1 none */
+    uint32_t seq;                        /* the newest slot's sequence number */
+    uint8_t clean[RING_SLOTS];           /* 1: known erased */
+    int to;                              /* the slot being written, -1 none */
+    uint32_t len, at, crc;               /* what is being written: its length, how far, its CRC */
+} ring = {-1, 0, {0}, -1, 0, 0, 0};
+static const uint8_t *ring_src;          /* the blob being written: h1_loop's own copy, which nothing else asks
+                                          * for until the save is done, so it stays as it was when it began */
+#define RING_MAX (RING_SLOT_BYTES - RING_BODY)
+
+static uint32_t ring_off(int slot) { return RING_BASE + (uint32_t)slot * RING_SLOT_BYTES; }
+static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+static void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24); }
+
+static uint32_t crc32_of(const uint8_t *p, uint32_t n)
+{
+    uint32_t c = 0xFFFFFFFFu, k;
+    while (n--) {
+        c ^= *p++;
+        for (k = 0; k < 8u; k++)
+            c = c >> 1 ^ (0xEDB88320u & (0u - (c & 1u)));
+    }
+    return ~c;
+}
+
+/* a slot's loop: its length, or 0 when it holds none (erased, torn, or another firmware's bytes) */
+static uint32_t ring_valid(int slot, uint32_t *seq)
+{
+    const uint8_t *h = plat_data(ring_off(slot));
+    uint32_t len;
+    if (!h || rd32(h) != RING_MAGIC)
+        return 0;
+    len = rd32(h + 8);
+    if (len < 12u || len > RING_MAX || crc32_of(h + RING_BODY, len) != rd32(h + 12))
+        return 0;
+    *seq = rd32(h + 4);
+    return len;
+}
+
+static int ring_erased(int slot)
+{
+    const uint8_t *p = plat_data(ring_off(slot));
+    uint32_t i;
+    if (!p)
+        return 0;
+    for (i = 0; i < RING_SLOT_BYTES; i++)
+        if (p[i] != 0xFFu)
+            return 0;
+    return 1;
+}
+
+static void ring_erase(int slot)
+{
+    uint32_t k;
+    for (k = 0; k < RING_SECT; k++)
+        if (plat_data_erase(ring_off(slot) + k * 4096u) != 0)
+            return;
+    ring.clean[slot] = (uint8_t)ring_erased(slot);
+}
+
+/* at start, before the sound: the newest whole loop, or 0 */
+static const uint8_t *ring_start(uint32_t *len)
+{
+    uint32_t s, n, best = 0;
+    int i;
+    ring.cur = -1;
+    for (i = 0; i < (int)RING_SLOTS; i++)
+        if ((n = ring_valid(i, &s)) != 0 && (ring.cur < 0 || (int32_t)(s - ring.seq) > 0)) {
+            ring.cur = i;
+            ring.seq = s;
+            best = n;
+        }
+    for (i = 0; i < (int)RING_SLOTS; i++)        /* every other slot erased now, while it costs nothing */
+        if (i != ring.cur) {
+            ring.clean[i] = (uint8_t)ring_erased(i);
+            if (!ring.clean[i])
+                ring_erase(i);
+        }
+    *len = best;
+    return ring.cur >= 0 ? plat_data(ring_off(ring.cur)) + RING_BODY : 0;
+}
+
+/* every frame: a page of a save under way, or a save begun, or (stopped and silent) a slot erased */
+static void ring_step(void)
+{
+    int i;
+    if (ring.to >= 0) {
+        uint32_t off = ring_off(ring.to), n = ring.len - ring.at;
+        if (n) {
+            if (n > RING_PAGE)
+                n = RING_PAGE;
+            if (plat_data_write(off + RING_BODY + ring.at, ring_src + ring.at, n) != 0) {
+                ring.to = -1;                    /* (a failed write: the slot is erased again, the save tried anew) */
+                return;
+            }
+            ring.at += n;
+        } else {
+            static uint8_t head[16];
+            wr32(head, RING_MAGIC);
+            wr32(head + 4, ring.seq + 1u);
+            wr32(head + 8, ring.len);
+            wr32(head + 12, ring.crc);
+            if (plat_data_write(off, head, sizeof head) == 0) {
+                uint32_t s;
+                if (ring_valid(ring.to, &s) == ring.len) {
+                    ring.cur = ring.to;
+                    ring.seq++;
+                    h1_loop_saved();
+                }
+            }
+            ring.to = -1;
+        }
+        return;
+    }
+    if (h1_loop_dirty()) {
+        for (i = 0; i < (int)RING_SLOTS; i++)
+            if (ring.clean[i] && i != ring.cur) {
+                uint32_t size;
+                const uint8_t *p = (const uint8_t *)h1_loop(&size);
+                if (!size || size > RING_MAX)
+                    return;
+                ring_src = p;
+                ring.to = i;
+                ring.clean[i] = 0;
+                ring.len = size;
+                ring.at = 0;
+                ring.crc = crc32_of(p, size);
+                return;
+            }
+    }
+    if (h1_loop_quiet() && !h1_voices_active())  /* stopped and silent: one slot back to erased (the sound stalls) */
+        for (i = 0; i < (int)RING_SLOTS; i++)
+            if (!ring.clean[i] && i != ring.cur && i != ring.to) {
+                ring_erase(i);
+                return;
+            }
+}
+
 void app_init(void)
 {
     static uint32_t blob[PLAT_STORE_MAX / 4];               /* words: the store fills it, the core reads it */
@@ -235,9 +393,14 @@ void app_init(void)
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n > 0)
         h1_state_load(blob, (uint32_t)n);                   /* refused unless it is this version's, or one it knows */
-    n = plat_store_load(OBJ_LOOP, blob, sizeof blob);       /* then the loop (the state's load empties it) */
-    if (n > 0)
-        h1_loop_load(blob, (uint32_t)n);
+    {                                                       /* then the loop (the state's load empties it) */
+        uint32_t len;
+        const uint8_t *lp = ring_start(&len);
+        if (lp)
+            h1_loop_load(lp, len);
+        else if ((n = plat_store_load(OBJ_LOOP, blob, sizeof blob)) > 0)
+            h1_loop_load(blob, (uint32_t)n);                /* (one saved before the ring: it goes there next) */
+    }
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -290,19 +453,15 @@ void app_frame(void)
     plat_glow(1);
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
-    /* saving erases flash, which stalls the sound for a moment: only when nothing is sounding, and one object a
-     * frame. The loop only once it has stopped (h1_loop_dirty): stop it with PLAY and it is kept. */
+    /* the state's save erases flash, which stalls the sound for a moment: only when nothing is sounding. The
+     * loop goes into its ring a page a frame, playing or not (ring_step). */
     if (h1_state_dirty() && !h1_voices_active()) {
         uint32_t size;
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)
             h1_state_saved();
-    } else if (h1_loop_dirty() && !h1_voices_active()) {
-        uint32_t size;
-        const void *p = h1_loop(&size);
-        if (size && plat_store_save(OBJ_LOOP, p, size) == 0)
-            h1_loop_saved();
-    }
+    } else
+        ring_step();
 }
 
 void app_input_only(void) { input(); }

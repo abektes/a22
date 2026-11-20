@@ -256,11 +256,11 @@ int main(void)
     CHECK(mo_count(0x90, -1) > 0 && mo_count(0x80, -1) > 0, "the loop's notes go out over MIDI");
     CHECK(mo_count(0xB0, 20) > 0, "the knob went out as CC 20");
 
-    /* ---- the loop, saved: only once it is stopped ---- */
-    CHECK(!h1_loop_dirty(), "a playing loop is not written (the flash would stall it)");
+    /* ---- the loop, saved: as soon as no take is going into it, playing or not (#39) ---- */
+    CHECK(h1_loop_dirty(), "a playing loop that changed asks to be saved");
     tap(H1_BTN_PLAY);                            /* stop */
     go(200);
-    CHECK(h1_loop_dirty(), "a stopped loop that changed asks to be saved");
+    CHECK(h1_loop_dirty(), "and so does a stopped one");
     p = (const uint8_t *)h1_loop(&lsize);
     CHECK(lsize > 12u && lsize <= H1_LOOP_MAX, "the loop as a blob");
     memcpy(lblob, p, lsize);

@@ -14,6 +14,12 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
   little slower.
 
+**Loop**
+- A loop that is still playing is kept through a power-off (#39). It used to be saved only once it had been
+  stopped with PLAY, because a save erases flash and that stalls the sound; a loop left playing was lost.
+  It now goes into flash erased ahead of time (at start, or while nothing sounds), a little at a time while it
+  plays, so nothing is heard. A power-off in the middle of a save leaves the loop before it.
+
 **Sound**
 - LAVA has a ninth algorithm, **HOOVER** (#24): two PWM saws (a saw plus a copy of it swept along, the old
   Juno trick) a little apart, a swoop up into every note, and a light fold. FOLD sets how far the sweep goes

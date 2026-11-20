@@ -11,6 +11,8 @@ out=app/build/host
 "$out/h1_host" tests/basic.txt "$out"
 # USB host: OCT- and OCT+ held, a keyboard plugged in and played, unplugged, and back to the computer
 "$out/h1_host" tests/usbhost.txt "$out"
+# the loop kept through a power-off while it plays (#39), and one cut off in the middle of its save
+"$out/h1_host" tests/looppower.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host

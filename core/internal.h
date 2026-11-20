@@ -278,6 +278,7 @@ extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
 uint32_t eng_loop_save(uint8_t *dst, uint32_t max);
 int eng_loop_load(const uint8_t *b, uint32_t n);
 uint32_t eng_loop_gen(void);                     /* changes whenever what is recorded in the loop changes */
+int eng_loop_taking(void);                       /* 1: a take is going into the loop (it is changing) */
 int eng_loop_quiet(void);                        /* 1: nothing is recording or playing (the loop may be written) */
 int eng_layer_count(void);                       /* main loop: layers the recorded notes are on (LAYERS) */
 int eng_layer_rec(void);                         /* main loop: the layer a take is going into, 0: none */
