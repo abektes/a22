@@ -14,7 +14,7 @@
  *   A  cowbell   the bell swings
  *   B  crash     the plunger fires what waits in its lane round the top of the table; the cymbal rocks
  *
- * Every hit scores on the backbox, more the harder it is played. Played very hard for long, the table TILTs.
+ * Every hit scores on the backbox, more the harder it is played. Hammered, the table TILTs.
  * The bulbs along the backbox, the arrows up the middle and the lights over the top lanes run in time.
  *
  *   K1 TUNE    every drum up or down                   the drums and the balls shrink or grow
@@ -820,7 +820,7 @@ SMALL static void backbox(const Vis *vis, f32 tail)
         g_text(176.0f, 19.0f, s + i, 16.0f, 1.8f + 0.8f * M.bump, 1.0f, 2);
     }
     /* the bob */
-    sw = sin_turns(vis->t * 1.3f) * minf(M.heat * 0.08f + (M.tilt > 0.0f ? 1.0f : 0.0f), 1.0f);
+    sw = sin_turns(vis->t * 1.3f) * minf(M.heat * 0.04f + (M.tilt > 0.0f ? 1.0f : 0.0f), 1.0f);
     g_ring(45.0f, 31.0f, 8.0f, 1.0f, 0.4f);
     g_line(45.0f, 13.0f, 45.0f + sw * 8.0f, 31.0f, 1.0f, 0.5f);
     g_disc(45.0f + sw * 8.0f, 31.0f, 2.4f, 1.0f);
@@ -928,7 +928,7 @@ SMALL static void tilt_draw(const Vis *vis)
     M.heat = maxf(0.0f, M.heat - M.heat * 0.9f * dt);
     if (M.tilt > 0.0f)
         M.tilt -= dt;
-    else if (M.heat > 10.0f) {                   /* played too hard: TILT */
+    else if (M.heat > 24.0f) {                   /* hammered: TILT */
         M.tilt = 1.5f;
         M.heat = 0.0f;
         M.sv[LEAN] = rng_next(vis->rng) & 1u ? 150.0f : -150.0f;
