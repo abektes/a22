@@ -469,6 +469,32 @@ void h1_button(int btn, int down)
 #define HOLD_RESET_INST 2200u
 #define HOLD_RESET_ALL 4000u
 #define HOLD_EDIT 350u                           /* EDIT held this long shows the instrument's volume, and is not a tap */
+#define HOLD_USB 1000u                           /* OCT- and OCT+ held this long: USB host, or back to the computer */
+
+static void (*usb_fn)(int on);
+static int usb_host;
+void h1_usb_host_fn(void (*fn)(int on)) { usb_fn = fn; }
+int h1_usb_host(void) { return usb_host; }
+
+/* a word from the port, shown as a toast: upper case, what the font has, at most 16 characters */
+void h1_toast(const char *text)
+{
+    int i = 0;
+    for (; text && *text && i < 16; text++) {
+        char c = *text;
+        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.'))
+            c = ' ';
+        if (c == ' ' && (i == 0 || toast_s[i - 1] == ' '))
+            continue;
+        toast_s[i++] = c;
+    }
+    while (i > 0 && toast_s[i - 1] == ' ')
+        i--;
+    toast_s[i] = 0;
+    toast_t = 0.0f;
+    toast_pips = -1;
+}
 
 static void holds(void)
 {
@@ -556,6 +582,19 @@ static void holds(void)
         btn_fired[H1_BTN_HOME] = 1;
         eng_post(EV_PANIC, 0);
         toast("HUSH", 0, 0, 0, -1);
+    }
+    /* OCT- and OCT+ held together for a second: the USB port plays host to a keyboard, or goes back to the
+     * computer. (A tap of both is the middle octave, as it was.) Never saved: every start is a USB device. */
+    if ((btn_held & (1u << H1_BTN_OCTDN)) && (btn_held & (1u << H1_BTN_OCTUP)) &&
+        !btn_fired[H1_BTN_OCTDN] && !btn_fired[H1_BTN_OCTUP] &&
+        now - btn_ms[H1_BTN_OCTDN] > HOLD_USB && now - btn_ms[H1_BTN_OCTUP] > HOLD_USB) {
+        btn_fired[H1_BTN_OCTDN] = btn_fired[H1_BTN_OCTUP] = 1;
+        if (usb_fn) {
+            usb_host = !usb_host;
+            usb_fn(usb_host);
+            toast(usb_host ? "USB HOST" : "USB COMPUTER", 0, 0, 0, -1);
+        } else
+            toast("NO USB HOST", 0, 0, 0, -1);
     }
 }
 

@@ -4,6 +4,11 @@
 
 Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE join it.
 
+**USB**
+- Hold OCT− and OCT+ for a second: the USB port plays host to a USB-MIDI keyboard (#23), which needs its own
+  power or a powered hub. The screen and the screen reader name it when it connects. Hold again to go back
+  to the computer. Never saved: every start is a USB device.
+
 **Room**
 - fm1-base's system fonts (the update, crash and safe-mode screens) are stored trimmed and compressed:
   the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
