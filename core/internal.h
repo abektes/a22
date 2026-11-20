@@ -11,6 +11,7 @@
 #define NINST 14
 #define NALGO 9                  /* algorithms an instrument may have: eight each, and LAVA a ninth (HOOVER) */
 #define NLAYER 16                /* recorded layers, each with its own settings */
+#define NLEV 2048                /* the loop's events, a note-on and a note-off a note, across every layer */
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
 #define SCOPE_N 512
@@ -275,12 +276,14 @@ void eng_post_note(int on, int note, int vel, int from_midi);   /* a note, with 
 /* MIDI out (h1_midi_out): the engine calls it from inside the render, the UI from the main loop */
 extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
 /* the loop, saved apart from the state (h1_loop): main loop */
-uint32_t eng_loop_save(uint8_t *dst, uint32_t max);
+const uint8_t *eng_loop_blob(uint32_t *size);    /* the loop as saved, in place (h1_loop) */
 int eng_loop_load(const uint8_t *b, uint32_t n);
 uint32_t eng_loop_gen(void);                     /* changes whenever what is recorded in the loop changes */
 int eng_loop_quiet(void);                        /* 1: nothing is recording or playing (the loop may be written) */
 int eng_layer_count(void);                       /* main loop: layers the recorded notes are on (LAYERS) */
 int eng_layer_rec(void);                         /* main loop: the layer a take is going into, 0: none */
+int eng_loop_used(void);                         /* main loop: the loop's events (a note is two), of NLEV */
+uint32_t eng_loop_full(void);                    /* main loop: moves each time a full loop turns a note away */
 void eng_render(int32_t *lr, uint32_t n);
 void eng_snapshot(Vis *vis);                     /* main loop: copy what the picture needs */
 uint32_t eng_sounding_lo(void);                  /* notes sounding, as key bits for the LEDs */

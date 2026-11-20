@@ -182,6 +182,7 @@ int h1_state_load(const void *blob, uint32_t size)
         st.inst = keep;
     }
     st.seq[0] &= 1;
+    if (st.seq[1] > 7) st.seq[1] = 1;              /* bars: 1 to 128 (0.2.2 had 1 to 8) */
     if (st.seq[3] > 2) st.seq[3] = 1;
     if (st.seq[4] > 2) st.seq[4] = 1;
     if (st.seq[5] > 2) st.seq[5] = CLICK_REC;
@@ -243,17 +244,17 @@ void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b)
 }
 
 /* ---- the loop, saved apart (h1.h) ---------------------------------------------------------------- */
-static uint8_t loop_blob[H1_LOOP_MAX];
 static uint32_t loop_saved_gen, loop_given_gen;
 
 const void *h1_loop(uint32_t *size)
 {
     uint32_t n;
+    const void *p;
     loop_given_gen = eng_loop_gen();
-    n = eng_loop_save(loop_blob, sizeof loop_blob);
+    p = eng_loop_blob(&n);
     if (size)
         *size = n;
-    return loop_blob;
+    return p;
 }
 
 int h1_loop_load(const void *blob, uint32_t size)
@@ -263,6 +264,8 @@ int h1_loop_load(const void *blob, uint32_t size)
     return r;
 }
 
+uint32_t h1_loop_gen(void) { return eng_loop_gen(); }
+int h1_loop_room(void) { return (NLEV - eng_loop_used()) / 2; }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && eng_loop_quiet(); }
 void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2)) { eng_midi_fn = fn; }

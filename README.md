@@ -215,12 +215,14 @@ take ended. Record a bass on COZY, turn COZY into a pad and record over it: the 
 Up to sixteen layers. The effects are one chain that follows the instrument in hand, and the
 instrument's volume is shared by its layers (hold EDIT and turn MASTER or SELECT to sit one
 instrument under another). The eight voices are shared by all the layers, and a step holds eight
-notes in all. With the ARP on, the loop records the notes the arpeggiator played. The picture is
+notes in all. With the ARP on, the loop records the notes the arpeggiator played.
+A loop is 1 to 128 bars (BARS on the SEQ page) and holds 1,024 notes across all its layers; a note
+that doesn't fit says `LOOP FULL` on the screen instead of going missing. The picture is
 the instrument in hand. With LAYERS off, everything recorded plays on the instrument in hand.
 The SEQ page's top line scrolls through the sequencer hotkeys and shows which way LAYERS is set.
 
 The loop and its layers are saved once the loop is stopped with PLAY and nothing is sounding, and
-come back after a restart. The step pattern and every instrument's settings save by themselves.
+come back after a restart (for now up to 239 notes: a longer loop says `LOOP NOT SAVED`). The step pattern and every instrument's settings save by themselves.
 
 In the simulator: <kbd>A</kbd>–<kbd>'</kbd> are the white keys from F and <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd>
 the black keys. <kbd>Z</kbd> <kbd>X</kbd> change the octave, <kbd>←</kbd> <kbd>→</kbd> change the

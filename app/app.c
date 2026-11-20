@@ -300,7 +300,10 @@ void app_frame(void)
     } else if (h1_loop_dirty() && !h1_voices_active()) {
         uint32_t size;
         const void *p = h1_loop(&size);
-        if (size && plat_store_save(OBJ_LOOP, p, size) == 0)
+        if (size > PLAT_STORE_MAX) {                        /* longer than one store object holds (478 events) */
+            h1_toast("LOOP NOT SAVED");
+            h1_loop_saved();
+        } else if (size && plat_store_save(OBJ_LOOP, p, size) == 0)
             h1_loop_saved();
     }
 }

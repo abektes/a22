@@ -14,6 +14,16 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
   little slower.
 
+**Loop**
+- Takes layered on the loop no longer go missing. The loop held 384 events (a press and a release a note),
+  across every layer, and quietly dropped whatever came after: three light layers on eight bars filled it
+  and the fourth was lost. It now holds 2,048 (1,024 notes), a note never goes in without room for its
+  release, and when the loop is full the screen says **LOOP FULL** instead of dropping notes in silence.
+- BARS goes up to **128** (1, 2, 4, 8, 16, 32, 64, 128). The bound on a loop is now its notes, not its bars:
+  1,024 notes across all layers, so 128 bars holds eight notes a bar.
+- A loop of more than 239 notes cannot be saved to flash yet and says **LOOP NOT SAVED** when stopped;
+  shorter loops are kept across a power-off as before. Loops saved by 0.2.2 load and play as they were.
+
 **Sound**
 - LAVA has a ninth algorithm, **HOOVER** (#24): two PWM saws (a saw plus a copy of it swept along, the old
   Juno trick) a little apart, a swoop up into every note, and a light fold. FOLD sets how far the sweep goes

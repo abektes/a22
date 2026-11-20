@@ -34,6 +34,10 @@ ASAN_OPTIONS=detect_leaks=0 build/h1v022
 "${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/ninth.c -o build/h1ninth -lm
 ASAN_OPTIONS=detect_leaks=0 build/h1ninth
+# the loop's room and length: four layers on eight bars, 16 to 128 bars, a full loop, 0.2.2's loop read
+"${CC:-cc}" -std=c99 -O2 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
+    core/*.c tests/looper.c -o build/h1looper -lm
+ASAN_OPTIONS=detect_leaks=0 build/h1looper
 # ECHO the same after 25 minutes on as at start (issue #31: it went grainy the longer the unit was on)
 "${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/h1echo -lm
 build/h1echo

@@ -127,8 +127,13 @@ all of it.
 ## The sequencer
 
 Time is 96 ticks per quarter note. A bar is 384, 288, 480, 288 or 336 ticks for 4/4, 3/4, 5/4,
-6/8 and 7/8. The loop recorder stores timed events (eight bytes each: tick, note, on, part, layer,
-velocity) in RAM, and the device keeps them in a store object of their own (`OBJ_LOOP`, the sector pair
+6/8 and 7/8. A loop is 1 to 128 bars (`st.seq[1]` is log2 of the bars; 128 bars of 5/4 is 61,440 ticks,
+inside the events' 16-bit tick). The loop recorder stores timed events (eight bytes each: tick, note, on, part, layer,
+velocity) in RAM, 2,048 of them (`NLEV`), kept in order of tick so that each audio block finds the ones it
+plays by halving (reading them all every block would cost more than the loop's sound). A note-on goes in
+only with room kept for its note-off, and a note the full loop turns away moves `eng_loop_full`, which the
+UI shows as LOOP FULL. The saved loop is the header and those events as they lie in RAM (`eng_loop_blob`,
+little-endian, no copy). The device keeps them in a store object of their own (`OBJ_LOOP`, the sector pair
 at 0xDE000, `h1_loop` / `h1_loop_load`), written once the loop is stopped and nothing sounds, since an
 erase stalls the sound. The step
 pattern is 64 steps of up to eight notes, on a 1/8, 1/16 or 1/32 grid, and is saved with the
