@@ -170,11 +170,13 @@ CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI
 echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
 (app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack is an input only.
 
-The saved state is version 9 (version 7 is the drum screens' branch): version 8 and, at the end, the
-ninth algorithm's four knobs for each instrument (`knob9`: only LAVA has one, HOOVER; the knob table
-keeps its eight). Version 8 (3160 bytes) is version 6 and, after the knob table, each step note's
-velocity and layer and the sixteen layers; it loads with its parts read the old way and HOOVER's knobs
-as new. A loop saved by 0.2.2 is loop version 1, read the same way; h1 now writes version 2. A version 6 state (1880 bytes)
+The saved state is version 9 (3344 bytes; 7 was never released). It has room for 16 instruments
+(`NSLOT`) of nine algorithms each, and keeps in `ninst` how many instruments it was saved with: on a
+load, the slots from there on come up as new, so adding an instrument (TILT and VIBE) needs no new
+version. Every older state is of fourteen instruments of eight algorithms (`H1Old`, read by offsets
+only): each of its tables goes to the start of version 9's, its parts are read the old way, HOOVER's
+knobs and the instruments past the fourteen come up as new. Version 8 (3160 bytes) is version 6 and,
+after the knob table, each step note's velocity and layer and the sixteen layers. A loop saved by 0.2.2 is loop version 1, read the same way; h1 now writes version 2. A version 6 state (1880 bytes)
 loads with its steps at full velocity on no layer, and LAYERS on. Versions 4 and 5 are the same up to the steps, where
 a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
 shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.

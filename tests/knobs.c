@@ -177,14 +177,15 @@ int main(void)
      * notes and the part of each */
     {
         static uint8_t blob5[sizeof(H1State)];
-        const size_t body = offsetof(H1State, steps);
+        const size_t body = offsetof(H1Old, steps);
         int j, ok = 1;
         s->version = 5;
         for (i = 0; i < NINST; i++)
             for (a = 0; a < 4; a++)
                 s->ip[i].knob0[a] = (uint8_t)(10 + i * 5 + a);
         memset(blob5, 0xFF, sizeof blob5);       /* (its padding, and what is past its end, may hold anything) */
-        memcpy(blob5, blob, body);
+        memcpy(blob5, blob, offsetof(H1Old, ip) + H1_OLD_NINST * sizeof(InstParams));   /* (fourteen instruments then) */
+        memcpy(blob5 + offsetof(H1Old, ink), s->ink, H1_OLD_NINST * 3u);
         memset(blob5 + body, 0, NSTEP * 8u);
         for (j = 0; j < 4; j++) {                /* step 3: two notes; step 63: four */
             blob5[body + 63u * 4u + (size_t)j] = (uint8_t)(50 + j);
@@ -197,8 +198,8 @@ int main(void)
         h1_init(44100);
         CHECK(H1_VERSION_5_SIZE == 920u, "a version 5 state is 920 bytes");
         CHECK(h1_state_load(blob5, (uint32_t)H1_VERSION_5_SIZE) == 0, "a version 5 state loads");
-        for (i = 0; i < NINST; i += 5)
-            for (a = 0; a < NALGOS(i); a++) {
+        for (i = 0; i < (int)H1_OLD_NINST; i += 5)
+            for (a = 0; a < (int)H1_OLD_NALGO; a++) {
                 to(i, a);
                 CHECK(are(10 + i * 5, 11 + i * 5, 12 + i * 5, 13 + i * 5), "every algorithm starts from the instrument's old knobs");
             }

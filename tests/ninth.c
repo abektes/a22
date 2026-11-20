@@ -5,6 +5,7 @@
  *   ALGORITHM     LAVA turns through nine, every other instrument through eight
  *   HOOVER        sounds, about as loud as LAVA's other algorithms
  *   version 8     a 0.2.2 state loads: its knobs, its steps' and layers' parts read the old way
+ *   slots         a version 9 state saved with fewer instruments: the ones after come up as new
  *   loop v1       a 0.2.2 loop loads, its notes' parts read the old way
  *   round trip    HOOVER, its knobs and a loop played on it come back from a save */
 #define _POSIX_C_SOURCE 200809L
@@ -98,27 +99,41 @@ int main(void)
     CHECK(peak > 400000, "HOOVER is heard");
     CHECK(e[8] > lo * 0.5 && e[8] < hi * 2.0, "and sits among LAVA's others, within 3 dB of their range");
 
-    /* ---- a version 8 state (0.2.2): the same up to knob9, its parts in bits ---- */
+    /* ---- a version 8 state (0.2.2): fourteen instruments of eight algorithms, its parts in bits ---- */
     h1_init(44100);
     to(LAVA, 3);
     h1_midi(0xB0, 20, 127);                      /* GROWL's first knob, as saved */
     p = (const uint8_t *)h1_state(&size);
     memset(blob, 0xAA, sizeof blob);
-    memcpy(blob, p, H1_VERSION_8_SIZE);
-    blob[4] = 8;
     {
-        H1State *o = (H1State *)(void *)blob;    /* (the host does not mind: the device never does this) */
+        const H1State *c = (const H1State *)(const void *)p;
+        H1Old *o = (H1Old *)(void *)blob;        /* (the host does not mind: the device never does this) */
+        memcpy(blob, p, offsetof(H1Old, ip));
+        memcpy(o->ip, c->ip, sizeof o->ip);
+        memcpy(o->ink, c->ink, sizeof o->ink);
+        memcpy(o->steps, c->steps, sizeof o->steps);
+        memset(o->step_part, 0, sizeof o->step_part);
+        for (i = 0; i < (int)H1_OLD_NINST; i++)
+            memcpy(o->knob[i], c->knob[i], sizeof o->knob[i]);
+        memcpy(o->step_vel, c->step_vel, sizeof o->step_vel);
+        memcpy(o->step_lay, c->step_lay, sizeof o->step_lay);
+        memcpy(o->layer, c->layer, sizeof o->layer);
+        o->version = 8;
         o->step_part[5][0] = OLD_PART(4, 6);
         o->steps[5][0] = 61;
         o->layer[2].part = OLD_PART(LAVA, 3);
+        o->knob[13][7][2] = 42;                  /* the last of the fourteen's last knob table entry */
     }
     h1_init(44100);
+    st.knob[14][1][0] = 7;                       /* (a slot past the fourteen: what is there now must not show through) */
     CHECK(h1_state_load(blob, (uint32_t)H1_VERSION_8_SIZE) == 0, "a version 8 state loads");
     CHECK(h1_instrument() == LAVA && h1_algorithm() == 3, "with what it held");
     CHECK(KNOBS(LAVA, 3)[0] == 100, "its knobs kept");
     CHECK(st.step_part[5][0] == PART(4, 6), "a step's part read the old way");
     CHECK(st.layer[2].part == PART(LAVA, 3), "a layer's part read the old way");
-    CHECK(!memcmp(st.knob9[LAVA], insts[LAVA]->def.knob0, 4), "HOOVER's knobs as new");
+    CHECK(!memcmp(st.knob[LAVA][8], insts[LAVA]->def.knob0, 4), "HOOVER's knobs as new");
+    CHECK(st.knob[13][7][2] == 42, "the knob table read across, instrument by instrument");
+    CHECK(st.knob[14][1][0] == 0 && st.ninst == NINST, "the slots past the fourteen empty, and the count saved");
     for (i = 0; i < NLAYER; i++)
         if (i != 2)
             CHECK(st.layer[i].part == 0 || part_ok(st.layer[i].part), "every other layer empty or a real part");
@@ -166,7 +181,7 @@ int main(void)
     memcpy(lblob, p, lsize);
     h1_init(44100);
     CHECK(h1_state_load(blob + 0, size) == 0 && h1_loop_load(lblob, lsize) == 0, "both load again");
-    CHECK(h1_instrument() == LAVA && h1_algorithm() == 8 && st.knob9[LAVA][1] == 100, "on HOOVER, its knobs where they were");
+    CHECK(h1_instrument() == LAVA && h1_algorithm() == 8 && st.knob[LAVA][8][1] == 100, "on HOOVER, its knobs where they were");
     p = (const uint8_t *)h1_loop(&lsize);
     {
         int n = 0, ok = 1;
@@ -178,6 +193,23 @@ int main(void)
     tap(H1_BTN_PLAY);
     go(1500);
     CHECK(energy > 0.0, "and it plays");
+
+    /* ---- a version 9 state saved with fewer instruments than there are now (as a 0.3.0 state will be once
+     * instruments are added): the ones after come up as new, the rest as saved ---- */
+    h1_init(44100);
+    to(12, 2);
+    h1_midi(0xB0, 21, 0);
+    to(11, 4);
+    h1_midi(0xB0, 22, 0);
+    memcpy(blob, h1_state(&size), size);
+    CHECK(size == 3344u, "a version 9 state is 3344 bytes");
+    ((H1State *)(void *)blob)->ninst = 12;
+    h1_init(44100);
+    CHECK(h1_state_load(blob, size) == 0, "it loads");
+    CHECK(st.knob[11][4][2] == 0 && h1_instrument() == 11 && h1_algorithm() == 4, "the twelve as saved");
+    CHECK(st.ip[12].algo == 0 && !memcmp(st.knob[12][2], insts[12]->def.knob0, 4) && st.ink[12][0] == insts[12]->ink[0],
+          "the thirteenth as new");
+    CHECK(st.ninst == NINST, "and the count is now's");
 
     printf("ninth: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

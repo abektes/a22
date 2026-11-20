@@ -10,7 +10,6 @@
 #define NSNOTE 8                 /* notes a step holds, at most */
 #define NINST 14
 #define NALGO 9                  /* algorithms an instrument may have: eight each, and LAVA a ninth (HOOVER) */
-#define NALGO_TAB 8              /* the knob table's algorithms: the ninth's knobs are kept apart (knob9) */
 #define NLAYER 16                /* recorded layers, each with its own settings */
 #define CTRL 32                  /* frames per control block: envelopes, LFO, coefficients */
 #define KS_LEN 1024              /* a string's delay line: down to 43 Hz at 44.1 kHz */
@@ -75,19 +74,23 @@ typedef struct InstParams {
 #define IP_CUT 0
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
-#define H1_VERSION 9u            /* (7 is kept for the drum screens' state, a branch of its own) */
-/* Versions 4 and 5 are the same as this one up to steps. There a step held four notes, not eight
- * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an
- * instrument's algorithms shared InstParams.knob0. h1_state_load reads both. */
+#define H1_VERSION 9u
+/* Version 9 has room for NSLOT instruments of NALGO algorithms, and says in ninst how many it was saved
+ * with: the slots from there on are taken as new when it is loaded, so instruments can be added without a
+ * new version. Versions 4, 5, 6 and 8 are of fourteen instruments of eight algorithms (H1Old, below: only
+ * its offsets are used), their parts packed in bits (PART_V8); 7 was never released. Version 8 is H1Old
+ * and no more. Version 6 is it up to the steps' velocities: those, the steps' layers and the layers came
+ * with version 8. Versions 4 and 5 are the same up to steps: there a step held four notes, not eight
+ * (steps[NSTEP][4], then in version 5 step_part[NSTEP][4]), and there was no knob table: an instrument's
+ * algorithms shared InstParams.knob0. h1_state_load reads all of them. */
+#define NSLOT 16                 /* instruments the saved state has room for */
+#define H1_OLD_NINST 14u
+#define H1_OLD_NALGO 8u
 #define H1_OLD_SNOTE 4u
-#define H1_VERSION_4_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
-#define H1_VERSION_5_SIZE ((offsetof(H1State, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
-/* Version 6 is this one up to the knob table: the steps' velocities, their layers and the layers came
- * with version 8. */
-#define H1_VERSION_6_SIZE ((offsetof(H1State, step_vel) + 3u) & ~3u)
-/* Version 8 is this one up to knob9: the ninth algorithm came with version 9, and with it a part is
- * counted (PART, below) rather than packed in bits. */
-#define H1_VERSION_8_SIZE ((offsetof(H1State, knob9) + 3u) & ~3u)
+#define H1_VERSION_4_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE + 3u) & ~3u)
+#define H1_VERSION_5_SIZE ((offsetof(H1Old, steps) + NSTEP * H1_OLD_SNOTE * 2u + 3u) & ~3u)
+#define H1_VERSION_6_SIZE ((offsetof(H1Old, step_vel) + 3u) & ~3u)
+#define H1_VERSION_8_SIZE sizeof(H1Old)
 
 /* A recorded layer: what was played in one take on one part (an instrument and its algorithm), and that
  * part's settings as they stood when the take ended: its four knobs, ENV and LFO. While the take is
@@ -102,6 +105,22 @@ typedef struct Layer {
     uint8_t rsv[2];
 } Layer;
 
+typedef struct H1Old {           /* what versions 4 to 8 saved: only its offsets are used, nothing is read through it */
+    uint32_t magic;
+    uint8_t version, inst;
+    int8_t octave;
+    uint8_t hud, keys[4], glo[4], seq[8];
+    InstParams ip[H1_OLD_NINST];
+    uint8_t ink[H1_OLD_NINST][3];
+    uint8_t rsv[5];
+    uint8_t steps[NSTEP][NSNOTE];
+    uint8_t step_part[NSTEP][NSNOTE];
+    uint8_t knob[H1_OLD_NINST][H1_OLD_NALGO][4];
+    uint8_t step_vel[NSTEP][NSNOTE];
+    uint8_t step_lay[NSTEP][NSNOTE];
+    Layer layer[NLAYER];
+} H1Old;
+
 typedef struct H1State {
     uint32_t magic;
     uint8_t version;
@@ -111,20 +130,20 @@ typedef struct H1State {
     uint8_t keys[4];             /* root, scale, glide, hold */
     uint8_t glo[4];              /* tempo, swing, tune, bright */
     uint8_t seq[8];              /* mode (loop, step), bars, meter, loop snap, step grid, click, layers */
-    InstParams ip[NINST];
-    uint8_t ink[NINST][3];
-    uint8_t rsv[5];
+    InstParams ip[NSLOT];        /* (NSLOT: room for instruments to come, see H1_VERSION) */
+    uint8_t ink[NSLOT][3];
+    uint8_t ninst;               /* the instruments it was saved with */
+    uint8_t rsv[4];
     uint8_t steps[NSTEP][NSNOTE];       /* the step pattern: up to eight notes a step, note + 1, 0 = none */
     uint8_t step_part[NSTEP][NSNOTE];   /* the part each of those notes was played on (PART), 0 = none kept */
-    uint8_t knob[NINST][NALGO_TAB][4];  /* 0..100: the four live modulations of the home screen, each algorithm its own */
+    uint8_t knob[NSLOT][NALGO][4];      /* 0..100: the four live modulations of the home screen, each algorithm its own */
     uint8_t step_vel[NSTEP][NSNOTE];    /* each step note's velocity, 0 = 127 (version 8) */
     uint8_t step_lay[NSTEP][NSNOTE];    /* each step note's layer, 0 = none (it follows its part as it is now) */
     Layer layer[NLAYER];
-    uint8_t knob9[NINST][4];     /* the ninth algorithm's knobs, where an instrument has one (version 9) */
 } H1State;
 
 /* the four home knobs of an instrument's algorithm, and of the algorithm it is on */
-#define KNOBS(inst, algo) ((algo) < NALGO_TAB ? st.knob[inst][(algo) >= 0 ? (algo) : 0] : st.knob9[inst])
+#define KNOBS(inst, algo) (st.knob[inst][(uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u])
 #define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
 void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs as new; algo < 0: all of the instrument's */
 
@@ -139,7 +158,7 @@ void knobs_default(int inst, int algo);          /* h1.c: one algorithm's knobs 
 #define PART_SOME(p) ((uint32_t)(p) - 1u < (uint32_t)(NINST * NALGO))
 #define PART_INST(p) (PART_SOME(p) ? (int)(((uint32_t)(p) - 1u) / NALGO) : 0)
 #define PART_ALGO(p) (PART_SOME(p) ? (int)(((uint32_t)(p) - 1u) % NALGO) : 0)
-#define PART_V8(p) ((uint8_t)(((p) & 0x80u) && (((p) >> 3) & 15u) < NINST ? PART(((p) >> 3) & 15u, (p) & 7u) : 0u))
+#define PART_V8(p) ((uint8_t)(((p) & 0x80u) && (((p) >> 3) & 15u) < H1_OLD_NINST ? PART(((p) >> 3) & 15u, (p) & 7u) : 0u))
 
 extern H1State st;
 

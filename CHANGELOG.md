@@ -10,6 +10,8 @@ Identity `FM-1_481000203`. Fixes from the GitHub issues.
   and LEAN how far apart the two saws are. Its lamp turns into a whirl that twists harder the further it
   sweeps. Every other instrument keeps eight.
 - The saved state is version 9 and a saved loop version 2, so a recorded note can name a ninth algorithm.
+  Version 9 has room for sixteen instruments and says how many it was saved with, so instruments added
+  later come up as new without another change of format.
   States and loops saved by 0.2.2 load as they were; an older firmware refuses a version 9 state and
   starts fresh.
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
