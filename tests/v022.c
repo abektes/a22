@@ -321,6 +321,16 @@ int main(void)
     go(500);
     CHECK(mo_count(0x90, 64) > 0 && mo_count(0x90, 67) > 0, "the arpeggiator's notes go out");
     CHECK(mo_count(0x90, -1) == mo_count(0x80, -1), "each with its note-off");
+    nmo = 0;
+    h1_midi(0xB0, 123, 0);                       /* all notes off from the computer: not sent back (a computer that */
+    go(100);                                     /* passes MIDI through would return it, for ever) */
+    CHECK(mo_count(0xB0, 123) == 0, "a CC 123 that came in is not sent back");
+    nmo = 0;
+    h1_button(H1_BTN_HOME, 1);                   /* HOME held: HUSH, and the computer is told */
+    go(1000);
+    h1_button(H1_BTN_HOME, 0);
+    go(100);
+    CHECK(mo_count(0xB0, 123) == 1, "HUSH sends CC 123");
     h1_midi_out(0);
 
     /* ---- a 0.2.1 state (version 6): it loads, LAYERS on, its steps at full and on no layer ---- */

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.3
+
+Identity `FM-1_481000203`. Fixes from the GitHub issues.
+
+**Room**
+- fm1-base's system fonts (the update, crash and safe-mode screens) are stored trimmed and compressed:
+  the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
+  little slower.
+
+**Sound**
+- ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
+  float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
+  then whole samples, and only a restart brought it back. It now sounds the same after hours as at
+  start.
+
 ## 0.2.2
 
 Identity `FM-1_481000202`. From the first round of feedback after the launch.
@@ -37,8 +52,8 @@ Identity `FM-1_481000202`. From the first round of feedback after the launch.
 - The FM-1 is a USB audio input beside its USB MIDI: a computer or a phone records it straight off the
   cable, at MASTER.
 - MIDI out over USB: the keys, the arpeggiator and the sequencer's notes on channel 1, and CC 20-23 as
-  the four knobs turn. Notes that came in over MIDI are not sent back. (The FM-1's TRS jack is an input
-  only, so there is no MIDI out there.)
+  the four knobs turn. Notes and an all-notes-off (CC 123) that came in over MIDI are not sent back.
+  (The FM-1's TRS jack is an input only, so there is no MIDI out there.)
 
 **Under the hood**
 - Saved state version 8. A 0.2.0 or 0.2.1 state (version 6) loads as it was, with LAYERS turned on. A

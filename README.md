@@ -57,9 +57,10 @@ same C code that goes on the device, and can play other FM-1 firmwares too.
 ## Install
 
 > **h1 is new.** Its releases have been installed and played on one FM-1, a unit bought in
-> November 2026: v0.1.0 from the stock firmware, each later one over the one before. Going back to stock from h1,
-> installing h1 from another custom firmware, and a unit with the older flash chip have not been
-> tried yet:
+> November 2026: v0.1.0 from the stock firmware, each later one over the one before. A tester put
+> v0.2.1 on a unit with the older flash chip, over stock V16
+> ([#25](https://github.com/jakehandy/h1/issues/25)). Going back to stock through the Hub's
+> **Back to official V15** and installing h1 from another custom firmware have not been tried yet:
 > [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) says what has.
 
 ### Before you install

@@ -174,10 +174,10 @@ static void loop_out(void)
 static void state_in(void)
 {
     uint32_t n = get32(image + 4);
-    if (get32(image) != MAGIC || n > LOOP_AT - 16u || get32(image + 8 + n) != crc32(image, 8 + n))
-        return;
-    h1_state_load(image + 8, n);         /* refused by the core unless it is this version's or an older one it knows */
-    n = get32(image + LOOP_AT + 4);      /* then the loop, which the state's load empties */
+    if (get32(image) == MAGIC && n <= LOOP_AT - 16u && get32(image + 8 + n) == crc32(image, 8 + n))
+        h1_state_load(image + 8, n);     /* refused by the core unless it is this version's or an older one it knows */
+    n = get32(image + LOOP_AT + 4);      /* then the loop, which the state's load empties (and kept with no state
+                                          * written: a loop recorded before any setting changed) */
     if (get32(image + LOOP_AT) == (MAGIC ^ 0x4C4F4F50u) && n <= 0x8000u - 16u &&
         get32(image + LOOP_AT + 8 + n) == crc32(image + LOOP_AT, 8 + n))
         h1_loop_load(image + LOOP_AT + 8, n);

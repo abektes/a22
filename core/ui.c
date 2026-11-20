@@ -306,7 +306,7 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (type == 0x80u || type == 0x90u)
         eng_post_note(0, d1 & 127, 0, 1);
     else if (type == 0xB0u && d1 == 123)
-        eng_post(EV_PANIC, 0);
+        eng_post(EV_PANIC, 1);                               /* (1: it came in over MIDI, and is not sent back) */
     else if (type == 0xB0u && d1 >= 20 && d1 <= 23) {      /* CC 20-23: the four knobs */
         KNOBS_NOW(st.inst)[d1 - 20] = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         knob_touch[d1 - 20] = 0.0f;

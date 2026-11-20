@@ -165,8 +165,9 @@ At the end of the mix a limiter with one control block of look-ahead keeps every
 that follows used to bend every peak. Under 0.7 it does nothing.
 
 MIDI out (`h1_midi_out`): what the keys, the arpeggiator and the sequencer play, on channel 1, and
-CC 20-23 as the home knobs turn. Never a note that came in over MIDI, so a computer that echoes its
-input does not loop. The device sends it over USB; the FM-1's TRS jack is an input only.
+CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI, so a computer that
+echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
+(app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack is an input only.
 
 The saved state is version 9: version 8 with room for sixteen instruments. Version 8 (3160 bytes) has
 fourteen: its tables go to the start of this one's, and TILT and VIBE, which came after, are as new.
@@ -272,6 +273,9 @@ that came out of it:
   `void *` hides from it, so there are none.
 - A number that came from a float is masked or clamped before it indexes anything (`tsin`, the string
   and echo lines), and a loop that runs on a float has a bound.
+- A counter that runs for as long as the unit is on stays a whole number and is never turned into a
+  float: a float keeps 24 bits, so the fraction is gone after a few minutes. ECHO's read position did
+  that until 0.2.3 and the echo went grainy the longer the unit was on (`tests/echo.c`).
 - A rectangle sent to the panel is at most 20 rows: the device converts it in a buffer that size.
 - After a start that failed, `app_init` leaves the saved state alone and comes up as new, so one bad
   start cannot become two.

@@ -11,6 +11,18 @@ commit `037ed8a` installed from official V15 by `fm1_install.py`. The FM-1 answe
 before and `FM-1_48100` after, restarted by itself, the port is named `h1 FM-1`, and the
 screen reader's channel reported COZY and ORBIT. No crash was recorded.
 
+Reported by a tester (2026-11-19, [#25](https://github.com/jakehandy/h1/issues/25)), not ticked
+below because the route differs:
+
+- v0.2.1 installed over stock **V16** (not V15) on a unit with the older Puya P25Q80 (`0x856014`)
+  and m-bootloader 2.4 in place of the stock bootloader, with the tester's own USB MIDI installer
+  (the same update protocol as the web installers). It wrote to 100%, restarted by itself, answers
+  `FM-1_481` and shows on USB as `h1 FM-1`. The package matched `SHA256SUMS`.
+- Leaving h1 worked by restoring a full flash backup with M-Flasher in download mode: it verified,
+  restarted, and the saved data came back byte for byte. That route skips h1's update loader, so it
+  is not section 3's **Back to official V15**.
+- Not reported yet: settings kept across a power cycle on that chip (section 5's real test).
+
 ## 0. Before touching an FM-1
 
 - [ ] The design is signed off in the simulator.

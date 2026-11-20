@@ -44,14 +44,16 @@ void fx_init(f32 sr)
     }
 }
 
+/* The read position is worked out in whole samples first and only the fraction is a float:
+ * echo_w counts up for as long as the unit is on, and (f32)echo_w - delay lost the fraction
+ * after about 13 minutes, then whole samples, so the echo went grainy until a restart. */
 static inline f32 echo_read(f32 delay)
 {
-    f32 pos = (f32)echo_w - delay, fr;
-    int32_t i = ifloor(pos);
-    f32 a, b;
-    fr = pos - (f32)i;
-    a = (f32)echo_buf[(uint32_t)i & (ECHO_N - 1u)];
-    b = (f32)echo_buf[(uint32_t)(i + 1) & (ECHO_N - 1u)];
+    int32_t d = ifloor(delay);
+    f32 fr = 1.0f - (delay - (f32)d), a, b;
+    uint32_t i = echo_w - (uint32_t)d - 1u;      /* pos = echo_w - delay = i + fr */
+    a = (f32)echo_buf[i & (ECHO_N - 1u)];
+    b = (f32)echo_buf[(i + 1u) & (ECHO_N - 1u)];
     return (a + (b - a) * fr) * (1.0f / 32768.0f);
 }
 
