@@ -1,0 +1,48 @@
+# USB host (fm1.toml usb_host): OCT- and OCT+ held a second turn the USB port into a host for a USB-MIDI keyboard,
+# and again back to the computer. Run by tests/run_tests.sh in fm1-base's host simulator:
+#   ./build.sh --host, then app/build/host/h1_host tests/usbhost.txt app/build/host
+wait 600
+listen
+# a tap of both is still the middle octave, and no host
+tap OCT-
+wait 100
+press OCT-
+press OCT+
+release OCT+
+release OCT-
+wait 300
+expect usbh 0
+# held: the port turns host, and the reader says so
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+said USB HOST
+expect usbh >0
+# a keyboard plugged in: its name, and it plays
+usbh plug Casio_CT-S1 in
+wait 400
+said Casio CT-S1
+peakreset
+usbh midi 90 3C 64
+wait 300
+expect peak_db_min -50
+usbh midi 80 3C 00
+wait 300
+# unplugged: told, and nothing left sounding
+usbh midi 90 40 64
+wait 100
+usbh unplug
+wait 400
+said UNPLUGGED
+# held again: back to the computer
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+said USB COMPUTER
+expect usbh 0

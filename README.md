@@ -129,7 +129,7 @@ That is what the backup is for.
 - **M-VAVE FM-1 only.** Not the SMK-37.
 - **Both flash chips.** h1 saves and updates on the original Puya P25Q80 (JEDEC ID `0x856014`)
   and on the UC25HQ80 (`0xB36014`) fitted to units sold since autumn 2026.
-- USB audio out and USB MIDI in and out. MIDI in over the TRS jack too. No MIDI out over TRS, and
+- USB audio out and USB MIDI in and out, or USB host for a keyboard. MIDI in over the TRS jack too. No MIDI out over TRS, and
   no Bluetooth. See [USB audio and MIDI](#usb-audio-and-midi).
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the
   instrument, the algorithm, the page and each control's value as it changes. It can't describe
@@ -159,6 +159,12 @@ same as the speaker. Nothing plays back through it: the FM-1 isn't a sound card 
 - CC 20 to 23 as the four knobs turn.
 - A note that came in over MIDI isn't sent back out, so a DAW that echoes its input doesn't loop.
 
+**A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB
+port turns host: plug in a USB-MIDI keyboard or controller and play h1 from it. The screen shows its
+name when it connects. The FM-1 gives the port no power, so the keyboard needs its own, or goes through
+a powered hub or a powered OTG adapter. While it's a host there's no computer: no USB audio and no MIDI
+to a DAW. Hold both again to go back. It's never kept, so the FM-1 always starts as a USB device.
+
 ## Hotkeys
 
 | Control | What it does |
@@ -178,6 +184,7 @@ same as the speaker. Nothing plays back through it: the FM-1 isn't a sound card 
 | SEQ + REC | LAYERS on and off (on by default): with it on, each take keeps its own instrument, algorithm and settings |
 | hold REC | Clear the loop or the pattern. With LAYERS on: clear what was recorded on the instrument in hand, and keep holding to three seconds to clear everything |
 | hold HOME | Silence everything |
+| hold OCT − and OCT + | USB host for a keyboard, or back to the computer (a tap of both is the middle octave) |
 | hold SAVE | Reset the algorithm in hand: its four knobs go back to how they came (everything else saves by itself) |
 | hold SAVE for two seconds | Reset this instrument: every algorithm's knobs, and its FX, ENV, LFO and ARP pages |
 | hold SAVE for four seconds | Reset every instrument, and the KEYS and GLOBAL pages. The sequencer and what it holds are left alone |
