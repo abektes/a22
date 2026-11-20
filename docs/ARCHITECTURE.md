@@ -169,7 +169,7 @@ CC 20-23 as the home knobs turn. Never a note that came in over MIDI, so a compu
 input does not loop. The device sends it over USB; the FM-1's TRS jack is an input only.
 
 The saved state is version 9: version 8 with room for sixteen instruments. Version 8 (3160 bytes) has
-fourteen: its tables go to the start of this one's, and PLINK and VIBE, which came after, are as new.
+fourteen: its tables go to the start of this one's, and TILT and VIBE, which came after, are as new.
 (They are last in PRESETS so that an instrument's number, which a recorded note's part holds, never
 changed.) Version 8 is version 6 and, after the knob table, each step note's velocity and layer and the
 sixteen layers. A version 6 state (1880 bytes) loads with its steps at full velocity on no layer, and

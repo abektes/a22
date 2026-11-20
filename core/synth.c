@@ -16,7 +16,7 @@ uint32_t eng_rng = 0x2F6E2B1u;
 
 const InstDef *const insts[NINST] = {&inst_cozy, &inst_orbit, &inst_koi, &inst_haunt, &inst_tide,
                                      &inst_pip, &inst_bonk, &inst_urchin, &inst_twang, &inst_lava,
-                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo, &inst_plink, &inst_vibe};
+                                     &inst_knot, &inst_ink, &inst_bard, &inst_turbo, &inst_tilt, &inst_vibe};
 
 /* Each algorithm against the rest, so that turning the encoder through the instruments is not a ride on
  * the volume: measured on the same phrase played on every one of them (the order is insts[]'s). */
@@ -35,7 +35,7 @@ static const f32 algo_gain[NINST][NALGO] = {
     /* INK    */ {1.122f, 0.750f, 1.000f, 1.000f, 1.000f, 1.000f, 1.000f, 0.841f},
     /* BARD   */ {1.000f, 1.000f, 1.000f, 1.000f, 1.189f, 1.122f, 1.334f, 1.189f},
     /* TURBO  */ {1.189f, 1.000f, 1.000f, 1.189f, 1.585f, 1.000f, 1.259f, 1.000f},
-    /* PLINK  */ {0.750f, 0.668f, 0.750f, 0.750f, 1.059f, 1.000f, 1.189f, 0.447f},
+    /* TILT   */ {0.750f, 0.668f, 0.750f, 0.750f, 1.059f, 1.000f, 1.189f, 0.447f},
     /* VIBE   */ {1.000f, 1.189f, 1.000f, 1.122f, 1.000f, 0.891f, 1.334f, 1.122f},
 };
 
@@ -1818,6 +1818,7 @@ void eng_snapshot(Vis *vis)
         vis->v[i].on = v->stage != 0;
         vis->v[i].gate = v->gate;
         vis->v[i].note = v->note;
+        vis->v[i].vel = v->vel;
         vis->v[i].serial = v->serial;
         vis->v[i].pitch = v->pitch;
         vis->v[i].env = v->env;

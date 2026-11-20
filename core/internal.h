@@ -75,7 +75,7 @@ typedef struct InstParams {
 
 #define H1_MAGIC 0x31483148u     /* "H1H1" */
 #define H1_VERSION 9u
-/* Versions 4, 5, 6 and 8 are of the fourteen instruments there were before PLINK and VIBE (H1Old below:
+/* Versions 4, 5, 6 and 8 are of the fourteen instruments there were before TILT and VIBE (H1Old below:
  * this state with fourteen where it has NINST; 7 was never released). Version 8 is that and no more.
  * Version 6 is it up to the knob table: the steps' velocities, their layers and the layers came with
  * version 8. Versions 4 and 5 are the same up to steps: there a step held four notes, not eight
@@ -170,6 +170,7 @@ typedef struct Blk {
 /* ---- what an instrument's picture gets every frame ------------------------------------ */
 typedef struct VVoice {
     uint8_t on, gate, note;
+    uint8_t vel;                 /* 1..127 */
     uint32_t serial;
     f32 pitch, env, age;
 } VVoice;
@@ -207,7 +208,7 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_pip, inst_bonk, inst_urchin, inst_twang, inst_lava, inst_knot, inst_ink, inst_tide, inst_haunt,
-                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_plink, inst_vibe;
+                     inst_bard, inst_turbo, inst_orbit, inst_cozy, inst_koi, inst_tilt, inst_vibe;
 extern const InstDef *const insts[NINST];
 
 /* ---- settings pages ------------------------------------------------------------------- */

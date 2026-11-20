@@ -257,7 +257,7 @@ int main(void)
                 for (k = 0; k < 4; k++)
                     ok &= st.knob[i][a][k] == insts[i]->def.knob0[k];
         }
-        CHECK(ok, "PLINK and VIBE come up as new");
+        CHECK(ok, "TILT and VIBE come up as new");
         CHECK(h1_state_load(blob6 + 1, 1879u) != 0, "a version 6 state of the wrong size is refused");
 
         /* and version 8, the same fourteen with each step note's velocity and layer and the layers after */
@@ -277,7 +277,7 @@ int main(void)
         ok = st.version == H1_VERSION;
         for (i = (int)H1_OLD_NINST; i < NINST; i++)
             ok &= st.ip[i].algo == 0 && st.knob[i][3][2] == insts[i]->def.knob0[2];
-        CHECK(ok, "and PLINK and VIBE as new");
+        CHECK(ok, "and TILT and VIBE as new");
     }
 
     /* ---- hold SAVE: the algorithm, then the instrument, then everything ---- */

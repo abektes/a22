@@ -18,7 +18,7 @@ the details and the manual `.fwsc` route.
 <p>
 <img src="docs/img/cozy.webp" width="104" alt="COZY"> <img src="docs/img/orbit.webp" width="104" alt="ORBIT"> <img src="docs/img/koi.webp" width="104" alt="KOI"> <img src="docs/img/haunt.webp" width="104" alt="HAUNT"> <img src="docs/img/tide.webp" width="104" alt="TIDE">
 <img src="docs/img/pip.webp" width="104" alt="PIP"> <img src="docs/img/bonk.webp" width="104" alt="BONK"> <img src="docs/img/urchin.webp" width="104" alt="URCHIN"> <img src="docs/img/twang.webp" width="104" alt="TWANG"> <img src="docs/img/lava.webp" width="104" alt="LAVA">
-<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/plink.webp" width="104" alt="PLINK">
+<img src="docs/img/knot.webp" width="104" alt="KNOT"> <img src="docs/img/ink.webp" width="104" alt="INK"> <img src="docs/img/bard.webp" width="104" alt="BARD"> <img src="docs/img/turbo.webp" width="104" alt="TURBO"> <img src="docs/img/tilt.webp" width="104" alt="TILT">
 <img src="docs/img/vibe.webp" width="104" alt="VIBE">
 </p>
 
@@ -41,7 +41,7 @@ knobs and algorithms, the settings pages, loop and step recording, and FAQs.
 | **INK** | gliding lead | SLIDE, SHAKE, PRESS, DRY |
 | **BARD** | medieval, from recordings of real instruments: lute, harp, psaltery, gurdy, rebec, shawm, bagpipe, organ, over a drone | DRONE, COURSE, BITE, AGE |
 | **TURBO** | eighties synths, a little tape-warped | CHORUS, TAPE, GLARE, DRIVE |
-| **PLINK** | electronic drum kits on a pin board, 8-bit first; every hit drops down it in time | TUNE, DECAY, BOUNCE, BITS |
+| **TILT** | electronic drum kits, 8-bit first, on a pinball table that is a drum kit: the kick is the flippers, the snare and toms are the bumpers, the crash fires the plunger | TUNE, DECAY, BOUNCE, BITS |
 | **VIBE** | drum kits of recorded hits: gong, bells, darbuka, congas, timpani, anvil; a steel tongue drum in a garden in the rain | TUNE, DECAY, WIND, STORM |
 
 <p>
