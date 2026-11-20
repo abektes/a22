@@ -4,6 +4,11 @@
 
 Identity `FM-1_481000203`. Fixes from the GitHub issues.
 
+**Room**
+- fm1-base's system fonts (the update, crash and safe-mode screens) are stored trimmed and compressed:
+  the same pixels in far less flash, which makes room for new instruments. Text on those screens draws a
+  little slower.
+
 **Sound**
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
   float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
