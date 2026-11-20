@@ -241,25 +241,28 @@ static struct {
     uint8_t clean[RING_SLOTS];           /* 1: known erased */
     int to;                              /* the slot being written, -1 none */
     uint32_t len, at, crc;               /* what is being written: its length, how far, its CRC */
-} ring = {-1, 0, {0}, -1, 0, 0, 0};
-static const uint8_t *ring_src;          /* the blob being written: h1_loop's own copy, which nothing else asks
-                                          * for until the save is done, so it stays as it was when it began */
+    uint32_t wait;                       /* frames the loop has been dirty: a save begins a moment after */
+} ring = {-1, 0, {0}, -1, 0, 0, 0, 0};
+#define RING_WAIT 20u                    /* (a third of a second: the save keeps clear of the take's own close) */
+static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
+                                          * records again (then the loop is dirty again, and saved anew) */
 #define RING_MAX (RING_SLOT_BYTES - RING_BODY)
 
 static uint32_t ring_off(int slot) { return RING_BASE + (uint32_t)slot * RING_SLOT_BYTES; }
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24); }
 
-static uint32_t crc32_of(const uint8_t *p, uint32_t n)
+static uint32_t crc32_run(uint32_t c, const uint8_t *p, uint32_t n)   /* c: ~0 to start, ~ of it at the end */
 {
-    uint32_t c = 0xFFFFFFFFu, k;
+    uint32_t k;
     while (n--) {
         c ^= *p++;
         for (k = 0; k < 8u; k++)
             c = c >> 1 ^ (0xEDB88320u & (0u - (c & 1u)));
     }
-    return ~c;
+    return c;
 }
+static uint32_t crc32_of(const uint8_t *p, uint32_t n) { return ~crc32_run(0xFFFFFFFFu, p, n); }
 
 /* a slot's loop: its length, or 0 when it holds none (erased, torn, or another firmware's bytes) */
 static uint32_t ring_valid(int slot, uint32_t *seq)
@@ -325,9 +328,15 @@ static void ring_step(void)
     if (ring.to >= 0) {
         uint32_t off = ring_off(ring.to), n = ring.len - ring.at;
         if (n) {
+            static uint8_t page[RING_PAGE];      /* (a page copied out first: what is written is what the CRC
+                                                  * covers, even where the engine's bytes move meanwhile) */
+            uint32_t k;
             if (n > RING_PAGE)
                 n = RING_PAGE;
-            if (plat_data_write(off + RING_BODY + ring.at, ring_src + ring.at, n) != 0) {
+            for (k = 0; k < n; k++)
+                page[k] = ring_src[ring.at + k];
+            ring.crc = crc32_run(ring.crc, page, n);
+            if (plat_data_write(off + RING_BODY + ring.at, page, n) != 0) {
                 ring.to = -1;                    /* (a failed write: the slot is erased again, the save tried anew) */
                 return;
             }
@@ -337,7 +346,7 @@ static void ring_step(void)
             wr32(head, RING_MAGIC);
             wr32(head + 4, ring.seq + 1u);
             wr32(head + 8, ring.len);
-            wr32(head + 12, ring.crc);
+            wr32(head + 12, ~ring.crc);
             if (plat_data_write(off, head, sizeof head) == 0) {
                 uint32_t s;
                 if (ring_valid(ring.to, &s) == ring.len) {
@@ -350,7 +359,9 @@ static void ring_step(void)
         }
         return;
     }
-    if (h1_loop_dirty()) {
+    if (!h1_loop_dirty())
+        ring.wait = 0;
+    else if (++ring.wait > RING_WAIT) {
         for (i = 0; i < (int)RING_SLOTS; i++)
             if (ring.clean[i] && i != ring.cur) {
                 uint32_t size;
@@ -362,7 +373,7 @@ static void ring_step(void)
                 ring.clean[i] = 0;
                 ring.len = size;
                 ring.at = 0;
-                ring.crc = crc32_of(p, size);
+                ring.crc = 0xFFFFFFFFu;
                 return;
             }
     }

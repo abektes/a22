@@ -47,15 +47,20 @@ expect peak_db_min -50
 # that comes back
 tap REC
 wait 200
-key 21 down
+strum 0 15 30
+strum 0 15 30
+strum 0 15 30
 wait 300
-key 21 up
-wait 1500
 tap REC
-wait 60
+# (a save begins a third of a second after the take closes; this one is part-way: its pages begun, no header)
+wait 350
+expect data.0xC8100 <255
+expect data.0xC8000 255
 power
 wait 600
 tap PLAY
 peakreset
 wait 3000
 expect peak_db_min -50
+# (and it is the one before: three notes, not the louder strummed overdub, about -28 dBFS)
+expect peak_db_max -32
