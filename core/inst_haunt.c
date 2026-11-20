@@ -385,7 +385,7 @@ static APART void eyes_run(const Vis *vis)
     }
 }
 
-static void haunt_draw(const Vis *vis)
+static SMALL void haunt_draw(const Vis *vis)
 {
     f32 dt = vis->dt, t = vis->t, fog = vis->k[0], dread = vis->k[1], shiver = vis->k[2], depth = vis->k[3], mt = smooth01(vis->algo_t);
     f32 fine, water = 232.0f - 46.0f * depth, dim = 0.15f + 0.85f * absf(2.0f * mt - 1.0f), tall = 84.0f + 80.0f * dread, vx = 120.0f, vy = 78.0f;
