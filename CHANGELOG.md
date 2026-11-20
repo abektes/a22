@@ -49,6 +49,10 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; TILT and PLUNK j
   then whole samples, and only a restart brought it back. It now sounds the same after hours as at
   start.
 
+**Name**
+- h1 is also called handy-1. Listings read handy-1 (h1): `firmware.json` takes its name from a new
+  `title` in `app/fm1.toml`. The id, the package's file names and the USB name stay `h1`.
+
 ## 0.2.2
 
 Identity `FM-1_481000202`. From the first round of feedback after the launch.

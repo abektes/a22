@@ -1,4 +1,4 @@
-# h1
+# h1 (or handy-1)
 
 Custom firmware for the M-VAVE FM-1. Sixteen instruments with dynamic visuals. Eight algorithms 
 and four live knobs, plus a loop recorder, a step sequencer, an arpeggiator and a metronome. 
