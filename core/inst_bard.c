@@ -44,6 +44,8 @@ static const BAlgo BA[NALGO] = {
 #define B_PLUCK 3.4f             /* a string's level against the other instruments */
 #define B_HELD 2.0f
 #define B_DRONE 1.1f
+#define B_DHOLD 1.2f                      /* seconds the drone holds after the last note */
+#define B_DFADE 0.6f                      /* then it falls by 1/e every this many seconds */
 #define B_FADE 48                /* samples in which a string that is plucked again lets go of what it held */
 
 static struct {
@@ -52,7 +54,7 @@ static struct {
 } B;
 static Svf drone_f, nose_f;
 static SmpR drone_r[3];
-static f32 drone_s[2], drone_lv, wheel_ph;
+static f32 drone_s[2], drone_lv, drone_hold, wheel_ph;
 static volatile int sounding;
 
 static void bard_block(const Blk *b)
@@ -223,15 +225,22 @@ static void bard_render(Voice *v, const Blk *b, f32 *out, int n)
 }
 
 /* The drone: recordings too, two octaves under the key's root and above it. It comes in under the first
- * note and goes when the playing stops. */
+ * note and, once the playing stops, holds for B_DHOLD seconds (a gap between phrases keeps it) and then
+ * dies away over a few seconds, the way a wheel runs down or a bag empties. */
 static void bard_post(const Blk *b, f32 *l, f32 *r, int n)
 {
     const BAlgo *a = &BA[B.algo];
     f32 root = 36.0f + (f32)st.keys[0] + b->bend, lv = B.drone * B.drone * B_DRONE, d[CTRL];
-    f32 want = sounding ? 1.0f : 0.0f, k = sounding ? 0.004f : 0.0006f, lo, bp;
+    f32 want, k, lo, bp;
     int i, j;
-    sounding = 0;
     if (n > CTRL) n = CTRL;
+    if (sounding)
+        drone_hold = B_DHOLD;
+    else if (drone_hold > 0.0f)
+        drone_hold -= (f32)n * b->isr;
+    want = drone_hold > 0.0f ? 1.0f : 0.0f;
+    k = want > drone_lv ? 0.004f : b->isr * (1.0f / B_DFADE);
+    sounding = 0;
     if (lv * drone_lv <= 0.0005f) {
         drone_lv += (want - drone_lv) * minf(1.0f, k * (f32)n);
         return;

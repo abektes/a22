@@ -36,6 +36,9 @@ ASAN_OPTIONS=detect_leaks=0 build/h1v022
 "${CC:-cc}" -std=c99 -O1 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/ninth.c -o build/h1ninth -lm
 ASAN_OPTIONS=detect_leaks=0 build/h1ninth
+# BARD's drone holds a moment after the playing stops and dies away, never cut off
+"${CC:-cc}" -std=c99 -O2 -ffp-contract=off -w core/*.c tests/drone.c -o build/h1drone -lm
+build/h1drone | tail -1
 # the loop's room and length: four layers on eight bars, 16 to 128 bars, a full loop, 0.2.2's loop read
 "${CC:-cc}" -std=c99 -O2 -g -ffp-contract=off -fsanitize=address,undefined -fno-sanitize-recover=all -w \
     core/*.c tests/looper.c -o build/h1looper -lm
