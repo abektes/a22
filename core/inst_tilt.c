@@ -239,7 +239,7 @@ static void tilt_render(Voice *v, const Blk *b, f32 *out, int n)
 #define PY0 (-392.4f)
 #define SQ (PH / PF)                             /* a circle lying on the table: this much of PS flatter than it is wide */
 #define NBALL 6
-#define NSEG 40
+#define NSEG 48
 #define GRAV 150.0f
 #define FLIP_L 13.0f
 #define BELL_X 76.0f
@@ -247,9 +247,10 @@ static void tilt_render(Voice *v, const Blk *b, f32 *out, int n)
 #define CYM_X 18.0f
 #define CYM_Y 31.0f
 
-enum { W_SOLID = 1, W_DEAD = 2, W_MIR = 4, W_CLOSE = 8, W_LOW = 16, W_KICK = 32, W_RAIL = 64 };
+enum { W_SOLID = 1, W_DEAD = 2, W_MIR = 4, W_CLOSE = 8, W_LOW = 16, W_KICK = 32, W_RAIL = 64, W_PEG = 128 };
 #define WEND 255
-/* walls: a byte of flags, then corners (x, y) up to WEND. W_MIR: and again mirrored about x = 46 */
+/* walls: a byte of flags, then corners (x, y) up to WEND. W_MIR: and again mirrored about x = 46. W_PEG: every
+ * corner is a post of its own */
 static const uint8_t WALLS[] = {
     W_SOLID | W_DEAD | W_RAIL, 4, 160, 4, 42, 6, 32, 10, 22, 18, 14, 27, 8, 38, 4, 50, 3, 63, 4, 74, 8, 83, 14, 91, 22, 95, 32, 97, 42, 97, 160, WEND,
     W_SOLID | W_DEAD, 88, 160, 88, 44, 87, 35, 83, 28, 77, 21, WEND,                 /* the shooter lane's inner rail */
@@ -260,6 +261,32 @@ static const uint8_t WALLS[] = {
     W_SOLID | W_MIR | W_LOW | W_CLOSE, 16, 108, 16, 124, 25, 130, WEND,              /* the slingshots */
     WEND
 };
+/* what each kit adds to the table, kit after kit, each one's list ending at a WEND */
+static const uint8_t KIT_WALLS[] = {
+    W_SOLID | W_MIR | W_LOW, 4, 89, 13, 93, 13, 98, 21, 102, WEND, WEND,             /* 8BIT: stairs down both sides */
+    W_SOLID | W_MIR | W_LOW, 4, 88, 15, 96, WEND, WEND,                              /* ANALOG: a fader either side */
+    WEND,                                                                            /* HOUSE */
+    W_SOLID | W_LOW, 36, 112, 41, 109, 46, 108, 51, 109, 56, 112, WEND, WEND,        /* FM: an arch over the flippers */
+    W_SOLID | W_PEG, 30, 86, 46, 92, 62, 86, WEND, WEND,                             /* ZAP: three rods */
+    W_SOLID | W_LOW, 6, 92, 14, 96, WEND, W_SOLID | W_LOW, 70, 97, 80, 92, WEND,     /* GLITCH: what is left of some rails */
+    W_SOLID | W_LOW, 42, 84, 50, 87, WEND, WEND,
+    WEND,                                                                            /* CLICK */
+    WEND,                                                                            /* RAVE */
+};
+/* and what moves on it: the kind, where, how long or how far.
+ * MV_STEP: a block that marches a step a beat. MV_NEEDLE: a meter's needle, over as far as the kit is loud.
+ * MV_SLIDE: a puck going from side to side. MV_JUMP: a bar that is somewhere else after every note.
+ * MV_PEND: a metronome's arm. MV_ROTOR: a bar turning, half a turn a beat */
+enum { MV_NONE, MV_STEP, MV_SLIDE, MV_NEEDLE, MV_JUMP, MV_PEND, MV_ROTOR };
+static const uint8_t MOVER[NALGO][4] = {
+    {MV_STEP, 46, 90, 8}, {MV_NEEDLE, 46, 84, 15}, {MV_SLIDE, 46, 110, 16}, {MV_NONE, 0, 0, 0},
+    {MV_NONE, 0, 0, 0}, {MV_JUMP, 46, 104, 6}, {MV_PEND, 46, 128, 17}, {MV_ROTOR, 46, 104, 9},
+};
+/* the drums' own shape in each kit: how wide the body is and how tall, in sixteenths of the drum's size.
+ * 8BIT pads (boxes), ANALOG drums, HOUSE decks with a record turning, FM coils, ZAP rods with a ball on top,
+ * GLITCH boxes of wire that will not stay put, CLICK pucks, RAVE bumpers with a cap */
+static const uint8_t FORM[NALGO][2] = {{16, 14}, {16, 16}, {16, 5}, {0, 22}, {2, 30}, {16, 16}, {16, 3}, {7, 20}};
+
 /* the four drums that are bumpers: snare, low tom, mid tom, high tom. x, y, twice the radius, height */
 static const uint8_t DT[4] = {SNARE, TOML, TOMM, TOMH};
 static const uint8_t DRUM_AT[4][4] = {{46, 70, 17, 5}, {27, 52, 14, 8}, {65, 50, 12, 7}, {46, 33, 10, 6}};   /* (x, y: see KIT_AT) */
@@ -272,8 +299,8 @@ static const uint8_t KIT_AT[NALGO][4][2] = {
     {{56, 72}, {30, 42}, {60, 48}, {35, 60}},    /* FM: a zigzag */
     {{46, 44}, {31, 60}, {61, 60}, {46, 76}},    /* ZAP */
     {{36, 68}, {31, 46}, {62, 44}, {60, 66}},    /* GLITCH: a square, not quite */
-    {{46, 72}, {28, 60}, {46, 50}, {64, 40}},    /* CLICK: a stair */
-    {{46, 58}, {27, 44}, {65, 44}, {46, 76}},    /* RAVE */
+    {{52, 76}, {28, 60}, {46, 50}, {64, 40}},    /* CLICK: a stair */
+    {{46, 58}, {26, 44}, {68, 44}, {46, 76}},    /* RAVE */
 };
 
 /* what springs back to rest: the drums' heads, the shaker's beads, the slingshots' bands, the cymbal, the
@@ -303,6 +330,8 @@ static struct {
     f32 spin, spinw, spink;                      /* the hat: turns, turns a second, its drag */
     f32 heat, tilt;                              /* how hard it has been played, TILT's seconds left */
     f32 feed, chase, bump, flash;
+    f32 ax, ay, bx, by, mw, mphi, mr, vu;        /* what moves: from a to b, turning at mw about a, mr thick; the meter */
+    int mt, kit;                                 /* its kind; the kit the walls are of, + 1 */
     uint32_t score;                              /* in tens */
     uint32_t seed;
     int side;
@@ -490,6 +519,11 @@ SMALL static void physics(f32 dt, f32 rad, f32 size, f32 rest, f32 hop)
             hitv = maxf(hitv, bump(b, 28.0f, 138.0f, 28.0f + c, 138.0f + sn, rad + 1.5f, 0.45f, w));
             hitv = maxf(hitv, bump(b, 64.0f, 138.0f, 64.0f - c, 138.0f + sn, rad + 1.5f, 0.45f, -w));
             bump(b, 88.0f, yp, 97.0f, yp, rad, 0.2f, 0.0f);
+            if (M.mt) {
+                hitv = maxf(hitv, bump(b, M.ax, M.ay, M.bx, M.by, rad + M.mr, rest, M.mw));
+                if (M.mt == MV_ROTOR)
+                    hitv = maxf(hitv, bump(b, M.ax, M.ay, 2.0f * M.ax - M.bx, 2.0f * M.ay - M.by, rad + M.mr, rest, M.mw));
+            }
             if (hitv > 45.0f && b->z <= 0.0f)
                 b->vz = hitv * hop;
             b->vz -= 420.0f * h;
@@ -598,22 +632,79 @@ SMALL static void shell(f32 X, f32 Yb, f32 Yt, f32 rx, f32 ry, f32 shade, f32 a)
     g_line(X + rx, Yt, X + rx, Yb, 1.3f, a);
 }
 
-/* a drum standing on the table. e: its head's light. rim: its hoop's */
-SMALL static void draw_drum(int i, f32 size, f32 e, f32 rim, f32 pulse)
+/* a box standing on the table, r from its middle to a side, h tall, its top lit e. wire: only its edges */
+SMALL static void box(f32 x, f32 y, f32 r, f32 h, f32 e, f32 shade, int wire)
 {
-    f32 r = (f32)DRUM_AT[i][2] * 0.5f * size, h = (f32)DRUM_AT[i][3] * (1.0f - 0.22f * M.s[POP + i]), X, Yb, Yt, rx, ry, k;
+    static const uint8_t FACE[4][4] = {{0, 3, 7, 4}, {1, 2, 6, 5}, {3, 2, 6, 7}, {4, 5, 6, 7}};      /* two sides, the front, the top */
+    f32 p[16], q[8];
+    int f, j;
+    for (j = 0; j < 8; j++) {                    /* the floor's corners, far left, far right, near right, near left; then the top's */
+        pj(x + ((j + 1) & 2 ? r : -r), y + (j & 2 ? r : -r), j & 4 ? h : 0.0f);
+        p[2 * j] = PX; p[2 * j + 1] = PY;
+    }
+    for (f = 0; f < 4; f++) {
+        for (j = 0; j < 4; j++) {
+            q[2 * j] = p[2 * FACE[f][j]];
+            q[2 * j + 1] = p[2 * FACE[f][j] + 1];
+        }
+        if (!wire) {
+            g_mode(G_PAINT);
+            g_fill(q, 4, f == 3 ? 0.0f : (f == 2 ? shade : shade * 0.5f));
+        }
+        g_mode(G_MAX);
+        if (f == 3 && e > 0.02f)
+            g_fill(q, 4, e);
+        g_poly(q, 4, 1, 1.3f, f == 3 ? 0.9f : 0.6f);
+    }
+}
+
+/* a drum standing on the table, in its kit's shape. e: its head's light. rim: its hoop's */
+SMALL static void draw_drum(int i, int algo, f32 size, f32 e, f32 rim, f32 pulse, f32 t)
+{
+    f32 r = (f32)DRUM_AT[i][2] * 0.5f * size, sr = (f32)FORM[algo][0] * (1.0f / 16.0f), X, Yb, Yt, rx, ry, k;
+    f32 h = (f32)(DRUM_AT[i][3] * FORM[algo][1]) * (1.0f / 16.0f) * (1.0f - 0.22f * M.s[POP + i]);
+    f32 shade = 0.12f + 0.3f * rim, edge = 0.6f + 0.4f * rim;
     int j;
+    if (algo == 0 || algo == 5) {
+        box(M.dx[i] + (algo == 5 ? rng_s(&M.seed) * 4.0f * e : 0.0f), M.dy[i], r * 0.8f, h, e, shade, algo == 5);
+        return;
+    }
     pj(M.dx[i], M.dy[i], 0.0f);
     X = PX; Yb = PY;
     rx = r * PS; ry = rx * PS * SQ;
     Yt = Yb - h * PS;
-    shell(X, Yb, Yt, rx, ry, 0.12f + 0.3f * rim, 0.6f + 0.4f * rim);
-    for (j = -1; j <= 1; j++) {                  /* the lugs */
-        f32 u = (f32)j * 0.56f, yo = ry * sqrtfx(1.0f - u * u);
-        g_line(X + rx * u, Yt + yo + 2.5f, X + rx * u, Yb + yo - 2.5f, 1.0f, 0.4f + 0.6f * rim);
+    if (sr < 1.0f)                               /* narrower than what a ball runs into: that is drawn on the floor */
+        oval(X, Yb, rx, ry, 1.0f, 0.35f + 0.5f * e);
+    if (sr > 0.0f)
+        shell(X, Yb, Yt, rx * sr, ry * sr, shade, edge);
+    if (algo == 1)
+        for (j = -1; j <= 1; j++) {              /* the lugs */
+            f32 u = (f32)j * 0.56f, yo = ry * sqrtfx(1.0f - u * u);
+            g_line(X + rx * u, Yt + yo + 2.5f, X + rx * u, Yb + yo - 2.5f, 1.0f, 0.4f + 0.6f * rim);
+        }
+    if (algo == 3)                               /* a coil: turns of it, swaying when it is hit */
+        for (j = 1; j < 3; j++)
+            oval(X + (j == 1 ? 2.5f : -2.5f) * M.s[POP + i], Yb + (Yt - Yb) * (f32)j * (1.0f / 3.0f), rx, ry, 1.2f, 0.5f);
+    if (algo == 4) {                             /* a rod: the ball on top of it */
+        g_mode(G_PAINT);
+        g_disc(X, Yt, rx * 0.34f + 1.5f, 0.0f);
+        g_mode(G_MAX);
+        g_disc(X, Yt, rx * 0.34f, 0.25f + 0.75f * e);
+        g_ring(X, Yt, rx * 0.34f, 1.2f, 0.9f);
+        return;
     }
+    if (algo == 7)                               /* a cap: its underside */
+        plate(X, Yt + 2.5f, rx, ry, 0.0f, 1.3f, 0.6f);
     plate(X, Yt, rx, ry, e, 1.5f + 2.0f * rim, 0.85f);
     k = clampf(0.55f + 0.2f * pulse - 0.3f * M.s[POP + i], 0.15f, 0.9f);
+    if (algo == 2) {                             /* a record: its label, and the light on it going round */
+        g_line(X + cos_turns(t * 0.55f) * rx * 0.35f, Yt + sin_turns(t * 0.55f) * ry * 0.35f, X + cos_turns(t * 0.55f) * rx * 0.9f, Yt + sin_turns(t * 0.55f) * ry * 0.9f, 1.3f, 0.7f);
+        k = 0.3f;
+    }
+    if (algo == 6) {                             /* a puck: a mark to aim at */
+        g_line(X - rx * 0.6f, Yt, X + rx * 0.6f, Yt, 1.0f, 0.6f);
+        g_line(X, Yt - ry * 0.6f, X, Yt + ry * 0.6f, 1.0f, 0.6f);
+    }
     oval(X, Yt, rx * k, ry * k, 1.0f, 0.45f);
 }
 
@@ -851,6 +942,25 @@ SMALL static void mosaic(int q)
     }
 }
 
+/* A list of walls into strokes (keep 0: only gone through). Returns where the list ended. */
+SMALL static const uint8_t *walls(const uint8_t *wp, int keep)
+{
+    while (*wp != WEND) {
+        int fl = *wp++, np = 0, m, k;
+        while (wp[np * 2] != WEND)
+            np++;
+        for (m = 0; keep && m <= ((fl & W_MIR) ? 1 : 0); m++)
+            for (k = 0; k < np - ((fl & (W_CLOSE | W_PEG)) ? 0 : 1) && nseg < NSEG; k++) {
+                const uint8_t *pa = wp + k * 2, *pb = fl & W_PEG ? pa : wp + ((k + 1) % np) * 2;
+                seg[nseg][0] = (uint8_t)(m ? 92 - pa[0] : pa[0]); seg[nseg][1] = pa[1];
+                seg[nseg][2] = (uint8_t)(m ? 92 - pb[0] : pb[0]); seg[nseg][3] = pb[1];
+                seg[nseg++][4] = (uint8_t)(fl | ((fl & W_CLOSE) && k == np - 1 ? W_KICK : 0));   /* (the side that closes a slingshot kicks) */
+            }
+        wp += np * 2 + 1;
+    }
+    return wp + 1;
+}
+
 SMALL static void tilt_draw(const Vis *vis)
 {
     f32 dt = vis->dt, tune = vis->k[0], decay = vis->k[1], bounce = vis->k[2], bits = vis->k[3];
@@ -870,22 +980,16 @@ SMALL static void tilt_draw(const Vis *vis)
             M.dx[i] = (f32)KIT_AT[algo][i][0];
             M.dy[i] = (f32)KIT_AT[algo][i][1];
         }
-        nseg = 0;                                /* the walls, as strokes */
-        for (wp = WALLS; *wp != WEND;) {
-            int fl = *wp++, np = 0, m, k;
-            while (wp[np * 2] != WEND)
-                np++;
-            for (m = 0; m <= ((fl & W_MIR) ? 1 : 0); m++)
-                for (k = 0; k < np - ((fl & W_CLOSE) ? 0 : 1) && nseg < NSEG; k++) {
-                    const uint8_t *pa = wp + k * 2, *pb = wp + ((k + 1) % np) * 2;
-                    seg[nseg][0] = (uint8_t)(m ? 92 - pa[0] : pa[0]); seg[nseg][1] = pa[1];
-                    seg[nseg][2] = (uint8_t)(m ? 92 - pb[0] : pb[0]); seg[nseg][3] = pb[1];
-                    seg[nseg++][4] = (uint8_t)(fl | (k == np - 1 ? W_KICK : 0));   /* (the side that closes a slingshot kicks) */
-                }
-            wp += np * 2 + 1;
-        }
         beat_prev = vis->beat;
         M.seed = 0x7117u;
+    }
+
+    if (M.kit != algo + 1) {                     /* the table's walls, and this kit's own */
+        M.kit = algo + 1;
+        nseg = 0;
+        walls(WALLS, 1);
+        for (wp = KIT_WALLS, i = 0; i <= algo; i++)
+            wp = walls(wp, i == algo);
     }
 
     /* the notes */
@@ -906,6 +1010,41 @@ SMALL static void tilt_draw(const Vis *vis)
         }
         beat_prev = vis->beat;
         M.chase += db;
+        if (M.chase >= 64.0f)
+            M.chase -= 64.0f;
+    }
+    {                                            /* what moves on this kit's table */
+        const uint8_t *mv = MOVER[algo];
+        uint32_t hh = vis->notes * 2654435761u;
+        f32 phi = 0.0f, len = (f32)mv[3], d;
+        static const int8_t ST[8] = {0, 1, 2, 1, 0, -1, -2, -1};
+        M.mt = mv[0];
+        M.ax = (f32)mv[1]; M.ay = (f32)mv[2];
+        M.mr = 1.2f;
+        M.vu += (sat(vis->level * 2.5f) - M.vu) * minf(1.0f, 12.0f * dt);
+        switch (M.mt) {
+        case MV_STEP: M.ax += len * (f32)ST[(int)M.chase & 7]; break;
+        case MV_SLIDE: M.ax += len * sin_turns(M.chase * 0.25f); break;
+        case MV_NEEDLE: phi = 0.41f - 0.32f * M.vu; break;
+        case MV_JUMP:
+            M.ax += (f32)(hh >> 4 & 31u) - 16.0f;
+            M.ay += (f32)(hh >> 12 & 15u) - 8.0f;
+            phi = (f32)(hh >> 20 & 255u) * (1.0f / 256.0f);
+            M.mphi = phi;
+            break;
+        case MV_PEND: phi = -0.25f + 0.085f * sin_turns(M.chase * 0.5f); break;
+        default: phi = M.chase * 0.5f; break;
+        }
+        if (M.mt <= MV_SLIDE) {                  /* (a block or a puck: round, and not a bar) */
+            len = 0.0f;
+            M.mr = 3.0f;
+            M.mphi = phi;
+        }
+        d = phi - M.mphi;
+        M.mw = (d - (f32)ifloor(d + 0.5f)) * 6.2832f / maxf(dt, 0.002f);
+        M.mphi = phi;
+        M.bx = M.ax + cos_turns(phi) * len;
+        M.by = M.ay + sin_turns(phi) * len;
     }
     for (i = 0; i < NDRUM; i++)
         M.e[i] = maxf(0.0f, M.e[i] - dt * glow_k * (0.3f + M.e[i]));
@@ -980,6 +1119,11 @@ SMALL static void tilt_draw(const Vis *vis)
         f32 z = g[4] & W_LOW ? 2.0f : 4.0f;
         if (g[4] & W_KICK)
             continue;
+        if (g[4] & W_PEG) {
+            tline((f32)g[0], (f32)g[1], 0.0f, (f32)g[0], (f32)g[1], 6.0f, 1.6f, 0.8f);
+            tell((f32)g[0], (f32)g[1], 6.0f, 1.3f, 0.0f, 0.4f + 0.6f * maxf(M.e[CLAP], M.e[SNARE]));
+            continue;
+        }
         fline((f32)g[0], (f32)g[1], (f32)g[2], (f32)g[3], 1.0f, 0.3f);
         tline((f32)g[0], (f32)g[1], z, (f32)g[2], (f32)g[3], z, 1.8f, 0.8f);
         if (g[4] & W_LOW)                        /* a post where a low rail begins */
@@ -987,6 +1131,21 @@ SMALL static void tilt_draw(const Vis *vis)
         if (g[4] & W_RAIL)                       /* the cabinet's own side: the outer edge of its wood */
             tline(50.5f + ((f32)g[0] - 50.5f) * 1.07f, 42.0f + ((f32)g[1] - 42.0f) * (g[1] < 42 ? 1.09f : 1.0f), z,
                   50.5f + ((f32)g[2] - 50.5f) * 1.07f, 42.0f + ((f32)g[3] - 42.0f) * (g[3] < 42 ? 1.09f : 1.0f), z, 1.6f, 0.55f);
+    }
+    /* what moves */
+    if (M.mt == MV_STEP)
+        box(M.ax, M.ay, 2.6f, 3.0f, pulse, 0.3f, 0);
+    else if (M.mt == MV_SLIDE) {
+        fline(30.0f, M.ay, 62.0f, M.ay, 1.0f, 0.3f);
+        tell(M.ax, M.ay, 2.0f, 3.0f, 0.0f, 0.3f + 0.7f * pulse);
+        tell(M.ax, M.ay, 2.0f, 3.0f, 1.3f, 1.0f);
+    } else if (M.mt) {
+        tline(M.ax, M.ay, 2.0f, M.bx, M.by, 2.0f, M.mt == MV_NEEDLE ? 1.6f : 2.6f, 1.0f);
+        if (M.mt == MV_ROTOR)
+            tline(M.ax, M.ay, 2.0f, 2.0f * M.ax - M.bx, 2.0f * M.ay - M.by, 2.0f, 2.6f, 1.0f);
+        if (M.mt == MV_PEND)
+            tell(M.ax + (M.bx - M.ax) * 0.55f, M.ay + (M.by - M.ay) * 0.55f, 2.0f, 2.2f, 0.0f, 1.0f);
+        tell(M.ax, M.ay, 2.0f, 1.5f, 0.0f, 1.0f);
     }
     /* the slingshots' bands and lights */
     for (i = 0; i < 2; i++) {
@@ -1040,8 +1199,8 @@ SMALL static void tilt_draw(const Vis *vis)
         switch (k) {
         case 0: case 1: case 2: case 3: {
             e = maxf(M.e[DT[k]], strobe);
-            draw_drum(k, size, e, k ? 0.0f : M.e[RIM], pulse * bounce);
-            pj(M.dx[k], M.dy[k], (f32)DRUM_AT[k][3]);
+            draw_drum(k, algo, size, e, k ? 0.0f : M.e[RIM], pulse * bounce, vis->t);
+            pj(M.dx[k], M.dy[k], (f32)(DRUM_AT[k][3] * FORM[algo][1]) * (1.0f / 16.0f));
             rays(PX, PY, (f32)DRUM_AT[k][2] * 0.5f * size * PS, (f32)DRUM_AT[k][2] * 0.5f * size * PS * PS * SQ + 3.0f, maxf(M.e[DT[k]], k ? 0.0f : M.e[RIM]), 10);
             break;
         }
