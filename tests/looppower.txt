@@ -1,0 +1,66 @@
+# The loop kept through a power-off while it plays (#39): it goes into its ring in the data area a page a frame
+# (app.c, ring_step), so a loop never stopped is there after a power-off. Run by tests/run_tests.sh in fm1-base's
+# host simulator: ./build.sh --host, then app/build/host/h1_host tests/looppower.txt app/build/host
+wait 600
+# a take: REC arms, a key starts it, REC closes it and the loop plays on
+tap REC
+wait 100
+key 12 down
+wait 300
+key 12 up
+wait 500
+key 16 down
+wait 300
+key 16 up
+wait 400
+tap REC
+# it plays; meanwhile the ring takes it (slot 0's header: "H1LR")
+wait 3000
+expect data.0xC8000 0x48
+expect data.0xC8001 0x31
+expect data.0xC8002 0x4C
+expect data.0xC8003 0x52
+# a power-off while it still plays, and on again: the loop is there, and PLAY plays it
+power
+wait 600
+tap PLAY
+peakreset
+wait 3000
+expect peak_db_min -50
+# an overdub while it plays: closed, it goes into the next slot, and is there after another power-off
+tap REC
+wait 200
+key 19 down
+wait 300
+key 19 up
+wait 1500
+tap REC
+wait 3000
+expect data.0xCD000 0x48
+power
+wait 600
+tap PLAY
+peakreset
+wait 3000
+expect peak_db_min -50
+# a power-off a moment into a save: the slot it was going into has no header, and the loop before it is the one
+# that comes back
+tap REC
+wait 200
+strum 0 15 30
+strum 0 15 30
+strum 0 15 30
+wait 300
+tap REC
+# (a save begins a third of a second after the take closes; this one is part-way: its pages begun, no header)
+wait 350
+expect data.0xC8100 <255
+expect data.0xC8000 255
+power
+wait 600
+tap PLAY
+peakreset
+wait 3000
+expect peak_db_min -50
+# (and it is the one before: three notes, not the louder strummed overdub, about -28 dBFS)
+expect peak_db_max -32

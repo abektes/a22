@@ -133,9 +133,14 @@ velocity) in RAM, 2,048 of them (`NLEV`), kept in order of tick so that each aud
 plays by halving (reading them all every block would cost more than the loop's sound). A note-on goes in
 only with room kept for its note-off, and a note the full loop turns away moves `eng_loop_full`, which the
 UI shows as LOOP FULL. The saved loop is the header and those events as they lie in RAM (`eng_loop_blob`,
-little-endian, no copy). The device keeps them in a store object of their own (`OBJ_LOOP`, the sector pair
-at 0xDE000, `h1_loop` / `h1_loop_load`), written once the loop is stopped and nothing sounds, since an
-erase stalls the sound. The step
+little-endian, no copy), and the device keeps them in a ring of its own in the data area (app.c `ring_step`,
+0xC8000..0xDBFFF: four slots of five sectors, `h1_loop` / `h1_loop_load`). A store save would erase
+first, and an erase stalls the sound for about 50 ms, so the loop goes into a slot that is already
+erased, a 256-byte page a frame, with a header (magic, sequence, length, CRC-32) written last. That
+happens as soon as no take is going in, while the loop plays (#39). The newest slot whose header reads
+right is the loop. Used slots are erased at start, before the sound, or once the loop is stopped and
+nothing sounds. A slot holds a blob of up to 20,224 bytes (`H1_LOOP_MAX` must stay under it). Before
+the ring the loop was store object `OBJ_LOOP` (0xDE000); it is read once, when the ring holds none. The step
 pattern is 64 steps of up to eight notes, on a 1/8, 1/16 or 1/32 grid, and is saved with the
 rest of the state. `eng_seq_info` gives the picture what it needs to draw the progress line or
 the notches.

@@ -80,14 +80,16 @@ const void *h1_state(uint32_t *size);
 int h1_state_load(const void *blob, uint32_t size);   /* 0 = taken */
 int h1_state_dirty(void);
 void h1_state_saved(void);
-/* The loop recorder's loop, as a blob of its own (at most H1_LOOP_MAX bytes: 2,048 events, a note-on and a
- * note-off a note), so that what was recorded is there after a power-off. Load it after h1_state_load (which
- * empties the loop). dirty() is 1 when it changed and nothing is recording or playing; then h1_loop gives it,
- * and saved() takes the dirt off what was given. The blob is the engine's own memory, not a copy: it stays
- * valid, and its bytes stay a loadable loop, until a take records again (h1_loop_gen moves then). */
+/* The loop recorder's loop, as a blob of its own (at most H1_LOOP_MAX bytes: 2,048 events, a note-on
+ * and a note-off a note), so that what was recorded is there
+ * after a power-off. Load it after h1_state_load (which empties the loop). dirty() is 1 when it changed and no take
+ * is going into it, whether it plays or not; then h1_loop gives it, and saved() takes the dirt off what was given.
+ * h1_loop is the main loop's, and may be called while the loop plays: it only reads what is recorded. The blob
+ * is the engine's own memory, not a copy, and stays a loadable loop until a take records again. */
 const void *h1_loop(uint32_t *size);
 int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else leaves the loop empty */
 int h1_loop_dirty(void);
+int h1_loop_quiet(void);                         /* 1: the loop is stopped (or empty), no take going */
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */
 uint32_t h1_loop_gen(void);                     /* moves whenever what is recorded changes */

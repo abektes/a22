@@ -2019,6 +2019,12 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
 
 uint32_t eng_loop_gen(void) { return loop_gen; }
 
+int eng_loop_taking(void)
+{
+    int s = loop_state;
+    return s == LOOP_REC || s == LOOP_DUB;
+}
+
 int eng_loop_quiet(void)
 {
     int s = loop_state;

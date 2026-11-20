@@ -171,7 +171,7 @@ to a DAW. Hold both again to go back. It's never kept, so the FM-1 always starts
 | KNOB 1–4 | Home screen: the instrument's four live modulations. Settings page: its four columns |
 | SELECT | Home screen: tempo. Settings page: next page. Writing steps: moves the cursor |
 | FX SEL ENV LFO GLO ARP SEQ | Open that settings page. Press it again, or HOME, to go back |
-| REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it, and a stopped loop is kept through a power-off. Step: REC turns step-write on and off, PLAY runs the pattern |
+| REC / PLAY | Loop: REC arms a take, again closes it, again overdubs. PLAY stops and starts it, and the loop is kept through a power-off. Step: REC turns step-write on and off, PLAY runs the pattern |
 | EDIT | Pins the knob strip on the home screen. Writing steps: leaves a rest |
 | OCT − / + | Octave, two each way. Press both for the middle octave |
 | MASTER | Volume of everything. A ring in the middle of the screen shows it while it turns, marked GLOBAL |
@@ -221,8 +221,8 @@ that doesn't fit says `LOOP FULL` on the screen instead of going missing. The pi
 the instrument in hand. With LAYERS off, everything recorded plays on the instrument in hand.
 The SEQ page's top line scrolls through the sequencer hotkeys and shows which way LAYERS is set.
 
-The loop and its layers are saved once the loop is stopped with PLAY and nothing is sounding, and
-come back after a restart (for now up to 239 notes: a longer loop says `LOOP NOT SAVED`). The step pattern and every instrument's settings save by themselves.
+The loop is saved as soon as a take is closed, while it goes on playing, and comes back after a
+restart (power off a second or two after closing a take; a long loop takes a little longer). The step pattern and every instrument's settings save by themselves.
 
 In the simulator: <kbd>A</kbd>–<kbd>'</kbd> are the white keys from F and <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>Y</kbd> <kbd>U</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd>
 the black keys. <kbd>Z</kbd> <kbd>X</kbd> change the octave, <kbd>←</kbd> <kbd>→</kbd> change the
@@ -256,7 +256,8 @@ tests/   the device app in fm1-base's host simulator, LAYERS, the knobs and two 
   [fm1-build](https://github.com/zvenson/fm1-build) builder builds the package, runs the tests,
   signs build provenance and publishes the release. Go through
   [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) before tagging.
-- `fmhub.json` is h1's card on The Firmware Hub. `firmware.json` is written by the build from
+- `fmhub.json` is h1's card on The Firmware Hub; its picture, `docs/img/hub-card.webp`, comes from
+  `python3 tools/hub_card.py` (rerun it when instruments are added). `firmware.json` is written by the build from
   `app/fm1.toml`.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is laid out and

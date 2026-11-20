@@ -21,8 +21,10 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   release, and when the loop is full the screen says **LOOP FULL** instead of dropping notes in silence.
 - BARS goes up to **128** (1, 2, 4, 8, 16, 32, 64, 128). The bound on a loop is now its notes, not its bars:
   1,024 notes across all layers, so 128 bars holds eight notes a bar.
-- A loop of more than 239 notes cannot be saved to flash yet and says **LOOP NOT SAVED** when stopped;
-  shorter loops are kept across a power-off as before. Loops saved by 0.2.2 load and play as they were.
+- A loop that is still playing is kept through a power-off (#39). It used to be saved only once it had been
+  stopped with PLAY, because a save erases flash and that stalls the sound; a loop left playing was lost.
+  It now goes into flash erased ahead of time (at start, or while nothing sounds), a little at a time while it
+  plays, so nothing is heard. A power-off in the middle of a save leaves the loop before it.
 
 **Sound**
 - LAVA has a ninth algorithm, **HOOVER** (#24): two PWM saws (a saw plus a copy of it swept along, the old
@@ -34,6 +36,11 @@ Identity `FM-1_481000300`. Fixes from the GitHub issues so far; PLINK and VIBE j
   later come up as new without another change of format.
   States and loops saved by 0.2.2 load as they were; an older firmware refuses a version 9 state and
   starts fresh.
+- EDIT + MASTER no longer turns everything else up (#38). While MASTER was the instrument's volume,
+  everything's volume was held at a level worked out on a different curve from the knob's, so the other
+  instruments and the loop's layers jumped louder (at half way, by about 12 dB) until the knob came back
+  through it. The held volume is now the knob's own, and it is held from the moment EDIT goes down, so a
+  nudge too small to count does not move it either.
 - ECHO no longer turns grainy the longer the unit is on (#31). Its read position was worked out in a
   float from a counter that never stops, so after about 13 minutes it lost the fraction of a sample,
   then whole samples, and only a restart brought it back. It now sounds the same after hours as at
