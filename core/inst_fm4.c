@@ -197,7 +197,7 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     v->s[7] *= 1.0f - onepole_k(0.025f, b->sr / (f32)n);
 }
 
-/* ---- 4-Color Vector Picture: 4-Op Topology Matrix + Live FM Lissajous Ring ------- */
+/* ---- 4-Color Vector Picture: 4-Op Topology Matrix + Live FM Waveform Ring ------- */
 static f32 fm_rot, fm_kick, fm_kickv, fm_lev;
 static uint32_t fm_seen;
 
@@ -255,36 +255,15 @@ static void fm4_draw(const Vis *vis)
     fm_lev += (minf(1.0f, vis->level * 3.4f) - fm_lev) * minf(1.0f, dt * 16.0f);
     fm_rot = fractf(fm_rot + dt * (0.04f + 0.14f * depth + 0.12f * fm_lev));
 
-    /* Soft ambient core glow responding to K4 FILTER & output level */
-    g_color(GC_CYAN);
-    g_glow(cx, cy, 34.0f + 24.0f * flt + 12.0f * fm_lev, 0.16f + 0.22f * flt * (0.4f + 0.6f * fm_lev));
-
     /* Subtle coordinate crosshairs in Slate */
     g_color(GC_SLATE);
     g_ring(cx, cy, 78.0f, 1.1f, 0.28f);
-    g_ring(cx, cy, 38.0f, 1.0f, 0.16f);
     g_line(cx - 86.0f, cy, cx + 86.0f, cy, 1.0f, 0.16f);
     g_line(cx, cy - 78.0f, cx, cy + 78.0f, 1.0f, 0.16f);
 
     /* Filter halo ring (Orange = K4 FILTER) */
     g_color(GC_ORANGE);
     g_arc(cx, cy, 78.0f, -0.25f, -0.25f + 0.99f * flt, 2.4f, 0.72f + 0.25f * fm_lev);
-
-    /* Inner 2D FM Lissajous harmonic orbit (morphs with topology + K1 RATIO + K2 DEPTH) */
-    {
-        f32 wx = 1.0f + (f32)((algo + 1) & 3);
-        f32 wy = 1.0f + (f32)(int)(ratio * 4.0f + 0.5f);
-        f32 rl = 26.0f + 10.0f * flt + 6.0f * fm_lev;
-        f32 pm = (0.08f + 0.38f * depth) * (0.6f + 0.4f * fm_lev);
-        for (i = 0; i < 64; i++) {
-            f32 u = (f32)i * (1.0f / 64.0f);
-            f32 m = sin_turns((wx + wy) * u + fm_rot * 2.0f) * pm;
-            xy[2 * i]     = cx + sin_turns(wx * u + m + fm_rot) * rl;
-            xy[2 * i + 1] = cy + cos_turns(wy * u - m * fb) * rl * 0.86f;
-        }
-        g_color(GC_CYAN);
-        g_poly(xy, 64, 1, 1.3f, 0.32f + 0.32f * fm_lev);
-    }
 
     /* Outer FM Phase-Modulated Waveform Ring (Green = K2 DEPTH, Blue = K1 RATIO) */
     {
