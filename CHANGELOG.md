@@ -12,8 +12,9 @@ Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
   PLUNK hits, CC0): FM-4, ELECTRIC,
   STACK, ANALOG, SHAPER, WIRE, HAZE, MONO (monophonic, with glide), KIT, PERC, WAVE and CHIP. Each has
   eight algorithms, and each algorithm starts from its own four knobs and keeps them.
-- WAVE: eight banks of eight single-cycle waves (made by `tools/gen_wavetables.py`, stored integrated so
-  the bright ones don't alias), morphed with WAVE, moved along by SCAN as a note dies, spread in stereo.
+- WAVE: eight banks of fifteen single-cycle waves (made by `tools/gen_wavetables.py`: eight main ones and
+  seven real in-between shapes), each kept at six octave levels so high notes don't fold back, morphed with
+  WAVE, moved along by SCAN as a note dies, spread in stereo.
 - CHIP: 8-bit console voices: band-limited pulses in sixteenth duty steps, a stepped triangle, a noise
   register (long and short), arpeggios, pitch sweeps and CRUSH.
 - Eight selectable effects (PLATE, DELAY, FILTER, SHIFT, CHORUS, TANK, LOFI, THUMP) with a send from each
