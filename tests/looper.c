@@ -78,10 +78,36 @@ static int seq_gated(void)                       /* voices the loop holds down n
     return n;
 }
 
-static void stop_and_clear(void)
+static void stop_and_clear(void)                 /* PLAY stops; REC held three seconds asks CLEAR ALL?, a tap says yes */
 {
     tap(H1_BTN_PLAY);
     h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    tap(H1_BTN_REC);
+}
+
+/* jakehandy/h1#49: a long hold of REC, easily made by accident, cleared the whole tape. It asks now: the
+ * tape is kept unless REC is tapped again, and not by any other button or by waiting. Called with a loop
+ * recorded on T1 and stopped. */
+static void clear_all_asks(void)
+{
+    int room = h1_loop_room();
+    h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* to T2 */
+    until(now() + 100);
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    CHECK(!strcmp(h1_toast_now(), "CLEAR ALL? TAP REC"), "REC held three seconds asks CLEAR ALL?");
+    CHECK(h1_loop_room() == room, "asking, it has cleared only the track in hand (T2, empty)");
+    until(now() + 3200);
+    CHECK(h1_loop_room() == room, "left unanswered, the tape is kept");
+    CHECK(!strcmp(h1_toast_now(), "TAPE KEPT"), "and it says so");
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    tap(H1_BTN_HOME);
+    CHECK(h1_loop_room() == room, "another button answers no");
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    tap(H1_BTN_REC);
+    CHECK(h1_loop_room() == NLEV / 2, "a tap of REC answers yes: the whole tape is empty");
+    CHECK(!strcmp(h1_toast_now(), "TAPE CLEARED"), "and it says so");
+    h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, -1); h1_button(H1_BTN_EDIT, 0);  /* back to T1 */
+    until(now() + 100);
 }
 
 /* takes of n notes each onto a loop of 2^lb bars, another instrument for each, then one pass counted */
@@ -129,8 +155,9 @@ int main(void)
     CHECK(got == 4 * 64, "eight bars, four layers of 64 notes: every note plays back");
     CHECK(offs >= ons, "every note the loop starts it lets go");
     got = layered(3, 1, 0);                      /* (nothing more: just listen again) */
-    stop_and_clear();
-    CHECK(h1_loop_room() == NLEV / 2, "hold REC empties the loop");
+    tap(H1_BTN_PLAY);
+    CHECK(h1_loop_room() < NLEV / 2, "the loop has notes in it");
+    clear_all_asks();
 
     /* ---- longer loops: 16 and 32 bars (a22's longest), at a quick tempo to keep the test short ---- */
     st.glo[0] = 240;

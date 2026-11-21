@@ -528,6 +528,10 @@ static void octave(int d)
     mark_dirty();
 }
 
+#define CLEAR_ALL_WAIT 3000u             /* REC held past 2.8 s asks; a tap of REC this soon after clears it all */
+static int clear_all_asked;              /* 1: CLEAR ALL? is up, waiting for its tap of REC */
+static uint32_t clear_all_ms;
+
 SMALL void h1_button(int btn, int down)
 {
     if (btn < 0 || btn >= H1_NBTN) return;
@@ -567,6 +571,18 @@ SMALL void h1_button(int btn, int down)
     btn_held |= 1u << btn;
     btn_ms[btn] = now;
     btn_fired[btn] = 0;
+
+    /* CLEAR ALL? asked: a tap of REC (EDIT not held) clears the whole tape; any other button keeps it */
+    if (clear_all_asked) {
+        clear_all_asked = 0;
+        if (btn == H1_BTN_REC && !(btn_held & (1u << H1_BTN_EDIT)) && now - clear_all_ms < CLEAR_ALL_WAIT) {
+            btn_fired[btn] = 1;                  /* (its release and holds do nothing more) */
+            eng_post(EV_CLEAR, 0);
+            toast("TAPE CLEARED", 0, 0, 0, -1);
+            return;
+        }
+        toast("TAPE KEPT", 0, 0, 0, -1);
+    }
 
     /* EDIT + Button Shift Shortcuts */
     if (btn != H1_BTN_EDIT && (btn_held & (1u << H1_BTN_EDIT))) {
@@ -706,9 +722,14 @@ static void holds(void)
         }
     }
     if ((btn_held & (1u << H1_BTN_REC)) && btn_fired[H1_BTN_REC] == 2 && now - btn_ms[H1_BTN_REC] > 2800u) {
-        btn_fired[H1_BTN_REC] = 1;
-        eng_post(EV_CLEAR, 0);
-        toast("TAPE CLEARED", 0, 0, 0, -1);
+        btn_fired[H1_BTN_REC] = 1;               /* (the whole tape only once asked: a long hold is easy by accident) */
+        clear_all_asked = 1;
+        clear_all_ms = now;
+        toast("CLEAR ALL? TAP REC", 0, 0, 0, -1);
+    }
+    if (clear_all_asked && !(btn_held & (1u << H1_BTN_REC)) && now - clear_all_ms >= CLEAR_ALL_WAIT) {
+        clear_all_asked = 0;
+        toast("TAPE KEPT", 0, 0, 0, -1);
     }
     if ((btn_held & (1u << H1_BTN_SEQ)) && !btn_fired[H1_BTN_SEQ] && now - btn_ms[H1_BTN_SEQ] > 550u) {
         btn_fired[H1_BTN_SEQ] = 1;

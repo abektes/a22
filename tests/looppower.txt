@@ -70,9 +70,12 @@ expect peak_db_max -32
 # overdubbed while its save is under way: that save is given up with a dead header, and the records after it
 # are still found.
 press REC
-wait 3500
+wait 2900
 release REC
-wait 600
+wait 20
+# (CLEAR ALL? asked: a tap of REC says yes, at much the moment a held REC used to clear it all)
+tap REC
+wait 1100
 tap REC
 wait 100
 key 12 down

@@ -3,6 +3,13 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**Tape and sequencers**
+- Holding REC past three seconds no longer clears the whole tape at once, which was easy to do by accident
+  (jakehandy/h1#49). It asks CLEAR ALL?, and a tap of REC within three seconds clears it; any other button,
+  or waiting, keeps it. The track in hand is still cleared at 0.7 s, as before.
+
 ## 0.1.0
 
 Identity `FM-1_4122000100`. Released 2026-11-21. Installed and run on one FM-1.

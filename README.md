@@ -87,7 +87,8 @@ When it is full the screen says **TAPE FULL**.
 - **EDIT + REC** cuts the track in hand's notes (between the loop's in and out bars) to a clipboard, and
   **EDIT + PLAY** pastes them at the current bar.
 - **EDIT + OCT −** and **EDIT + OCT +** move the loop's in and out bars.
-- **Hold REC** clears the track in hand. Keep holding (about three seconds) to clear the whole tape.
+- **Hold REC** clears the track in hand. Keep holding (about three seconds) and it asks CLEAR ALL?: tap REC
+  within three seconds to clear the whole tape. Any other button, or waiting, keeps it.
 
 The tape and every setting are saved by themselves and come back after a restart.
 
