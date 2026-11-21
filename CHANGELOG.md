@@ -5,7 +5,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## 0.1.0
 
-Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
+Identity `FM-1_4122000100`. Released 2026-11-21. Installed and run on one FM-1.
 
 **Sound**
 - Twelve engines in place of h1's sixteen instruments, synthesised but for KIT's short drum recordings (h1's
@@ -40,10 +40,15 @@ Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
 - Colour vector graphics: each pixel is one of eight colour banks at one of 32 shades (h1 had one ink in
   256 levels).
 
-**Performance** (measured on an FM-1, eight-note chords on all 80 algorithms with PLATE on)
+**Performance** (measured on an FM-1, eight-note chords held on every algorithm with PLATE on)
 - PLATE runs its two halves on the two cores, to the bit the same as on one, and sleeps while it and its
   input are silent: the audio's busiest moment went from 96% of its time to 81%, the average from 73% to
   54%, and with nothing playing from 38% to 10%. The screen draws about twice as many frames under load.
+- Drawing does the same pixels in less time: an ellipse works out only the pixels near its edge, the top bar
+  and knob strip clear without blending each pixel, and glows and gradient fills keep their state in
+  registers. The big glows of ELECTRIC, STACK, HAZE, WIRE and PERC follow their knob, no longer the level, so
+  they aren't drawn and sent again every frame. Over all 96 algorithms the screen went from 24 frames a
+  second to 41 on average (STACK 13 to 27, KIT 20 to 48), and the audio's busiest moment from 84% to 74%.
 - A faster sine table lookup for every engine; SHAPER's phase distortions and CRUSH no longer divide every
   sample.
 

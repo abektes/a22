@@ -168,7 +168,7 @@ go back. It's never kept, so the FM-1 always starts as a USB device.
 
 ## Install
 
-A22 has no release and no listing on The Firmware Hub yet.
+Releases are on [GitHub](https://github.com/abektes/a22/releases). A22 is not listed on The Firmware Hub yet.
 
 ### Before you install
 
@@ -181,9 +181,10 @@ A22 has no release and no listing on The Firmware Hub yet.
 
 ### Get the package
 
-Until there is a release, every push to `main` builds a development package: open the latest successful
-run under **Actions**, download the `a22-dev-build` artifact and unzip it for `a22.fwsc` (identity
-`FM-1_412200`). The `a22-release-test` artifact is the next release built as it will be.
+Download `a22-X.Y.Z.fwsc` from the [latest release](https://github.com/abektes/a22/releases/latest) (a release
+X.Y.Z answers `FM-1_4122XXYYZZ`). Between releases, every push to `main` builds a development package: open
+the latest successful run under **Actions**, download the `a22-dev-build` artifact and unzip it for
+`a22.fwsc` (identity `FM-1_412200`). The `a22-release-test` artifact is the next release built as it will be.
 
 ### From a terminal
 
