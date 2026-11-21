@@ -42,7 +42,7 @@ void *memmove(void *d, const void *s, size_t_ n)
 #define H1_RELEASE "dev"
 #endif
 #ifndef H1_SOURCE_URL
-#define H1_SOURCE_URL "https://github.com/jakehandy/h1"
+#define H1_SOURCE_URL "https://github.com/abektes/a22"
 #endif
 
 /* ---- the ABI's two structs, laid out as fm1core.h (ABI 6) lays them out ---------------------- */
@@ -362,7 +362,7 @@ static void put_str(char *buf, uint32_t n, const char *s)
     while (s[i] && i + 1 < n) { buf[i] = s[i]; i++; }
     buf[i] = 0;
 }
-static void c_ui_info(char *buf, uint32_t n) { put_str(buf, n, booted ? h1_instrument_name(h1_instrument()) : "h1"); }
+static void c_ui_info(char *buf, uint32_t n) { put_str(buf, n, booted ? h1_instrument_name(h1_instrument()) : "A22"); }
 static void c_shutdown(void)
 {
     if (booted && h1_state_dirty()) state_out();

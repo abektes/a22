@@ -3,7 +3,8 @@
 Custom firmware for the M-VAVE FM-1: an FM workstation. Ten synth and drum engines, each with eight
 algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
 four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
-sequencer and eight patch snapshots. Everything is synthesised: no samples.
+sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
+layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)).
 
 A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
 
@@ -12,9 +13,9 @@ A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and buil
 <img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
 </p>
 
-> **A22 has not been tried on an FM-1 yet.** It builds with JieLi's toolchain and passes its tests in
-> fm1-base's host simulator, but nobody has installed it on a unit. Install it only if you are ready to
-> go back to stock or another firmware if it misbehaves (see [If something goes wrong](#if-something-goes-wrong)).
+> **A22 is early.** It has been installed and run on one FM-1 (every engine, effect and the tape driven over
+> USB, with no crash), but not yet played at length by many people. Install it only if you are ready to go
+> back to stock or another firmware if it misbehaves (see [If something goes wrong](#if-something-goes-wrong)).
 
 ## Engines
 

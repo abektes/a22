@@ -11,21 +11,40 @@
 #include "internal.h"
 #include "dsp.h"
 
-/* Casio CZ piecewise linear phase distortion transfer (warp in 0..1) */
-static inline f32 pd_warp(f32 p, f32 warp)
+/* The phase distortions' kinks, worked out once a block (they divide by them every sample otherwise) */
+typedef struct { f32 d, id, i1d; } PdWarp;
+typedef struct { f32 w, iw; } PdPulse;
+
+static inline PdWarp pd_warp_k(f32 warp)
 {
-    f32 d = clampf(0.5f - 0.46f * warp, 0.04f, 0.5f);
-    if (p < d) return 0.5f * (p / d);
-    return 0.5f + 0.5f * ((p - d) / (1.0f - d));
+    PdWarp k;
+    k.d = clampf(0.5f - 0.46f * warp, 0.04f, 0.5f);
+    k.id = 1.0f / k.d;
+    k.i1d = 1.0f / (1.0f - k.d);
+    return k;
+}
+
+static inline PdPulse pd_pulse_k(f32 warp)
+{
+    PdPulse k;
+    k.w = clampf(0.5f - 0.44f * warp, 0.06f, 0.5f);
+    k.iw = 1.0f / k.w;
+    return k;
+}
+
+/* Casio CZ piecewise linear phase distortion transfer */
+static inline f32 pd_warp(f32 p, const PdWarp *k)
+{
+    if (p < k->d) return 0.5f * (p * k->id);
+    return 0.5f + 0.5f * ((p - k->d) * k->i1d);
 }
 
 /* Double-kink pulse phase distortion */
-static inline f32 pd_pulse(f32 p, f32 warp)
+static inline f32 pd_pulse(f32 p, const PdPulse *k)
 {
-    f32 w = clampf(0.5f - 0.44f * warp, 0.06f, 0.5f);
-    if (p < w) return 0.5f * (p / w);
+    if (p < k->w) return 0.5f * (p * k->iw);
     if (p < 0.5f) return 0.5f;
-    if (p < 0.5f + w) return 0.5f + 0.5f * ((p - 0.5f) / w);
+    if (p < 0.5f + k->w) return 0.5f + 0.5f * ((p - 0.5f) * k->iw);
     return 1.0f;
 }
 
@@ -74,6 +93,9 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
     f32 f, d0, d1, dm, fc;
     f32 p0 = v->ph[0], p1 = v->ph[1], pm = v->ph[2];
     f32 plk = (algo == 3) ? exp2fx(-v->age * 2.2f) : 1.0f;
+    f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f), isteps = 1.0f / steps;   /* CRUSH's phase steps */
+    PdWarp kw = pd_warp_k(warp);
+    PdPulse kp = pd_pulse_k(warp * (algo == 3 ? plk : 0.8f));
     Svf fl;
 
     if (b->punch > 0.01f) pitch += b->punch * v->s[7] * 0.85f;
@@ -93,8 +115,8 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
             f32 xl, xr;
             switch (algo) {
             case 0: /* CZ-SAW: phase-distorted saw into Buchla wavefolder */
-                xl = -tcos(pd_warp(p0, warp));
-                xr = -tcos(pd_warp(p1, warp));
+                xl = -tcos(pd_warp(p0, &kw));
+                xr = -tcos(pd_warp(p1, &kw));
                 xl = fold_sin(xl * fold_g + b0) - dc0;
                 xr = fold_sin(xr * fold_g + b0) - dc0;
                 break;
@@ -120,8 +142,8 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
             case 3: /* PLUCK: crisp hyper-digital PD+fold mallet pluck */
             {
                 f32 fg = 1.0f + (fold_g - 1.0f) * plk;
-                xl = -tcos(pd_pulse(p0, warp * plk));
-                xr = -tcos(pd_pulse(p1, warp * plk));
+                xl = -tcos(pd_pulse(p0, &kp));
+                xr = -tcos(pd_pulse(p1, &kp));
                 xl = (fold_sin(xl * fg + b0) - dc0) * (0.45f + 0.55f * plk);
                 xr = (fold_sin(xr * fg + b0) - dc0) * (0.45f + 0.55f * plk);
                 break;
@@ -136,23 +158,22 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
             case 5: /* CYBER: octave-split folded PD lead + solid sub fundamental */
             {
                 f32 p02 = fractf(p0 * 2.0f), p12 = fractf(p1 * 2.0f);
-                f32 hi_l = fold_sin((-tcos(pd_warp(p02, warp))) * fold_g + b0) - dc0;
-                f32 hi_r = fold_sin((-tcos(pd_warp(p12, warp))) * fold_g + b0) - dc0;
+                f32 hi_l = fold_sin((-tcos(pd_warp(p02, &kw))) * fold_g + b0) - dc0;
+                f32 hi_r = fold_sin((-tcos(pd_warp(p12, &kw))) * fold_g + b0) - dc0;
                 xl = 0.52f * tsin(p0) + 0.58f * hi_l;
                 xr = 0.52f * tsin(p1) + 0.58f * hi_r;
                 break;
             }
             case 6: /* GLASSY: delicate double-pulse PD chime + soft 2nd-harmonic shimmer */
-                xl = -tcos(pd_pulse(p0, warp * 0.8f)) * 0.65f + 0.40f * tsin(pm + tsin(p0) * warp * 0.6f);
-                xr = -tcos(pd_pulse(p1, warp * 0.8f)) * 0.65f + 0.40f * tsin(pm + tsin(p1) * warp * 0.6f);
+                xl = -tcos(pd_pulse(p0, &kp)) * 0.65f + 0.40f * tsin(pm + tsin(p0) * warp * 0.6f);
+                xr = -tcos(pd_pulse(p1, &kp)) * 0.65f + 0.40f * tsin(pm + tsin(p1) * warp * 0.6f);
                 xl = fold_sin(xl * (1.0f + 0.45f * (fold_g - 1.0f)) + b0 * 0.5f) - dc1;
                 xr = fold_sin(xr * (1.0f + 0.45f * (fold_g - 1.0f)) + b0 * 0.5f) - dc1;
                 break;
             default: /* CRUSH: stepped digital phase-quantized wavefolder */
             {
-                f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f);
-                f32 q0 = (f32)(int)(p0 * steps) / steps;
-                f32 q1 = (f32)(int)(p1 * steps) / steps;
+                f32 q0 = (f32)(int)(p0 * steps) * isteps;
+                f32 q1 = (f32)(int)(p1 * steps) * isteps;
                 xl = fold_sin(tsin(q0) * fold_g + b0) - dc0;
                 xr = fold_sin(tsin(q1) * fold_g + b0) - dc0;
                 break;
@@ -189,6 +210,7 @@ static void digital_draw(const Vis *vis)
     f32 x0 = 26.0f, x1 = 214.0f, cy = 114.0f, amp = 48.0f;
     f32 fold_g = 1.0f + fold * fold * 3.6f;
     f32 b0 = bias * 0.65f, dc0 = fold_sin(b0);
+    PdWarp kw;
     int i;
 
     if (vis->fresh) {
@@ -220,10 +242,11 @@ static void digital_draw(const Vis *vis)
     }
 
     /* Sculpted mathematical PD waveform (Blue) & Folded waveform (Green) */
+    kw = pd_warp_k(warp);
     for (i = 0; i < 72; i++) {
         f32 p = (f32)i * (1.0f / 71.0f);
         f32 px = lerpf(x0, x1, p);
-        f32 pd = -tcos(pd_warp(fractf(p + dg_ph * 0.15f), warp));
+        f32 pd = -tcos(pd_warp(fractf(p + dg_ph * 0.15f), &kw));
         f32 fl = fold_sin(pd * (fold_g + 0.6f * dg_lev) + b0) - dc0;
         f32 sc = vis->scope[(vis->scope_pos + i * 3) & (SCOPE_N - 1)] * 20.0f;
         xy[2 * i]      = px;

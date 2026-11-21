@@ -255,6 +255,7 @@ int main(void)
     h1_two = run_audio_hash(1);
     pthread_mutex_lock(&mu); w_stop = 1; pthread_cond_signal(&cv_go); pthread_mutex_unlock(&mu);
     pthread_join(th, 0);
+    h1_two_cores(0, 0);                       /* (the worker is gone: nothing may hand it a job now) */
     printf("dual-core hash: 1-core=0x%08X  2-core=0x%08X (%d engines x 8 = %d presets)\n",
            h1_one, h1_two, h1_instrument_count(), h1_instrument_count() * 8);
     assert(h1_one == h1_two);

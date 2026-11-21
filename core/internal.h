@@ -332,6 +332,7 @@ void fx_init(f32 sr);
 void fx_reset(void);
 void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, const uint8_t p[4], f32 bpm, int fx_on);
 void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm);
+void fx_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 
 /* UI (ui.c) */
 void ui_init(void);

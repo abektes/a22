@@ -43,7 +43,8 @@ typedef struct Mod {
 
 typedef struct TRun {
     Blk b;
-    f32 knob_s[4];                 /* smoothed knobs */
+    f32 knob_s[4];                 /* smoothed knobs, as set (what live keys play) */
+    f32 auto_s[4];                 /* smoothed knobs with the tape's automation (what the tape and steps play) */
     uint8_t auto_k[4];             /* automated K1..K4 override during tape playback */
     uint8_t auto_on[4];
     Mod m;
@@ -133,7 +134,7 @@ int scale_snap(int note)
 /* ---- track snapshot helpers ----------------------------------------------------------- */
 static void track_snap_live(int t)
 {
-    int k, inst = st.inst < NINST ? st.inst : 0, algo = st.ip[inst].algo & 7;
+    int k, inst = cur_i, algo = st.ip[inst].algo & 7;   /* (the engine's own: st.inst is the panel's) */
     Track *tr = &st.trk[t & 3];
     tr->inst = (uint8_t)inst;
     tr->algo = (uint8_t)algo;
@@ -258,25 +259,28 @@ static const Blk *track_set(int t, int part, int is_seq)
     TRun *r = &trun[t & 3];
     const Track *tr = &st.trk[t & 3];
     int inst = PART_INST(part), algo = PART_ALGO(part), k;
-    int live = (!is_seq && (t & 3) == cur_trk);
+    /* The track in hand plays as it is set now, live keys and recorded part alike; another track plays its
+     * snapshot. Once a block per track (the first call, from block(), is the track in hand's live one), so both
+     * the knobs as set and the knobs with the tape's automation are kept, and the varispeed shift is added
+     * after: the recorded part on the track in hand gets its automation and its shift as the others do. */
+    int live = (t & 3) == cur_trk;
     const uint8_t *env  = (live || !tr->has_snap) ? st.ip[inst].env  : tr->env;
     const uint8_t *menv = (live || !tr->has_snap) ? st.ip[inst].menv : tr->menv;
     const uint8_t *lfo  = (live || !tr->has_snap) ? st.ip[inst].lfo  : tr->lfo;
     const uint8_t *kn   = (live || !tr->has_snap) ? KNOBS(inst, algo) : tr->knob;
 
     if (r->at != blkno) {
-        f32 pshift = is_seq ? tape_pitch_shift() : 0.0f;
         if (r->at != blkno - 1u) {
             for (k = 0; k < 4; k++) {
-                uint8_t kv = (is_seq && r->auto_on[k]) ? r->auto_k[k] : kn[k];
-                r->knob_s[k] = (f32)kv * 0.01f;
+                r->knob_s[k] = (f32)kn[k] * 0.01f;
+                r->auto_s[k] = (f32)(r->auto_on[k] ? r->auto_k[k] : kn[k]) * 0.01f;
             }
         }
         r->at = blkno;
-        mod_run(&r->m, lfo, env, menv, &r->lf, &lfo_rng, pshift);
+        mod_run(&r->m, lfo, env, menv, &r->lf, &lfo_rng, 0.0f);
         for (k = 0; k < 4; k++) {
-            uint8_t kv = (is_seq && r->auto_on[k]) ? r->auto_k[k] : kn[k];
-            r->knob_s[k] += ((f32)kv * 0.01f - r->knob_s[k]) * 0.08f;
+            r->knob_s[k] += ((f32)kn[k] * 0.01f - r->knob_s[k]) * 0.08f;
+            r->auto_s[k] += ((f32)(r->auto_on[k] ? r->auto_k[k] : kn[k]) * 0.01f - r->auto_s[k]) * 0.08f;
         }
         r->b.sr = SR;
         r->b.isr = ISR;
@@ -285,11 +289,11 @@ static const Blk *track_set(int t, int part, int is_seq)
     }
     r->b.algo = algo;
     for (k = 0; k < 4; k++)
-        r->b.k[k] = r->knob_s[k];
+        r->b.k[k] = is_seq ? r->auto_s[k] : r->knob_s[k];
     if (r->m.kmod_k >= 0)
         r->b.k[r->m.kmod_k] = sat(r->b.k[r->m.kmod_k] + r->m.kmod);
     r->b.lfo = r->m.lfo;
-    r->b.bend = r->m.bend;
+    r->b.bend = r->m.bend + (is_seq ? tape_pitch_shift() : 0.0f);
     r->b.menv_amt = r->m.menv_amt;
     r->b.vel_sens = r->m.vel_sens;
     r->b.punch = r->m.punch;
@@ -409,7 +413,13 @@ static void voice_off_ex(int note, int trk, int seq)
 }
 
 static void voice_on(int note, int vel) { voice_on_ex(note, live_part(), cur_trk, 0, vel); }
-static void voice_off(int note)         { voice_off_ex(note, cur_trk, 0); }
+/* a key let go: its live voice ends on whichever track it started (the track may have changed since) */
+static void voice_off(int note)
+{
+    int t;
+    for (t = 0; t < NTRACK; t++)
+        voice_off_ex(note, t, 0);
+}
 
 static void voices_release_all(void)
 {
@@ -714,12 +724,16 @@ static void route(int note, int on, int vel, int from_midi)
             if (nheld < 16) held[nheld++] = (uint8_t)note;
             shake_drop(note);
         } else {
+            int found = 0;
             for (i = 0; i < nheld; i++)
                 if (held[i] == note) {
                     for (; i + 1 < nheld; i++) held[i] = held[i + 1];
                     nheld--;
+                    found = 1;
                     break;
                 }
+            if (!found)
+                voice_off(note);                 /* (pressed before the mode changed: its own voice) */
         }
         return;
     }
@@ -737,12 +751,16 @@ static void route(int note, int on, int vel, int from_midi)
             held[nheld++] = (uint8_t)note;
         }
     } else {
+        int found = 0;
         for (i = 0; i < nheld; i++)
             if (held[i] == note) {
                 for (; i + 1 < nheld; i++) { held[i] = held[i + 1]; held_vel[i] = held_vel[i + 1]; }
                 nheld--;
+                found = 1;
                 break;
             }
+        if (!found)
+            voice_off(note);                     /* (pressed before the mode changed: its own voice) */
     }
 }
 
@@ -1590,6 +1608,7 @@ void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(v
 {
     c2_run = run;
     c2_wait = wait;
+    fx_two_cores(run, wait);                    /* (PLATE's two halves: fx.c) */
 }
 
 static void voice_block(int i)
@@ -2049,22 +2068,39 @@ uint32_t eng_sounding_lo(void)
 
 int eng_seq_leds(uint32_t *out, int page_open, int blink)
 {
-    /* 16 white keys in FM-1's 27-key layout (F3..G5) */
+    /* 16 white keys in FM-1's 27-key layout (F3..G5): the step pattern, or the tape's notes, with the place
+     * running across. A pattern or tape longer than 16 sixteenths shares a key between ceil(n / 16) of them. */
     static const uint8_t WKEY[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
     uint32_t m = 0;
-    int i, n;
-    if (st.seq[0] != SEQ_STEP || (!step_playing && !step_write && !page_open))
-        return 0;
-    n = step_count();
-    for (i = 0; i < 16 && i < n; i++) {
-        int has = st.steps[i][0] != 0;
-        if (n > 16 && i * 2 + 1 < n) has = st.steps[i * 2][0] || st.steps[i * 2 + 1][0];
-        if (step_playing && ((n <= 16 && i == step_at) || (n > 16 && (step_at >> 1) == i)))
-            has = !has;
-        else if (step_write && !step_playing && ((n <= 16 && i == step_cursor) || (n > 16 && (step_cursor >> 1) == i)))
-            has = blink;
-        if (has) m |= 1u << WKEY[i];
+    int i, n, per, at = -1, wr = -1;
+    if (st.seq[0] == SEQ_STEP) {
+        if (!step_playing && !step_write && !page_open)
+            return 0;
+        n = step_count();
+        per = (n + 15) / 16;
+        for (i = 0; i < n; i++)
+            if (st.steps[i][0])
+                m |= 1u << WKEY[i / per];
+        if (step_playing)
+            at = imin(step_at, n - 1) / per;
+        else if (step_write)
+            wr = imin(step_cursor, n - 1) / per;
+    } else {
+        int s = loop_state, ne = nlev;
+        if (s != LOOP_REC && s != LOOP_PLAY && s != LOOP_DUB && !(page_open && s == LOOP_IDLE))
+            return 0;
+        n = imax(1, (int)loop_len / 24);
+        per = (n + 15) / 16;
+        for (i = 0; i < ne; i++)
+            if ((lev[i].flags & 7u) == LEV_ON)
+                m |= 1u << WKEY[imin(lev[i].tick / 24, n - 1) / per];
+        if (s != LOOP_IDLE)
+            at = imin((int)loop_pos / 24, n - 1) / per;
     }
+    if (at >= 0)
+        m ^= 1u << WKEY[at];
+    if (wr >= 0)                                            /* the step being written blinks */
+        m = blink ? m | 1u << WKEY[wr] : m & ~(1u << WKEY[wr]);
     *out = m;
     return 1;
 }
