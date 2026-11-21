@@ -3,7 +3,7 @@
 
 /* Curated K1..K4 sweet spots for all 80 factory presets (10 engines x 8 algorithms).
  * Algorithm 0 of each engine matches insts[inst]->def.knob0. */
-static const uint8_t ALGO_K0[NINST][NALGO][4] = {
+static const uint8_t ALGO_K0[][NALGO][4] = {
     /* 0 FM-4      (K1 RATIO, K2 DEPTH, K3 FEEDBK, K4 FILTER):
      *   KEYS, BASS, BELL, PAD, BRASS, PLUCK, ORGAN, ALIEN */
     {{25, 58, 20, 76}, {34, 64, 36, 54}, {52, 56, 16, 86}, {30, 44, 48, 64},
@@ -44,7 +44,16 @@ static const uint8_t ALGO_K0[NINST][NALGO][4] = {
      *   HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH */
     {{50, 52, 58, 52}, {50, 48, 46, 44}, {50, 62, 54, 48}, {50, 58, 56, 46},
      {50, 66, 36, 40}, {50, 60, 72, 64}, {50, 56, 60, 58}, {56, 68, 42, 62}},
+    /* 10 WAVE     (K1 WAVE, K2 SCAN, K3 SPREAD, K4 FILTER):
+     *   HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL */
+    {{30, 20, 30, 70}, {40, 10, 24, 74}, {36, 46, 34, 58}, {50, 40, 40, 66},
+     {24, 34, 30, 62}, {20, 60, 32, 70}, {40, 24, 46, 80}, {44, 52, 30, 50}},
+    /* 11 CHIP     (K1 DUTY, K2 SWEEP, K3 ARP, K4 CRUSH):
+     *   PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET */
+    {{50, 0, 40, 10}, {50, 12, 0, 6}, {20, 0, 0, 8}, {36, 0, 60, 10},
+     {50, 0, 0, 12}, {36, 6, 56, 8}, {50, 46, 52, 6}, {50, 0, 30, 10}},
 };
+typedef char a22_k0_rows[sizeof ALGO_K0 / sizeof ALGO_K0[0] == NINST ? 1 : -1];
 
 void knobs_default(int inst, int algo)
 {

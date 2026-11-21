@@ -8,8 +8,9 @@
 #define NVOICE 8
 #define NSTEP 64                 /* step sequencer max steps */
 #define NSNOTE 8                 /* polyphony per step */
-#define NINST 10                 /* 10 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC */
-#define NSLOT 10                 /* state slots for all 10 engines */
+#define NINST 12                 /* 12 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC,
+                                  * WAVE, CHIP (new ones go at the end: a saved tape names engines by number) */
+#define NSLOT 12                 /* state slots for all 12 engines */
 #define NALGO 8                  /* 8 curated algorithms/presets per engine */
 #define NTRACK 4                 /* 4-Track Virtual Tape (T1..T4) */
 #define NSNAP 8                  /* 8 instant user patch snapshots (SAVE + white keys 1..8) */
@@ -99,7 +100,7 @@ typedef struct Snap {
 } Snap;
 
 #define H1_MAGIC 0x32324132u     /* "2A22" - isolated from h1 saves */
-#define H1_VERSION 3u     /* 3: chord memory */
+#define H1_VERSION 4u     /* 3: chord memory; 4: twelve engines (WAVE, CHIP) */
 
 /* Sequencer / Tape mode enums */
 enum { SEQ_TAPE = 0, SEQ_STEP = 1 };
@@ -237,8 +238,8 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_fm4, inst_electric, inst_stack, inst_analog, inst_shaper;
-extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc;
-extern const InstDef *const insts[NINST];
+extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip;
+extern const InstDef *const insts[];
 
 /* ---- pages ---------------------------------------------------------------------------- */
 enum { PG_HOME = 0, PG_FX, PG_MIX, PG_ENV, PG_LFO, PG_GLO, PG_ARP, PG_SEQ, NPAGE };

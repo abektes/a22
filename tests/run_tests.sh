@@ -2,7 +2,7 @@
 # a22's tests. First the device app in fm1-base's host simulator (the platform simulated, the same app.c
 # and core as the firmware), with the second core and without. Then the core alone, most of it under the
 # compiler's address and undefined-behaviour checkers:
-#   a22_test   two cores bit-exact on all 80 presets, MONO mono, the tape saved and loaded from odd
+#   a22_test   two cores bit-exact on all 96 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
 #   basics     the limiter on every algorithm, velocity, the tape through a power cycle, MIDI out
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click

@@ -1,5 +1,5 @@
 /* a22's own features, on the core alone. Run by tests/run_tests.sh.
- *   1) two cores sound the same as one, to the bit, on all 10 engines x 8 algorithms (the second core a
+ *   1) two cores sound the same as one, to the bit, on all 12 engines x 8 algorithms (the second core a
  *      real thread), and every one of those 80 makes a sound
  *   1b) MONO is mono: overlapping keys stay one voice, and letting go of the first keeps the second
  *   2) the tape with knob automation, Cut & Paste and a snapshot, saved and loaded back from odd addresses
@@ -260,7 +260,7 @@ int main(void)
     pthread_t th;
     uint32_t h1_one, h1_two;
 
-    /* 1) Dual-core bit-exactness across all 10 engines x 8 algorithms */
+    /* 1) Dual-core bit-exactness across all 12 engines x 8 algorithms */
     pthread_create(&th, 0, worker, 0);
     h1_one = run_audio_hash(0);
     h1_two = run_audio_hash(1);
@@ -270,8 +270,8 @@ int main(void)
     printf("dual-core hash: 1-core=0x%08X  2-core=0x%08X (%d engines x 8 = %d presets)\n",
            h1_one, h1_two, h1_instrument_count(), h1_instrument_count() * 8);
     assert(h1_one == h1_two);
-    assert(h1_instrument_count() == 10);
-    printf("PASS: dual-core bit-exactness across all 80 presets!\n");
+    assert(h1_instrument_count() == 12);
+    printf("PASS: dual-core bit-exactness across all 96 presets!\n");
 
     /* 1b) MONO mono-legato verification: overlapping keys stay 1 active voice & glide cleanly */
     {

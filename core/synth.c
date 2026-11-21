@@ -9,13 +9,14 @@ H1State st;
 Voice voices[NVOICE];
 uint32_t eng_rng = 0x2F6E2B1u;
 
-const InstDef *const insts[NINST] = {
+const InstDef *const insts[] = {
     &inst_fm4, &inst_electric, &inst_stack, &inst_analog, &inst_shaper,
-    &inst_wire, &inst_haze, &inst_mono, &inst_kit, &inst_perc
+    &inst_wire, &inst_haze, &inst_mono, &inst_kit, &inst_perc, &inst_wave, &inst_chip
 };
+typedef char a22_insts_all[sizeof insts / sizeof insts[0] == NINST ? 1 : -1];
 
 /* Per-algorithm gain trim calibrated via 88-WAV RMS QA so all 80 presets sit evenly (~-19.5 dBFS) */
-static const f32 algo_gain[NINST][NALGO] = {
+static const f32 algo_gain[][NALGO] = {
     /* 0 FM-4      */ {1.05f, 1.00f, 1.00f, 1.25f, 1.20f, 1.12f, 1.38f, 1.35f},
     /* 1 ELECTRIC  */ {1.25f, 1.22f, 1.55f, 1.65f, 1.72f, 1.25f, 1.12f, 1.32f},
     /* 2 STACK   */ {1.30f, 2.15f, 1.05f, 1.25f, 1.38f, 1.58f, 1.38f, 1.48f},
@@ -26,7 +27,10 @@ static const f32 algo_gain[NINST][NALGO] = {
     /* 7 MONO   */ {1.92f, 1.58f, 1.38f, 1.24f, 1.24f, 1.20f, 1.44f, 1.28f},
     /* 8 KIT      */ {1.25f, 1.42f, 1.45f, 1.42f, 1.40f, 1.45f, 1.45f, 1.75f},
     /* 9 PERC      */ {1.12f, 1.32f, 1.14f, 1.38f, 2.10f, 1.10f, 1.14f, 1.92f},
+    /* 10 WAVE     */ {0.47f, 0.60f, 0.54f, 1.12f, 0.50f, 0.61f, 0.57f, 0.48f},
+    /* 11 CHIP     */ {0.50f, 0.53f, 0.39f, 0.55f, 0.50f, 0.52f, 1.10f, 0.58f},
 };
+typedef char a22_gain_rows[sizeof algo_gain / sizeof algo_gain[0] == NINST ? 1 : -1];
 
 static f32 SR = 44100.0f, ISR = 1.0f / 44100.0f;
 static int cur_i, cur_trk;
