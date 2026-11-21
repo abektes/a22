@@ -291,9 +291,11 @@ footer .sep { flex: 1 1 auto; }
 .index h2:first-child { margin-top: 0; }
 .index ul { list-style: none; margin: 0; padding: 0; }
 .index li a { display: flex; align-items: center; gap: 10px; padding: 3px 0; text-decoration: none; color: var(--ink); }
-.index li a:hover { text-decoration: underline; }
+.index li a:hover { text-decoration: none; }
+.index li a:hover .nm { text-decoration: underline; }
 .swatch { width: 18px; height: 18px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700;
-  background: var(--ink-c); border: 1px solid rgb(20 23 28 / .25); border-radius: 2px; flex: none; }
+  line-height: 1; padding-bottom: .09em; background: var(--ink-c); border: 1px solid rgb(20 23 28 / .25); border-radius: 2px; flex: none;
+  text-decoration: none; }
 .pages { padding: 0 var(--gutter) 64px; min-width: 0; }
 .chapter { padding: 64px 0 24px; max-width: 980px; scroll-margin-top: 16px; }
 .chapter > h2 { font-size: clamp(32px, 3.6vw, 46px); margin-bottom: 14px; }
@@ -552,7 +554,7 @@ def front():
 
 
 def manual():
-    idx_banks = "".join(f'<li><a href="#{bank_id(i)}"><span class="swatch" style="--ink-c:{hexc(ink)}">{BANKS[i]}</span>{esc(n)}</a></li>'
+    idx_banks = "".join(f'<li><a href="#{bank_id(i)}"><span class="swatch" style="--ink-c:{hexc(ink)}">{BANKS[i]}</span><span class="nm">{esc(n)}</span></a></li>'
                         for i, (n, ink, *_) in enumerate(ENGINES))
     chapters = [("controls", "Controls"), ("tape", "Tape and sequencers"), ("effects", "Effects"),
                 ("pages", "Pages"), ("usb", "USB audio and MIDI"), ("install", "Install and recovery"),
