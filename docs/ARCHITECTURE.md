@@ -15,7 +15,7 @@ port/rfm1/   the core as an .rfm1 (WebAssembly behind the fm1core ABI) for the F
 port/host/   a script runner that writes images and WAVs: where art is tuned and tests run
 app/         the device, on fm1-base (base/, a submodule): built by ./build.sh
 tools/       build scripts, and samples/, which cuts the recordings down to what the firmware carries
-dist/        h1.rfm1, the build the simulator loads
+dist/        a22.rfm1, the build the simulator loads
 ```
 
 ## The rule that keeps the simulator honest
@@ -302,7 +302,7 @@ that came out of it:
 ## Building
 
 - `tools/build_host.sh` then `build/h1host OUTDIR script...` for images and WAVs.
-- `tools/build_rfm1.sh [VERSION]` for `dist/h1.rfm1` (clang with the wasm32 target and wasm-ld). Run it in the
+- `tools/build_rfm1.sh [VERSION]` for `dist/a22.rfm1` (clang with the wasm32 target and wasm-ld). Run it in the
   [FM-1 browser simulator](https://github.com/jakehandy/fm1-browser-simulator): open the page and drop the file
   on it, or run `tools/update-h1.sh` there to make it the built-in firmware.
 - `./build.sh` builds the device package: fm1-base's `tools/build.py` with `app/` as the app.

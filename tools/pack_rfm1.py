@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turns build/h1-core.wasm into dist/h1.rfm1: adds the custom sections the .rfm1 format asks for
+"""Turns build/a22-core.wasm into dist/a22.rfm1: adds the custom sections the .rfm1 format asks for
 (the "rfm1" manifest, "rfm1.credits", "rfm1.license.0") and checks the module first: its only
 imports may be WASI's, its memory fixed in size, and every required export present.
 
@@ -99,7 +99,7 @@ wasm = open(os.path.join(root, "build/a22-core.wasm"), "rb").read()
 mem = check(wasm)
 manifest = {"rfm1": 1, "abi": 6, "id": "a22", "name": "A22", "version": a.version,
             "license": "MIT",
-            "source_url": "https://github.com/jakehandy/h1" + ("@" + commit if commit else ""),
+            "source_url": "https://github.com/abektes/a22" + ("@" + commit if commit else ""),
             "authors": ["A22", "Jake Handy"], "built_by": "A22 tools/build_rfm1.sh, clang wasm32",
             "memory_mib": mem // (1024 * 1024)}
 out = wasm + section("rfm1", json.dumps(manifest, indent=1).encode())
