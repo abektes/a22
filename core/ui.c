@@ -366,9 +366,9 @@ static void set_track(int t)
 {
     t = (t % NTRACK + NTRACK) % NTRACK;
     st.track = (uint8_t)t;
+    /* (the engine keeps the outgoing track's engine and algorithm, and brings the new one's, in that order:
+     * changing st.inst here first had the outgoing track keep the incoming one's) */
     eng_post(EV_TRACK, t);
-    st.inst = st.trk[t].inst < NINST ? st.trk[t].inst : 0;
-    st.ip[st.inst].algo = st.trk[t].algo & 7;
     vis.fresh = 1;
     toast("TRACK ", t + 1, 1, 0, -1);
     mark_dirty();

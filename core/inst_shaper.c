@@ -93,6 +93,7 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
     f32 f, d0, d1, dm, fc;
     f32 p0 = v->ph[0], p1 = v->ph[1], pm = v->ph[2];
     f32 plk = (algo == 3) ? exp2fx(-v->age * 2.2f) : 1.0f;
+    f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f), isteps = 1.0f / steps;   /* CRUSH's phase steps */
     PdWarp kw = pd_warp_k(warp);
     PdPulse kp = pd_pulse_k(warp * (algo == 3 ? plk : 0.8f));
     Svf fl;
@@ -171,9 +172,8 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
                 break;
             default: /* CRUSH: stepped digital phase-quantized wavefolder */
             {
-                f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f);
-                f32 q0 = (f32)(int)(p0 * steps) / steps;
-                f32 q1 = (f32)(int)(p1 * steps) / steps;
+                f32 q0 = (f32)(int)(p0 * steps) * isteps;
+                f32 q1 = (f32)(int)(p1 * steps) * isteps;
                 xl = fold_sin(tsin(q0) * fold_g + b0) - dc0;
                 xr = fold_sin(tsin(q1) * fold_g + b0) - dc0;
                 break;
