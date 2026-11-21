@@ -8,6 +8,9 @@ layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.
 
 A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
 
+**[The guide and website](https://abektes.github.io/a22/)** · **[Play it in your browser](https://abektes.github.io/a22/sim/)** ·
+**[Download](https://github.com/abektes/a22/releases/latest)** · **[☕ Buy me a coffee](https://buymeacoffee.com/abektes)**
+
 <p>
 <img src="docs/img/a22/fm4.png" width="120" alt="FM-4"> <img src="docs/img/a22/electric.png" width="120" alt="ELECTRIC"> <img src="docs/img/a22/stack.png" width="120" alt="STACK"> <img src="docs/img/a22/analog.png" width="120" alt="ANALOG"> <img src="docs/img/a22/shaper.png" width="120" alt="SHAPER">
 <img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
@@ -232,7 +235,7 @@ These come from fm1-base, which A22 is built on:
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, the
   algorithm, the page and each control's value as it changes.
 - Package identity `FM-1_4122`. A release X.Y.Z answers `FM-1_4122XXYYZZ`.
-- The development build's image is 252 KB and uses 437 KB of the chip's 475 KB of SRAM.
+- The firmware's image is 406 KB of its 568 KB flash slot and uses 440 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 
@@ -267,6 +270,11 @@ tests/   the device app in fm1-base's host simulator, the core alone, and the cr
 
 `docs/ARCHITECTURE.md` and `docs/RESEARCH.md` come from h1 and describe its instruments, but the
 platform, the two cores and the hardware notes still apply.
+
+## Support
+
+A22 is free and stays free. If it gave you a good evening, you can
+[buy me a coffee](https://buymeacoffee.com/abektes).
 
 ## Licence
 
