@@ -1,6 +1,6 @@
 # A22
 
-Custom firmware for the M-VAVE FM-1: an FM workstation. Ten synth and drum engines, each with eight
+Custom firmware for the M-VAVE FM-1: an FM workstation. Twelve synth and drum engines, each with eight
 algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
 four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
 sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
@@ -11,6 +11,7 @@ A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and buil
 <p>
 <img src="docs/img/a22/fm4.png" width="120" alt="FM-4"> <img src="docs/img/a22/electric.png" width="120" alt="ELECTRIC"> <img src="docs/img/a22/stack.png" width="120" alt="STACK"> <img src="docs/img/a22/analog.png" width="120" alt="ANALOG"> <img src="docs/img/a22/shaper.png" width="120" alt="SHAPER">
 <img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
+<img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP">
 </p>
 
 > **A22 is early.** It has been installed and run on one FM-1 (every engine, effect and the tape driven over
@@ -34,6 +35,8 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 | **MONO** | monophonic leads and basses, with glide | ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER | FM-BITE, CUTOFF, GLIDE, SUB-DRV |
 | **KIT** | drum kits, a drum on every note of the octave | 808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD | TUNE, DECAY, PUNCH, FM-GRIT |
 | **PERC** | tuned percussion | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
+| **WAVE** | wavetables: eight banks of eight waves, morphing | HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL | WAVE, SCAN, SPREAD, FILTER |
+| **CHIP** | 8-bit console voices: pulses, stepped triangle, noise, arpeggios | PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET | DUTY, SWEEP, ARP, CRUSH |
 
 ## Effects
 

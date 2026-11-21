@@ -5,7 +5,7 @@
   "author": "A22",
   "license": "MIT",
   "tagline": "FM workstation for the FM-1",
-  "description": "FM-first custom firmware for the M-VAVE FM-1 with 4-color vector graphics, 10 flagship synth & drum engines (FM-4, Electric, Stack, Analog, Shaper, Wire, Haze, Mono, Kit, Perc), 8 selectable FX, 4-track virtual tape, mixer, and Riff/Shake sequencers.",
+  "description": "FM-first custom firmware for the M-VAVE FM-1 with 4-color vector graphics, 12 synth & drum engines (FM-4, Electric, Stack, Analog, Shaper, Wire, Haze, Mono, Kit, Perc, Wave, Chip), 8 selectable FX, 4-track virtual tape, mixer, and Riff/Shake sequencers.",
   "tags": ["synth", "fm", "groovebox", "sequencer"],
   "install": "https://github.com/abektes/a22#install",
   "source": "https://github.com/abektes/a22",

@@ -1,5 +1,5 @@
 {
-  "what": "A22: an FM workstation for the FM-1. Ten synthesised engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC), each with eight algorithms and four live knobs, drawn in colour vector graphics. Eight effects, a four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step sequencer and eight patch snapshots. Derived from h1 by Jake Handy.",
+  "what": "A22: an FM workstation for the FM-1. Twelve synthesised engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC, WAVE, CHIP), each with eight algorithms and four live knobs, drawn in colour vector graphics. Eight effects, a four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step sequencer and eight patch snapshots. Derived from h1 by Jake Handy.",
   "author": "A22",
   "kinds": [
     "synth"

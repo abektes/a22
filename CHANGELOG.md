@@ -8,10 +8,14 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
 
 **Sound**
-- Ten engines in place of h1's sixteen instruments, synthesised but for KIT's short drum recordings (h1's
+- Twelve engines in place of h1's sixteen instruments, synthesised but for KIT's short drum recordings (h1's
   PLUNK hits, CC0): FM-4, ELECTRIC,
-  STACK, ANALOG, SHAPER, WIRE, HAZE, MONO (monophonic, with glide), KIT and PERC. Each has
-  eight algorithms, and each algorithm keeps its own four knobs.
+  STACK, ANALOG, SHAPER, WIRE, HAZE, MONO (monophonic, with glide), KIT, PERC, WAVE and CHIP. Each has
+  eight algorithms, and each algorithm starts from its own four knobs and keeps them.
+- WAVE: eight banks of eight single-cycle waves (made by `tools/gen_wavetables.py`, stored integrated so
+  the bright ones don't alias), morphed with WAVE, moved along by SCAN as a note dies, spread in stereo.
+- CHIP: 8-bit console voices: band-limited pulses in sixteenth duty steps, a stepped triangle, a noise
+  register (long and short), arpeggios, pitch sweeps and CRUSH.
 - Eight selectable effects (PLATE, DELAY, FILTER, SHIFT, CHORUS, TANK, LOFI, THUMP) with a send from each
   track, and a master bus with a three-band EQ and drive.
 
