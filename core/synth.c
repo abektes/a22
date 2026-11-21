@@ -478,6 +478,7 @@ static int riff_rec, riff_at;
 typedef struct TBall {
     f32 x, y, vx, vy, hit, gate_t;
     uint8_t on, note, playing, bounces;
+    uint8_t gone;                 /* bounced out: off the picture, its last note still ringing out its gate */
 } TBall;
 static TBall tballs[NSHAKE];
 static f32 tomb_angle;
@@ -508,13 +509,12 @@ static void shake_drop(int note)
     int i, slot = 0;
     for (i = 0; i < NSHAKE; i++)
         if (!tballs[i].on) { slot = i; break; }
-    if (i == NSHAKE) {
-        /* reuse oldest ball */
+    if (i == NSHAKE)                             /* reuse a ball at random */
         slot = (int)(rng_next(&eng_rng) % NSHAKE);
-        if (tballs[slot].playing) {
-            voice_off(tballs[slot].note);
-            mout(0, tballs[slot].note, 0);
-        }
+    if (tballs[slot].playing) {
+        voice_off(tballs[slot].note);
+        mout(0, tballs[slot].note, 0);
+        seq_to_tape(tballs[slot].note, 0, 0);
     }
     tballs[slot].on = 1;
     tballs[slot].note = (uint8_t)iclamp(note, 0, 127);
@@ -526,6 +526,7 @@ static void shake_drop(int note)
     tballs[slot].gate_t = 0.0f;
     tballs[slot].playing = 0;
     tballs[slot].bounces = 0;
+    tballs[slot].gone = 0;
 }
 
 static void shake_clear(void)
@@ -535,8 +536,9 @@ static void shake_clear(void)
         if (tballs[i].playing) {
             voice_off(tballs[i].note);
             mout(0, tballs[i].note, 0);
+            seq_to_tape(tballs[i].note, 0, 0);
         }
-        tballs[i].on = tballs[i].playing = 0;
+        tballs[i].on = tballs[i].playing = tballs[i].gone = 0;
     }
 }
 
@@ -561,6 +563,10 @@ static void shake_tick(f32 dt)
                 seq_to_tape(b->note, 0, 0);
                 b->playing = 0;
             }
+        }
+        if (b->gone) {                           /* (its note over, the ball is free) */
+            if (!b->playing) b->on = b->gone = 0;
+            continue;
         }
         b->hit = maxf(0.0f, b->hit - dt * 5.0f);
         b->vy += grav * dt;
@@ -599,7 +605,7 @@ static void shake_tick(f32 dt)
                         b->gate_t = 0.14f;
                         b->bounces++;
                         if (!st.keys[3] && nheld == 0 && b->bounces > 5) {
-                            b->on = 0;
+                            b->gone = 1;         /* out: the note it just struck still ends */
                             break;
                         }
                     }
@@ -2017,7 +2023,7 @@ void eng_snapshot(Vis *vis)
     vis->scope = scope;
     vis->scope_pos = (int)(scope_w & (SCOPE_N - 1));
     for (i = 0; i < NSHAKE; i++) {
-        vis->balls[i].on = tballs[i].on;
+        vis->balls[i].on = tballs[i].on && !tballs[i].gone;
         vis->balls[i].note = tballs[i].note;
         vis->balls[i].x = tballs[i].x;
         vis->balls[i].y = tballs[i].y;

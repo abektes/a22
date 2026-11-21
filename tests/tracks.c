@@ -78,6 +78,32 @@ static void midi_note_off_through_mode_change(int d, const char *what)
     h1_midi_out(0);
 }
 
+/* SHAKE: keys dropped as balls, let go; once the balls have bounced out, every note they played has ended,
+ * on the FM-1 and over MIDI out */
+static void shake_balls_end_their_notes(void)
+{
+    int k;
+    fresh();
+    memset(midi_open, 0, sizeof midi_open);
+    h1_midi_out(midi_count);
+    h1_control_set(H1_ENC_PRESET, 0);
+    go(30);
+    arp_mode(2);                                 /* OFF, RIFF, SHAKE */
+    go(30);
+    CHECK(st.ip[st.inst].arp[0] == ARP_SHAKE, "EDIT + ALGORITHM turned the mode to SHAKE");
+    for (k = 0; k < 6; k++) {
+        h1_key(4 + k * 2, 1);
+        go(60);
+        h1_key(4 + k * 2, 0);
+        go(60);
+    }
+    go(30000);
+    CHECK(midi_hanging() == 0, "SHAKE's balls send every note off over MIDI out when they bounce out");
+    CHECK(h1_voices_active() == 0u, "SHAKE's balls let go of every note when they bounce out");
+    arp_mode(-2);
+    h1_midi_out(0);
+}
+
 static void arp_mode(int d)                      /* EDIT held, ALGORITHM turned */
 {
     h1_button(H1_BTN_EDIT, 1);
@@ -260,6 +286,7 @@ int main(void)
     pattern_lanes_show_each_track();
     midi_note_off_through_mode_change(3, "a key held from OFF into UP sends its note off over MIDI out");
     midi_note_off_through_mode_change(2, "a key held from OFF into SHAKE sends its note off over MIDI out");
+    shake_balls_end_their_notes();
     printf("tracks: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

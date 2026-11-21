@@ -53,6 +53,9 @@ Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
 - A key held while the track or the sequencer mode changed never let go of its note.
 - A key pressed with the sequencer OFF and let go after the mode changed sent no note off over MIDI out, so
   a synth listening kept the note on (jakehandy/h1#56).
+- A SHAKE ball that bounced out left the note it had just struck sounding for good, on the FM-1 and over
+  MIDI out. It now leaves the picture and lets its note ring out first; a reused ball also ends its note
+  on the tape.
 - The tape's knob automation and varispeed (with pitch following speed) reached the other tracks' recorded
   parts but not the track in hand's.
 - The white keys show all of a 64-step pattern (only its first 32 steps lit before), and the tape's notes and
