@@ -6,14 +6,13 @@
 extern f32 sin_tab[SIN_N + 1];
 void dsp_init(void);
 
-/* sin(2*pi*t) from table, t in turns, any finite value */
+/* sin(2*pi*t) from table, t in turns, any finite value (|t| < 2^20). The turn's whole part is not taken off first:
+ * scaling by SIN_N is exact, the mask drops the whole turns, and the fraction comes out the same to the bit, with
+ * one float-to-int conversion where there were two. */
 static inline f32 tsin(f32 t)
 {
-    f32 x;
-    int32_t i;
-    t -= (f32)ifloor(t);
-    x = t * (f32)SIN_N;
-    i = (int32_t)x;
+    f32 x = t * (f32)SIN_N;
+    int32_t i = ifloor(x);
     x -= (f32)i;
     i &= SIN_N - 1;
     return sin_tab[i] + (sin_tab[i + 1] - sin_tab[i]) * x;
