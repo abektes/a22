@@ -2043,7 +2043,24 @@ void eng_seq_info(SeqInfo *si)
     for (t = 0; t < NTRACK; t++)
         for (c = 0; c < 32; c++)
             si->trk_dens[t][c] = 0;
-    if (loop_len > 0.0f) {
+    if (st.seq[0] == SEQ_STEP) {
+        /* the PATTERN page's lanes: the steps' notes by their track, and the place in the pattern (the tape's
+         * notes, which these lanes showed before, are not what plays in STEP) */
+        int n = step_count(), j;
+        si->loop_in = 0.0f;
+        si->loop_out = 1.0f;
+        if (step_playing && n > 0) {
+            int at = imin(step_at, n - 1);
+            si->loop_pos = sat(((f32)at + sat(step_acc / maxf(1.0f, step_len(at)))) / (f32)n);
+        } else
+            si->loop_pos = step_write && n > 0 ? sat((f32)imin(step_cursor, n - 1) / (f32)n) : 0.0f;
+        for (i = 0; i < n; i++)
+            for (j = 0; j < NSNOTE; j++)
+                if (st.steps[i][j]) {
+                    uint8_t *d = &si->trk_dens[st.step_trk[i][j] & 3][i * 32 / n];
+                    if (*d < 15) (*d)++;
+                }
+    } else if (loop_len > 0.0f) {
         for (i = 0; i < ne && i < NLEV; i++) {
             if ((lev[i].flags & 7) == LEV_ON) {
                 int col = iclamp((int)((f32)lev[i].tick * 32.0f / loop_len), 0, 31);

@@ -190,12 +190,36 @@ static void varispeed_reaches_the_track_in_hand(void)
     CHECK(one > 20 && two > one * 17 / 10 && two < one * 23 / 10, what);
 }
 
+/* the PATTERN page's lanes show each track's steps (they showed the tape's notes, so only a track with a tape
+ * recording ever lit) */
+static void pattern_lanes_show_each_track(void)
+{
+    SeqInfo si;
+    int t, c, n[4] = {0, 0, 0, 0};
+    fresh();
+    h1_button(H1_BTN_SEQ, 1); go(800); h1_button(H1_BTN_SEQ, 0); go(50);   /* hold SEQ: STEP */
+    CHECK(st.seq[0] == SEQ_STEP, "holding SEQ swaps the tape for the step sequencer");
+    for (t = 0; t < 3; t++) {
+        if (t) { track(1); go(30); }
+        h1_button(H1_BTN_REC, 1); h1_button(H1_BTN_REC, 0); go(30);
+        h1_key(7 + 2 * t, 1); go(60); h1_key(7 + 2 * t, 0); go(60);
+        h1_button(H1_BTN_REC, 1); h1_button(H1_BTN_REC, 0); go(30);
+    }
+    eng_seq_info(&si);
+    for (t = 0; t < 4; t++)
+        for (c = 0; c < 32; c++)
+            n[t] += si.trk_dens[t][c];
+    CHECK(n[0] > 0 && n[1] > 0 && n[2] > 0, "steps written on T1, T2 and T3 each show in their own lane");
+    CHECK(n[3] == 0, "T4, with no steps, shows none");
+}
+
 int main(void)
 {
     tracks_keep_their_engines();
     held_keys_let_go();
     leds_show_the_pattern();
     varispeed_reaches_the_track_in_hand();
+    pattern_lanes_show_each_track();
     printf("tracks: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
