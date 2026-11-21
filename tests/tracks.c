@@ -1,6 +1,6 @@
 /* a22's tracks, as a hand moves between them: each of T1..T4 keeps the engine and algorithm it was given when
  * EDIT + PRESETS goes to another and back; a key held while the track, the engine or the sequencer mode changes
- * still lets go of its note; the tape's knob automation and varispeed reach the recorded part on the track in
+ * still lets go of its note, on the FM-1 and over MIDI out; the tape's knob automation and varispeed reach the recorded part on the track in
  * hand too; the white keys show all of a 64-step pattern, and the tape. Run by tests/run_tests.sh. */
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +38,44 @@ static void track(int d)                         /* EDIT held, PRESETS turned, E
     h1_button(H1_BTN_EDIT, 1);
     h1_encoder(H1_ENC_PRESET, d);
     h1_button(H1_BTN_EDIT, 0);
+}
+
+static void arp_mode(int d);
+
+/* MIDI out, counted: notes the FM-1 sent on that it has not sent off */
+static int midi_open[128];
+static void midi_count(uint8_t status, uint8_t d1, uint8_t d2)
+{
+    if ((status & 0xF0) == 0x90 && d2) midi_open[d1 & 127]++;
+    else if ((status & 0xF0) == 0x80 || (status & 0xF0) == 0x90) midi_open[d1 & 127]--;
+}
+static int midi_hanging(void)
+{
+    int i, n = 0;
+    for (i = 0; i < 128; i++)
+        if (midi_open[i] > 0) n++;
+    return n;
+}
+
+/* a key pressed with the sequencer OFF, the mode turned (d) while it is held, then let go (jakehandy/h1#56) */
+static void midi_note_off_through_mode_change(int d, const char *what)
+{
+    fresh();
+    memset(midi_open, 0, sizeof midi_open);
+    h1_midi_out(midi_count);
+    h1_control_set(H1_ENC_PRESET, 0);
+    go(30);
+    h1_key(7, 1);
+    go(100);
+    CHECK(midi_hanging() == 1, "a key sends its note on over MIDI out");
+    arp_mode(d);
+    go(30);
+    h1_key(7, 0);
+    go(2000);
+    CHECK(midi_hanging() == 0, what);
+    CHECK(h1_voices_active() == 0u, "and its own voice lets go");
+    arp_mode(-d);
+    h1_midi_out(0);
 }
 
 static void arp_mode(int d)                      /* EDIT held, ALGORITHM turned */
@@ -220,6 +258,8 @@ int main(void)
     leds_show_the_pattern();
     varispeed_reaches_the_track_in_hand();
     pattern_lanes_show_each_track();
+    midi_note_off_through_mode_change(3, "a key held from OFF into UP sends its note off over MIDI out");
+    midi_note_off_through_mode_change(2, "a key held from OFF into SHAKE sends its note off over MIDI out");
     printf("tracks: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

@@ -51,6 +51,8 @@ Identity `FM-1_4122000100`. Not released. Installed and run on one FM-1.
 - Changing track (EDIT + PRESETS) kept the new track's engine and algorithm on the old one: going round
   T1 to T4 left each with the next one's engine. Each track keeps its own now.
 - A key held while the track or the sequencer mode changed never let go of its note.
+- A key pressed with the sequencer OFF and let go after the mode changed sent no note off over MIDI out, so
+  a synth listening kept the note on (jakehandy/h1#56).
 - The tape's knob automation and varispeed (with pitch following speed) reached the other tracks' recorded
   parts but not the track in hand's.
 - The white keys show all of a 64-step pattern (only its first 32 steps lit before), and the tape's notes and

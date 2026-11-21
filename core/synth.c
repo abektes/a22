@@ -736,8 +736,10 @@ static void route(int note, int on, int vel, int from_midi)
                     found = 1;
                     break;
                 }
-            if (!found)
-                voice_off(note);                 /* (pressed before the mode changed: its own voice) */
+            if (!found) {                        /* (pressed before the mode changed: its own voice, */
+                voice_off(note);                 /*  and the note on MIDI out it sent then) */
+                if (!from_midi) mout(0, note, 0);
+            }
         }
         return;
     }
@@ -763,8 +765,10 @@ static void route(int note, int on, int vel, int from_midi)
                 found = 1;
                 break;
             }
-        if (!found)
-            voice_off(note);                     /* (pressed before the mode changed: its own voice) */
+        if (!found) {                            /* (pressed before the mode changed: its own voice, */
+            voice_off(note);                     /*  and the note on MIDI out it sent then) */
+            if (!from_midi) mout(0, note, 0);
+        }
     }
 }
 
