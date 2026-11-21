@@ -11,6 +11,7 @@ on:
       - web/**
       - dist/a22.rfm1
       - docs/img/a22/**
+      - site/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 

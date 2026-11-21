@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Builds A22's website into a folder: the guide (index.html), the engines' pictures and the browser simulator.
+"""Builds A22's website into a folder: the front page (index.html), the manual (manual.html), the engines'
+screen captures, the FM-1's own Barlow lettering (site/fonts) and the browser simulator.
 
     python3 tools/build_site.py OUT
 
 .github/workflows/pages.yml runs it and publishes OUT to GitHub Pages (https://abektes.github.io/a22/). The
 simulator is web/ with dist/a22.rfm1 beside it, as the repository lays them out (it loads ../dist/a22.rfm1).
+The look is a synth's voice-ROM catalogue: twelve banks (A to L, one an engine) of eight voices.
 """
 import html
 import os
@@ -16,8 +18,9 @@ REPO = "https://github.com/abektes/a22"
 RELEASE = REPO + "/releases/latest"
 COFFEE = "https://buymeacoffee.com/abektes"
 HUB = "https://thefirmwarehub.com"
+SIM = "sim/"
+BANKS = "ABCDEFGHIJKL"
 
-KNOB_COLORS = ["var(--k1)", "var(--k2)", "var(--k3)", "var(--k4)"]
 
 # name, ink, picture, what it is, [(knob, what it does) x4], [(algorithm, what it is) x8]
 ENGINES = [
@@ -66,7 +69,10 @@ ENGINES = [
     ("HAZE", (155, 118, 255), "haze", "Evolving ambient textures: FM pairs through moving vowel formants, with a shimmer on top.",
      [("MORPH", "hollow and pure to rich, moving FM"), ("FORMANT", "the two formants sweep OO, OH, AH, EH, EE"),
       ("DRIFT", "tape wow and flutter, the stereo drifting"), ("SHIMMER", "a crystalline octave above")],
-     [("AETHER", ""), ("VOX", ""), ("SOLAR", ""), ("ICE", ""), ("MIST", ""), ("ABYSS", ""), ("PRISM", ""), ("GHOST", "")]),
+     [("AETHER", "an octave modulator over a fifth, airy and open"), ("VOX", "the most vowel: a voice inside the drone"),
+      ("SOLAR", "a bright twelfth shimmering over a sub-octave"), ("ICE", "inharmonic, glassy FM with two octaves of shimmer"),
+      ("MIST", "the softest: little FM, wide and breathy"), ("ABYSS", "an octave down with a low modulator, dark"),
+      ("PRISM", "a third-harmonic modulator, bright and faceted"), ("GHOST", "ratios a hair off true, beating, the widest drift")]),
     ("MONO", (255, 107, 26), "mono", "Monophonic leads and basses, legato, with glide and a ladder filter.",
      [("FM-BITE", "FM punch and a snarling edge"), ("CUTOFF", "the ladder filter"),
       ("GLIDE", "slide time, snappy to a liquid 303 slide"), ("SUB-DRV", "sub weight, resonance and drive")],
@@ -142,355 +148,531 @@ FAQ = [("Will it brick my FM-1?",
        ("Do my settings survive an update?",
         "Yes, unless a release changes how settings are stored; its notes say so. Your recorded tape is kept either way."),
        ("Can I record it into my computer?",
-        "Yes. Over one USB cable the FM-1 is an audio input (the whole mix at the MASTER volume) and a MIDI port: notes in at their velocity, CC 20 to 23 for the knobs, and the keys, arpeggiator and tape out on channel 1."),
-       ("Is it related to h1?",
-        "A22 is derived from h1 by Jake Handy, with its own engines, a four-track tape, effects, a mixer and colour pictures. It is built on fm1-base by Charles Vestal and felucca-bsp from Felucca by Leo Kuroshita.")]
+        "Yes. Over one USB cable the FM-1 is an audio input (the whole mix at the MASTER volume) and a MIDI port: notes in at their velocity, CC 20 to 23 for the knobs, and the keys, arpeggiator and tape out on channel 1.")]
+
 
 
 def esc(s):
     return html.escape(s, quote=True)
 
 
-def rgb(c):
-    return "rgb(%d %d %d)" % c
+def hexc(c):
+    return "#%02x%02x%02x" % c
 
 
-def engine_cards():
-    out = []
-    for name, ink, pic, what, knobs, algos in ENGINES:
-        kn = "".join(
-            f'<li><b style="--c:{KNOB_COLORS[i]}">{esc(k)}</b><span>{esc(d)}</span></li>' for i, (k, d) in enumerate(knobs))
-        al = "".join(f"<li><b>{esc(a)}</b>{(' <span>' + esc(d) + '</span>') if d else ''}</li>" for a, d in algos)
-        out.append(f"""
-      <article class="engine" id="engine-{esc(pic)}" style="--ink:{rgb(ink)}">
-        <img src="img/{esc(pic)}.png" width="240" height="240" alt="{esc(name)}'s picture on the FM-1's screen" loading="lazy">
-        <div class="engine-body">
-          <h3>{esc(name)}</h3>
-          <p>{esc(what)}</p>
-          <h4>Knobs</h4>
-          <ul class="knobs">{kn}</ul>
-          <h4>Algorithms</h4>
-          <ul class="algos">{al}</ul>
-        </div>
-      </article>""")
-    return "".join(out)
+def bank_id(i):
+    return "bank-" + BANKS[i].lower()
 
 
-def mosaic():
-    return "".join(f'<img src="img/{esc(p)}.png" width="240" height="240" alt="" style="--ink:{rgb(c)}">'
-                   for _, c, p, *_ in ENGINES)
+CSS = """
+@font-face { font-family: "Barlow SC"; src: url("fonts/BarlowSemiCondensed-Medium.ttf") format("truetype");
+  font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow SC"; src: url("fonts/BarlowSemiCondensed-Bold.ttf") format("truetype");
+  font-weight: 700; font-style: normal; font-display: swap; }
+:root {
+  color-scheme: light;
+  --paper: #e2e6eb; --sheet: #f5f7f9; --ink: #14171c; --ink-2: #485059; --rule: #b8bfc8; --rule-soft: #d2d7dd;
+  --k1: #3b9eff; --k2: #2cc96b; --k3: #ffffff; --k4: #ff6b1a;
+  --face: "Barlow SC", "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --gutter: clamp(16px, 4vw, 48px);
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); scrollbar-color: var(--rule) var(--paper); }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 500 18px/1.55 var(--face);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: var(--ink); color: var(--sheet); }
+a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 2px; }
+h1, h2, h3 { font-weight: 700; line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+p { margin: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+code, pre { font-family: var(--code); font-size: 15px; }
+img { display: block; image-rendering: pixelated; }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: var(--gutter); top: 8px; background: var(--sheet); padding: 8px 12px; z-index: 9; }
+
+/* the masthead: a catalogue's running head */
+.masthead { display: flex; align-items: baseline; gap: 28px; padding: 22px var(--gutter);
+  border-bottom: 1px solid var(--rule); }
+.masthead .mark { font-weight: 700; font-size: 24px; text-decoration: none; letter-spacing: 0; }
+.masthead nav { display: flex; gap: 24px; margin-left: auto; font-size: 17px; }
+.masthead nav a { color: var(--ink-2); text-decoration: none; }
+.masthead nav a:hover, .masthead nav a[aria-current] { color: var(--ink); text-decoration: underline; }
+
+/* the cover: bank tabs down the edge, the title, the open bank */
+.cover { display: grid; grid-template-columns: 92px minmax(0, 1fr); min-height: clamp(660px, calc(100svh - 74px), 940px); }
+.tabs { display: flex; flex-direction: column; padding: 0; margin: 0; position: sticky; top: 0; align-self: start;
+  height: calc(100svh - 74px); min-height: 540px; max-height: 940px; }
+.tab { flex: 1 1 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center;
+  align-items: flex-start; gap: 0; border: 0; border-bottom: 1px solid rgb(20 23 28 / .18);
+  background: var(--ink-c); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  padding: 4px 0 4px 14px; width: 66px; transition: width .28s cubic-bezier(.16, 1, .3, 1);
+  box-shadow: inset -1px 0 0 rgb(20 23 28 / .18); }
+.tab b { font-size: 22px; line-height: 1; }
+.tab span { font-size: 11px; letter-spacing: .04em; line-height: 1.35; }
+.tab:hover { width: 76px; }
+.tab[aria-selected="true"] { width: 92px; box-shadow: none; }
+.title { padding: clamp(32px, 6vh, 72px) var(--gutter) 0; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); align-items: end; gap: 18px 48px; }
+.title .side { display: grid; gap: 14px; }
+.title h1 { font-size: clamp(64px, 9vw, 96px); line-height: .9; letter-spacing: -0.02em; }
+.lede { font-size: clamp(20px, 2.2vw, 26px); line-height: 1.3; max-width: 34ch; margin-top: 14px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; background: var(--ink); color: var(--sheet);
+  font: 700 18px var(--face); padding: 14px 22px; border-radius: 3px; text-decoration: none; }
+.btn:hover { background: #2a2f37; color: var(--sheet); }
+.more { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; text-decoration: none; }
+.more svg, .btn svg { width: 16px; height: 16px; flex: none; }
+.more:hover { text-decoration: underline; }
+.small { font-size: 14px; color: var(--ink-2); line-height: 1.45; }
+
+/* the sheet's paper runs from the top of the cover beside the rail, so every open tab meets its page */
+.cover > .body { background: var(--sheet); margin: 0 var(--gutter) clamp(32px, 6vh, 64px) 0;
+  border: 1px solid var(--rule); border-left: 0; border-top: 0; border-radius: 0 0 3px 0; }
+.sheet { margin-top: clamp(28px, 5vh, 48px); }
+.bank { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 clamp(24px, 3vw, 44px);
+  padding: 0 clamp(20px, 3vw, 32px) clamp(20px, 3vw, 32px) var(--gutter); }
+.band { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  background: var(--ink-c); margin: 0 calc(-1 * clamp(20px, 3vw, 32px)) clamp(20px, 3vw, 28px) calc(-1 * var(--gutter));
+  padding: 12px clamp(20px, 3vw, 32px) 12px var(--gutter); border-block: 1px solid rgb(20 23 28 / .25); }
+.band h2 { font-size: clamp(28px, 3vw, 38px); display: flex; align-items: baseline; gap: 14px; }
+.band .code { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.voices th { text-align: left; font-size: 13px; font-weight: 700; color: var(--ink-2); padding: 0 10px 6px 0; }
+.bank[hidden] { display: none; }
+.screen { background: #000; padding: 10px; border-radius: 4px; align-self: start; }
+.screen img { width: 240px; height: 240px; }
+.bank .what { margin: 0 0 18px; max-width: 60ch; color: var(--ink-2); }
+.voices td { padding: 7px 10px 7px 0; border-top: 1px solid var(--rule-soft); vertical-align: baseline; }
+.voices tr:last-child td { border-bottom: 1px solid var(--rule-soft); }
+.voices .n { width: 3.2ch; color: var(--ink-2); }
+.voices .v { width: 11ch; font-weight: 700; }
+.voices .d { color: var(--ink-2); }
+.knobrow { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 16px; font-size: 16px; }
+.knob { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.dot { width: 11px; height: 11px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgb(20 23 28 / .35); }
+.bank .open { margin-top: 18px; font-size: 16px; }
+@keyframes print { from { opacity: .4; transform: translateY(4px); } }
+.printing .voices tr, .printing .screen { animation: print .42s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(var(--i, 0) * 28ms); }
+
+/* the pages after the cover */
+.part { padding: clamp(56px, 9vw, 112px) var(--gutter); border-top: 1px solid var(--rule); }
+.part > .inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(180px, .7fr);
+  gap: 28px clamp(32px, 5vw, 72px); }
+.part .note { font-size: 14px; color: var(--ink-2); line-height: 1.45; border-top: 1px solid var(--rule); padding-top: 14px; align-self: start; }
+.part .note p + p { margin-top: 10px; }
+.part h2 { font-size: clamp(30px, 3.4vw, 44px); }
+.part .aside { margin-top: 14px; max-width: 34ch; color: var(--ink-2); }
+.spec th, .spec td { text-align: left; vertical-align: baseline; padding: 14px 0; border-top: 1px solid var(--rule); }
+.spec tr:last-child th, .spec tr:last-child td { border-bottom: 1px solid var(--rule); }
+.spec th { width: 9.5em; padding-right: 20px; font-weight: 700; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 2.2em minmax(0, 1fr); gap: 4px 12px;
+  padding: 16px 0; border-top: 1px solid var(--rule); }
+.steps li:last-child { border-bottom: 1px solid var(--rule); }
+.steps li::before { content: counter(step); font-weight: 700; font-variant-numeric: tabular-nums; }
+.steps pre { grid-column: 2; margin: 8px 0 0; padding: 12px 14px; background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 3px; overflow-x: auto; }
+.prose p + p { margin-top: 14px; }
+.prose p { max-width: 64ch; }
+
+footer { padding: 28px var(--gutter) 44px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap;
+  gap: 8px 24px; font-size: 14px; color: var(--ink-2); }
+footer a { color: var(--ink-2); }
+footer .sep { flex: 1 1 auto; }
+
+/* the manual */
+.manual { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start; }
+.index { position: sticky; top: 0; max-height: 100svh; overflow-y: auto; padding: 28px 20px 28px var(--gutter);
+  border-right: 1px solid var(--rule); font-size: 16px; }
+.index h2 { font-size: 15px; letter-spacing: .02em; color: var(--ink-2); margin: 18px 0 8px; font-weight: 700; }
+.index h2:first-child { margin-top: 0; }
+.index ul { list-style: none; margin: 0; padding: 0; }
+.index li a { display: flex; align-items: center; gap: 10px; padding: 3px 0; text-decoration: none; color: var(--ink); }
+.index li a:hover { text-decoration: underline; }
+.swatch { width: 18px; height: 18px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: var(--ink-c); border: 1px solid rgb(20 23 28 / .25); border-radius: 2px; flex: none; }
+.pages { padding: 0 var(--gutter) 64px; min-width: 0; }
+.chapter { padding: 64px 0 24px; max-width: 980px; scroll-margin-top: 16px; }
+.chapter > h2 { font-size: clamp(32px, 3.6vw, 46px); margin-bottom: 14px; }
+.chapter > p { max-width: 64ch; color: var(--ink-2); }
+.mbank { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0 36px; padding: 40px 0;
+  border-top: 1px solid var(--rule); scroll-margin-top: 16px; }
+.mbank:first-of-type { border-top: 0; }
+.mbank h3 { font-size: 30px; display: flex; align-items: baseline; gap: 12px; }
+.mbank h3 .swatch { width: 1.2em; height: 1.2em; font-size: .7em; }
+.mbank .what { margin: 8px 0 16px; color: var(--ink-2); max-width: 62ch; }
+.mbank h4 { font-size: 15px; font-weight: 700; color: var(--ink-2); margin: 20px 0 4px; letter-spacing: .02em; }
+.knobs td { padding: 7px 12px 7px 0; border-top: 1px solid var(--rule-soft); vertical-align: baseline; }
+.knobs tr:last-child td { border-bottom: 1px solid var(--rule-soft); }
+.knobs .k { width: 10.5ch; font-weight: 700; white-space: nowrap; }
+.knobs .k .dot { display: inline-block; margin-right: 8px; vertical-align: -1px; }
+.knobs .d { color: var(--ink-2); }
+.chart td, .chart th { text-align: left; vertical-align: baseline; padding: 10px 16px 10px 0; border-top: 1px solid var(--rule-soft); }
+.chart tr:last-child td, .chart tr:last-child th { border-bottom: 1px solid var(--rule-soft); }
+.chart th { font-weight: 700; white-space: nowrap; width: 1%; }
+.chart td { color: var(--ink-2); }
+.chart thead th { color: var(--ink-2); font-size: 15px; border-top: 0; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 48px; }
+.two h3 { font-size: 22px; margin: 24px 0 8px; }
+.two p { color: var(--ink-2); }
+.chapter details { border-top: 1px solid var(--rule-soft); padding: 14px 0; max-width: 72ch; }
+.chapter details:last-of-type { border-bottom: 1px solid var(--rule-soft); }
+summary { cursor: pointer; font-weight: 700; }
+.chapter details p { margin-top: 8px; color: var(--ink-2); }
+.toc-toggle { display: none; }
+
+@media (max-width: 1180px) {
+  .part > .inner { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+  .part .note { grid-column: 2; }
+}
+@media (max-width: 980px) {
+  .manual { grid-template-columns: minmax(0, 1fr); }
+  .index { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--rule); padding: 0; }
+  .index > details { border: 0; padding: 14px var(--gutter); max-width: none; }
+  .index > details > div { padding-top: 6px; columns: 2; column-gap: 24px; }
+  .mbank { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 981px) { .index > details > summary { display: none; } }
+@media (max-width: 820px) {
+  .cover { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .tabs { flex-direction: row; overflow-x: auto; order: 2; position: static; height: auto; min-height: 0; max-height: none;
+    margin: 28px 0 0 var(--gutter); border: 1px solid var(--rule); border-right: 0; border-radius: 3px 0 0 0;
+    scroll-snap-type: x mandatory; scroll-padding-left: 0; }
+  .tab { width: auto; min-width: 54px; height: 64px; flex: 0 0 auto; border-bottom: 0; border-right: 1px solid rgb(20 23 28 / .18);
+    padding: 8px 9px; transition: none; scroll-snap-align: start; box-shadow: none; }
+  .tab:hover, .tab[aria-selected="true"] { width: auto; }
+  .tab[aria-selected="true"] { box-shadow: inset 0 -4px 0 var(--ink); }
+  .cover > .body { display: contents; }
+  .title { order: 1; grid-template-columns: minmax(0, 1fr); }
+  .sheet { order: 3; margin: 0 var(--gutter) 40px; background: var(--sheet); border: 1px solid var(--rule);
+    border-top: 0; border-radius: 0 0 3px 3px; }
+  .bank { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 0 18px 20px; }
+  .band { margin: 0 -18px 0; padding: 12px 18px; }
+  .title .side { gap: 12px; }
+  .part .note { grid-column: 1; }
+  .screen { justify-self: start; }
+  .part > .inner { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .voices thead { display: none; }
+  .voices tr { display: grid; grid-template-columns: 3.4ch minmax(0, 1fr); border-top: 1px solid var(--rule-soft); }
+  .voices tr:last-child { border-bottom: 1px solid var(--rule-soft); }
+  .voices td, .voices tr:last-child td { border: 0; }
+  .voices td.n { grid-row: 1 / span 2; padding-top: 8px; }
+  .voices td.v { padding: 8px 0 0; width: auto; }
+  .voices td.d { grid-column: 2; padding: 0 0 8px; }
+  .spec th { width: auto; display: block; border-top: 1px solid var(--rule); padding-bottom: 0; }
+  .spec td { display: block; border-top: 0; padding-top: 4px; }
+  .spec tr:last-child th { border-bottom: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab { transition: none; }
+  .printing .voices tr, .printing .screen { animation: none; }
+}
+"""
+
+ARROW = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 3.5 13.5 8 9 12.5" fill="none" '
+         'stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>')
+DOWN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v10M3.5 8.5 8 13l4.5-4.5M2.5 15h11" fill="none" '
+        'stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>')
+
+KNOB_VARS = ["var(--k1)", "var(--k2)", "var(--k3)", "var(--k4)"]
 
 
-def chips():
-    return "".join(f'<a href="#engine-{esc(p)}" style="--ink:{rgb(c)}">{esc(n)}</a>' for n, c, p, *_ in ENGINES)
-
-
-def page():
-    effects = "".join(f"<tr><th>{esc(n)}</th><td>{esc(d)}</td><td>{esc(k)}</td></tr>" for n, d, k in EFFECTS)
-    pages = "".join(f"<tr><th>{esc(n)}</th><td><kbd>{esc(b)}</kbd></td><td>{esc(c)}</td></tr>" for n, b, c in PAGES)
-    hot = "".join(f"<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>" for k, v in HOTKEYS)
-    faq = "".join(f"<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q, a in FAQ)
+def head(title, desc, extra_style=""):
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A22: an FM workstation for the M-VAVE FM-1</title>
-<meta name="description" content="A22 is free, open-source custom firmware for the M-VAVE FM-1: twelve synth and drum engines in colour, eight effects, a four-track tape, a mixer, Riff and Shake sequencers, USB audio and MIDI.">
-<meta property="og:title" content="A22: an FM workstation for the M-VAVE FM-1">
-<meta property="og:description" content="Twelve engines, eight effects, a four-track tape. Free custom firmware for the FM-1.">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(desc)}">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(desc)}">
 <meta property="og:image" content="img/fm4.png">
+<meta name="theme-color" content="#e2e6eb">
 <link rel="icon" href="img/fm4.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-<style>
-:root {{
-  color-scheme: dark;
-  --bg: #0a0b0e; --panel: #12141a; --panel-2: #181b22; --line: #262a33;
-  --text: #e9ecf1; --muted: #8d95a5;
-  --k1: #3b9eff; --k2: #2cc96b; --k3: #dfe4ec; --k4: #ff6b1a;
-  --coffee: #ffdd00;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --display: "Space Grotesk", system-ui, sans-serif;
-}}
-* {{ box-sizing: border-box; }}
-html {{ scroll-behavior: smooth; }}
-body {{ margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 var(--mono); }}
-a {{ color: var(--k1); }}
-a:hover {{ color: #7cc0ff; }}
-img {{ image-rendering: pixelated; }}
-.wrap {{ width: min(1120px, 100% - 32px); margin-inline: auto; }}
-header.top {{ position: sticky; top: 0; z-index: 5; background: rgb(10 11 14 / .86); backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line); }}
-header.top .wrap {{ display: flex; align-items: center; gap: 20px; height: 56px; }}
-.logo {{ font: 700 20px var(--display); color: var(--text); text-decoration: none; letter-spacing: .02em; }}
-.logo span {{ color: var(--k4); }}
-nav {{ display: flex; gap: 18px; margin-left: auto; font-size: 13px; overflow-x: auto; }}
-nav a {{ color: var(--muted); text-decoration: none; white-space: nowrap; }}
-nav a:hover {{ color: var(--text); }}
-.hero {{ display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 72px 0 56px; }}
-.hero h1 {{ font: 700 clamp(64px, 11vw, 132px)/0.9 var(--display); margin: 0 0 18px; letter-spacing: -.02em; }}
-.hero h1 .dot {{ color: var(--k4); }}
-.lede {{ font-size: 18px; color: var(--text); max-width: 34ch; margin: 0 0 10px; }}
-.sub {{ color: var(--muted); margin: 0 0 28px; max-width: 46ch; }}
-.ctas {{ display: flex; flex-wrap: wrap; gap: 10px; }}
-.btn {{ display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; border-radius: 10px; font: 600 14px var(--mono);
-  text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--panel); }}
-.btn:hover {{ border-color: #3a404c; color: var(--text); }}
-.btn.primary {{ background: var(--k4); border-color: var(--k4); color: #120700; }}
-.btn.primary:hover {{ background: #ff8a47; color: #120700; }}
-.btn.coffee {{ background: var(--coffee); border-color: var(--coffee); color: #1a1500; }}
-.btn.coffee:hover {{ background: #ffe84d; color: #1a1500; }}
-.mosaic {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }}
-.mosaic img {{ width: 100%; height: auto; border-radius: 8px; background: #000; outline: 1px solid var(--line);
-  transition: outline-color .2s, transform .2s; }}
-.mosaic img:hover {{ outline-color: var(--ink); transform: translateY(-2px); }}
-.facts {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px;
-  overflow: hidden; margin-bottom: 24px; }}
-.facts div {{ padding: 18px 16px; background: var(--panel); border-right: 1px solid var(--line); }}
-.facts div:last-child {{ border-right: 0; }}
-.facts b {{ display: block; font: 700 28px var(--display); }}
-.facts span {{ color: var(--muted); font-size: 13px; }}
-.chips {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 72px; }}
-.chips a {{ font-size: 12px; font-weight: 600; text-decoration: none; color: var(--ink); border: 1px solid currentColor;
-  border-radius: 999px; padding: 4px 11px; opacity: .85; }}
-.chips a:hover {{ opacity: 1; background: color-mix(in srgb, var(--ink) 12%, transparent); }}
-section {{ padding: 56px 0; border-top: 1px solid var(--line); }}
-.label {{ display: flex; gap: 14px; align-items: baseline; margin-bottom: 22px; }}
-.label .n {{ color: var(--k4); font-weight: 600; }}
-.label h2 {{ font: 700 clamp(26px, 4vw, 36px)/1.1 var(--display); margin: 0; }}
-section > .wrap > p, .prose p {{ max-width: 72ch; color: #cfd4dd; }}
-.engines {{ display: grid; gap: 18px; }}
-.engine {{ display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; padding: 20px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 16px; border-left: 3px solid var(--ink); scroll-margin-top: 72px; }}
-.engine img {{ width: 240px; height: 240px; border-radius: 10px; background: #000; }}
-.engine h3 {{ font: 700 26px var(--display); margin: 0 0 4px; color: var(--ink); }}
-.engine p {{ margin: 0 0 14px; color: #cfd4dd; }}
-.engine h4 {{ font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }}
-.knobs {{ list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }}
-.knobs li {{ display: flex; gap: 10px; font-size: 13px; }}
-.knobs b {{ color: var(--c); min-width: 9ch; }}
-.knobs span, .algos span {{ color: var(--muted); }}
-.algos {{ list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; font-size: 13px; }}
-.algos b {{ color: var(--text); margin-right: 6px; }}
-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-th, td {{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }}
-th {{ font-weight: 600; white-space: nowrap; }}
-td {{ color: #cfd4dd; }}
-kbd {{ font: 600 12px var(--mono); padding: 2px 7px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); }}
-dl.keys {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; margin: 0; }}
-dl.keys div {{ display: grid; grid-template-columns: 15ch 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }}
-dt {{ font-weight: 600; color: var(--k4); }}
-dd {{ margin: 0; color: #cfd4dd; font-size: 14px; }}
-.cols {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }}
-.card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }}
-.card h3 {{ font: 700 19px var(--display); margin: 0 0 8px; }}
-.card p, .card li {{ color: #cfd4dd; font-size: 14px; }}
-.card ul {{ padding-left: 18px; margin: 0; }}
-pre {{ background: #07080a; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }}
-details {{ border-bottom: 1px solid var(--line); padding: 14px 0; }}
-summary {{ cursor: pointer; font-weight: 600; }}
-details p {{ color: #cfd4dd; margin: 10px 0 0; max-width: 76ch; }}
-.support {{ display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap;
-  background: linear-gradient(120deg, #1b1706, var(--panel) 60%); border: 1px solid #3a3210; border-radius: 16px; padding: 24px 26px; }}
-.support h3 {{ font: 700 22px var(--display); margin: 0 0 4px; }}
-.support p {{ margin: 0; color: #cfd4dd; }}
-footer {{ border-top: 1px solid var(--line); padding: 32px 0 56px; color: var(--muted); font-size: 13px; }}
-footer p {{ margin: 6px 0; max-width: 90ch; }}
-:focus-visible {{ outline: 2px solid var(--k4); outline-offset: 2px; border-radius: 4px; }}
-@media (max-width: 900px) {{
-  .hero {{ grid-template-columns: minmax(0, 1fr); padding-top: 48px; }}
-  .facts {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-  .facts div {{ border-bottom: 1px solid var(--line); }}
-  .engine {{ grid-template-columns: minmax(0, 1fr); }}
-  .engine img {{ width: 100%; max-width: 240px; height: auto; }}
-  dl.keys, .cols {{ grid-template-columns: minmax(0, 1fr); }}
-  nav {{ display: none; }}
-}}
-@media (max-width: 560px) {{
-  .knobs, .algos {{ grid-template-columns: minmax(0, 1fr); }}
-  .ctas .btn {{ flex: 1 1 100%; justify-content: center; }}
-  .facts div:nth-child(5) {{ grid-column: 1 / -1; }}
-  dl.keys div {{ grid-template-columns: minmax(0, 1fr); gap: 2px; }}
-  th, td {{ padding: 8px 6px; }}
-  table.wide td:nth-child(2) {{ display: none; }}
-}}
-@media (prefers-reduced-motion: reduce) {{ html {{ scroll-behavior: auto; }} .mosaic img {{ transition: none; }} }}
-</style>
+<link rel="preload" href="fonts/BarlowSemiCondensed-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/BarlowSemiCondensed-Medium.ttf" as="font" type="font/ttf" crossorigin>
+<style>{CSS}{extra_style}</style>
 </head>
 <body>
-<header class="top">
-  <div class="wrap">
-    <a class="logo" href="#">A22<span>.</span></a>
-    <nav aria-label="Sections">
-      <a href="#engines">Engines</a><a href="#controls">Controls</a><a href="#tape">Tape</a>
-      <a href="#effects">Effects</a><a href="#usb">USB</a><a href="#install">Install</a><a href="#faq">FAQ</a>
-      <a href="sim/">Simulator</a>
-    </nav>
-  </div>
+<a class="skip" href="#main">Skip to content</a>
+"""
+
+
+def masthead(current):
+    def link(href, label, key):
+        cur = ' aria-current="page"' if key == current else ""
+        return f'<a href="{href}"{cur}>{label}</a>'
+    return f"""<header class="masthead">
+  <a class="mark" href="./">A22</a>
+  <nav aria-label="Site">{link("manual.html", "Manual", "manual")}{link(SIM, "Simulator", "sim")}{link(REPO, "GitHub", "gh")}</nav>
 </header>
+"""
 
-<main>
-<div class="wrap">
-  <div class="hero">
-    <div>
-      <h1>A22<span class="dot">.</span></h1>
-      <p class="lede">An FM workstation for the M-VAVE FM-1.</p>
-      <p class="sub">Free, open-source firmware: twelve synth and drum engines drawn in colour, eight effects,
-        a four-track tape with knob automation, a mixer, and USB audio and MIDI over one cable.</p>
-      <div class="ctas">
-        <a class="btn primary" href="{RELEASE}">Download the latest release</a>
-        <a class="btn" href="sim/">Play it in your browser</a>
-        <a class="btn" href="{REPO}">Source on GitHub</a>
-        <a class="btn coffee" href="{COFFEE}">☕ Buy me a coffee</a>
-      </div>
-    </div>
-    <div class="mosaic" aria-hidden="true">{mosaic()}</div>
-  </div>
 
-  <div class="facts">
-    <div><b>12</b><span>engines</span></div>
-    <div><b>96</b><span>algorithms</span></div>
-    <div><b>8</b><span>effects</span></div>
-    <div><b>4</b><span>tape tracks</span></div>
-    <div><b>1</b><span>USB cable: audio + MIDI</span></div>
-  </div>
-  <nav class="chips" aria-label="Engines">{chips()}</nav>
-</div>
+def footer():
+    return f"""<footer>
+  <span>A22 · free and open source, <a href="{REPO}/blob/main/LICENSE">MIT</a></span>
+  <span class="sep"></span>
+  <a href="{REPO}">GitHub</a>
+  <a href="{COFFEE}">Buy me a coffee</a>
+  <span>M-VAVE and FM-1 are trademarks of their owners; A22 is not affiliated with M-VAVE.</span>
+</footer>
+"""
 
-<section id="intro">
-  <div class="wrap prose">
-    <div class="label"><span class="n">01</span><h2>How it plays</h2></div>
-    <p><b>PRESETS</b> picks the engine, <b>ALGORITHM</b> one of its eight algorithms, and the four knobs shape the
-      sound and the picture together. Each algorithm keeps its own knob settings, so they stand where you left them.</p>
-    <p>Deeper settings live on small pages that all work the same way: four columns, one for each knob, and SELECT
-      for the next subpage. Learn one page and you know them all. Everything saves by itself.</p>
-  </div>
-</section>
 
-<section id="engines">
-  <div class="wrap">
-    <div class="label"><span class="n">02</span><h2>The engines</h2></div>
-    <p>Almost everything is synthesised. KIT's 909, CRISP, LOFI and WORLD kits layer in short CC0 recordings of real drums.
-      The four knobs are coloured as on the FM-1: <b style="color:var(--k1)">blue</b>, <b style="color:var(--k2)">green</b>,
-      <b style="color:var(--k3)">white</b>, <b style="color:var(--k4)">orange</b>.</p>
-    <div class="engines">{engine_cards()}
-    </div>
-  </div>
-</section>
-
-<section id="controls">
-  <div class="wrap">
-    <div class="label"><span class="n">03</span><h2>Controls</h2></div>
-    <p>A button with a hold does its tap when you let go, so holding one only does its hold.</p>
-    <dl class="keys">{hot}</dl>
-  </div>
-</section>
-
-<section id="tape">
-  <div class="wrap">
-    <div class="label"><span class="n">04</span><h2>The tape, steps, riffs and chords</h2></div>
-    <div class="cols">
-      <div class="card">
-        <h3>Four-track tape</h3>
-        <ul>
-          <li>T1 to T4, each with its own engine, algorithm, knobs, volume, pan, send and mute.</li>
-          <li>1 to 32 bars, 2,048 events (1,024 notes) across all four tracks, knob moves included.</li>
-          <li><b>REC</b> arms the track in hand and the first key starts the take; REC again closes it and the tape plays on. REC while it plays overdubs. <b>PLAY</b> starts and stops it.</li>
-          <li>Knobs turned while recording play back as automation.</li>
-          <li>SPEED plays it at half or double speed or backwards; TRICK adds a tape brake or stutters.</li>
-          <li><b>Hold REC</b> clears the track in hand; keep holding and it asks <b>CLEAR ALL?</b> before it clears the rest.</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Step, Riff and Shake</h3>
-        <ul>
-          <li><b>STEP:</b> hold SEQ to swap the tape for the step sequencer. REC writes, PLAY runs, SELECT moves the cursor, a tap of EDIT is a rest. Up to eight notes a step.</li>
-          <li><b>RIFF:</b> record a sequence a note at a time on the SEQ page, then hold any key and it plays from there, transposed.</li>
-          <li><b>SHAKE:</b> every key drops a ball into a spinning cage, and it plays its note each time it bounces. GRAV, SPIN, BOUNCE and CAGE shape the cage.</li>
-          <li><b>Chord memory:</b> hold a chord and press EDIT + GLO, and each key then plays that shape from itself. Or let A22 build chords from a scale.</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="effects">
-  <div class="wrap">
-    <div class="label"><span class="n">05</span><h2>Effects and pages</h2></div>
-    <p>One effect at a time, chosen on the FX page with ALGORITHM; each track sets how much it sends. The master bus has its own three-band EQ and drive.</p>
-    <table class="wide"><thead><tr><th>Effect</th><th>What it is</th><th>Knobs</th></tr></thead><tbody>{effects}</tbody></table>
-    <p style="margin-top:28px">Each page's four columns are the four knobs, and SELECT steps through its subpages.</p>
-    <table><thead><tr><th>Page</th><th>Button</th><th>Columns</th></tr></thead><tbody>{pages}</tbody></table>
-  </div>
-</section>
-
-<section id="usb">
-  <div class="wrap">
-    <div class="label"><span class="n">06</span><h2>USB audio and MIDI</h2></div>
-    <div class="cols">
-      <div class="card"><h3>Audio</h3><p>Plug it into a computer or phone with a USB cable that carries data and pick the FM-1 as an input: you record the whole mix at the MASTER volume. It only goes one way.</p></div>
-      <div class="card"><h3>MIDI in</h3><p>Over USB or the TRS jack, on any channel. Notes play the engine in hand at their velocity, CC 20 to 23 turn the four knobs, CC 123 stops every note.</p></div>
-      <div class="card"><h3>MIDI out</h3><p>Over USB on channel 1: the notes of the keys, the arpeggiator and the tape, and CC 20 to 23 as the knobs turn. Notes that came in over MIDI aren't sent back out.</p></div>
-      <div class="card"><h3>USB host</h3><p>No computer? Hold OCT − and OCT + for a second and the port turns host for a USB-MIDI keyboard on its own power or a powered hub. Hold both again to go back.</p></div>
-    </div>
-  </div>
-</section>
-
-<section id="install">
-  <div class="wrap">
-    <div class="label"><span class="n">07</span><h2>Install</h2></div>
-    <div class="cols">
-      <div class="card">
-        <h3>Before you start</h3>
-        <ul>
-          <li>Back up what the firmware you are leaving has made, with its own backup.</li>
-          <li>Charge the FM-1 and use a USB cable that carries data.</li>
-          <li>A22 is community firmware with no warranty, and nothing to do with M-VAVE.</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>From a terminal</h3>
-        <p>Download <code>a22-X.Y.Z.fwsc</code> from the <a href="{RELEASE}">latest release</a>, then from a clone of the repository:</p>
-        <pre>pip3 install mido python-rtmidi
-python3 base/tools/fm1_install.py a22-X.Y.Z.fwsc</pre>
-        <p>It works from the stock firmware (V15) and other custom firmwares, asks before it writes, and checks the FM-1 afterwards.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="faq">
-  <div class="wrap">
-    <div class="label"><span class="n">08</span><h2>Questions</h2></div>
-    {faq}
-  </div>
-</section>
-
-<section id="support">
-  <div class="wrap">
-    <div class="support">
+def front():
+    tabs, panels = [], []
+    for i, (name, ink, pic, what, knobs, algos) in enumerate(ENGINES):
+        L, sel = BANKS[i], i == 0
+        tabs.append(f'<button class="tab" role="tab" id="tab-{L.lower()}" aria-controls="panel-{L.lower()}" '
+                    f'aria-selected="{"true" if sel else "false"}" tabindex="{0 if sel else -1}" '
+                    f'style="--ink-c:{hexc(ink)}"><b>{L}</b><span>{esc(name)}</span></button>')
+        rows = "".join(f'<tr style="--i:{j + 1}"><td class="n">{L}{j + 1}</td><td class="v">{esc(a)}</td>'
+                       f'<td class="d">{esc(d)}</td></tr>' for j, (a, d) in enumerate(algos))
+        kn = "".join(f'<span class="knob"><span class="dot" style="--c:{KNOB_VARS[k]}"></span>{esc(n)}</span>'
+                     for k, (n, _) in enumerate(knobs))
+        panels.append(f"""
+      <div class="bank" role="tabpanel" id="panel-{L.lower()}" aria-labelledby="tab-{L.lower()}"{"" if sel else " hidden"} style="--ink-c:{hexc(ink)}">
+        <div class="band"><h2>{L} · {esc(name)}</h2><span class="code">Bank {L} · {L}1–{L}8</span></div>
+        <div class="screen"><img src="img/{pic}.png" width="240" height="240" alt="{esc(name)} on the FM-1's screen, playing {esc(algos[0][0])}" loading="{"eager" if sel else "lazy"}"></div>
+        <div>
+          <p class="what">{esc(what)}</p>
+          <table class="voices"><caption class="skip">Bank {L}: {esc(name)}'s eight algorithms</caption><thead><tr><th scope="col">No.</th><th scope="col">Voice</th><th scope="col">Character</th></tr></thead><tbody>{rows}</tbody></table>
+          <div class="knobrow" aria-label="Its four knobs">{kn}</div>
+          <p class="open"><a class="more" href="manual.html#{bank_id(i)}">{esc(name)} in the manual {ARROW}</a></p>
+        </div>
+      </div>""")
+    spec = "".join(f"<tr><th scope=\"row\">{esc(k)}</th><td>{esc(v)}</td></tr>" for k, v in [
+        ("Sound", "Twelve engines, eight algorithms each, four live knobs. Eight effects and a master EQ with drive."),
+        ("Making music", "A four-track tape with knob automation, a step sequencer, Riff and Shake, an arpeggiator, "
+                         "chord memory and eight snapshots."),
+        ("Pictures", "Every engine draws its own animated colour picture on the FM-1's screen, moving with the sound."),
+        ("Connect", "USB audio and MIDI over one cable, MIDI in on the TRS jack, USB host for a keyboard."),
+        ("Runs on", "The M-VAVE FM-1, with either flash chip. Not the SMK-37.")])
+    return head("A22 · firmware for the M-VAVE FM-1",
+                "A22 is free, open-source firmware for the M-VAVE FM-1: twelve sound engines, ninety-six algorithms, "
+                "a four-track tape, eight effects, USB audio and MIDI.") + masthead("home") + f"""<main id="main">
+<section class="cover" aria-label="A22">
+  <div class="tabs" role="tablist" aria-label="Banks, one an engine" aria-orientation="vertical">{"".join(tabs)}</div>
+  <div class="body">
+    <div class="title">
       <div>
-        <h3>Enjoying A22?</h3>
-        <p>It's free and stays free. If it gave you a good evening, a coffee keeps it going.</p>
+        <h1>A22</h1>
+        <p class="lede">Firmware for the M-VAVE FM-1. Twelve banks of sound, ninety-six voices.</p>
       </div>
-      <a class="btn coffee" href="{COFFEE}">☕ Buy me a coffee</a>
+      <div class="side">
+        <div class="actions">
+          <a class="btn" href="{RELEASE}">{DOWN}Download 0.1.0</a>
+          <a class="more" href="{SIM}">Play it in your browser {ARROW}</a>
+        </div>
+        <p class="small">Free and open source. Installs over USB from the stock firmware or another custom one, and goes back the same way.</p>
+      </div>
     </div>
+    <div class="sheet">{"".join(panels)}
+    </div>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="inside">
+  <div class="inner">
+    <div><h2 id="inside">What's inside</h2>
+      <p class="aside">A22 turns the FM-1 into an FM workstation. Everything is synthesised, apart from short drum recordings layered into four of KIT's kits.</p></div>
+    <table class="spec">{spec}</table>
+    <aside class="note"><p>The firmware image is 406 KB of the FM-1's 568 KB slot and uses 440 KB of its 475 KB of memory.</p>
+      <p>Package identity FM-1_4122.</p></aside>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="install">
+  <div class="inner">
+    <div><h2 id="install">Install</h2>
+      <p class="aside">About two minutes, over a USB cable that carries data. Back up anything the firmware you are leaving has made first.</p></div>
+    <ol class="steps">
+      <li><span>Download <a href="{RELEASE}">a22-0.1.0.fwsc</a> from the latest release, and clone the repository for its installer.</span></li>
+      <li><span>Install the MIDI library the installer uses.</span><pre>pip3 install mido python-rtmidi</pre></li>
+      <li><span>Plug in the FM-1 and run the installer. It asks before it writes and checks the FM-1 afterwards.</span><pre>python3 base/tools/fm1_install.py a22-0.1.0.fwsc</pre></li>
+    </ol>
+    <aside class="note"><p>Works from the stock firmware (V15) and from other custom firmwares. On anything older than V15, update with M-VAVE's own updater first.</p></aside>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="back">
+  <div class="inner">
+    <div><h2 id="back">Going back</h2></div>
+    <div class="prose">
+      <p>A22 carries an update loader, so any installer can replace it: press Back to official V15 on <a href="{HUB}">The Firmware Hub</a>, or install another custom firmware.</p>
+      <p>If an install stops halfway, plug in and run it again; it picks up where it stopped. If A22 ever fails to start twice, it comes up in safe mode with USB working, and holding REC while you switch on opens the chip's own update mode, which nothing can overwrite.</p>
+      <p>The <a href="manual.html">manual</a> has every engine, control and page.</p>
+    </div>
+    <aside class="note"><p>A22 is early: installed and run on one FM-1 so far.</p>
+      <p>Measured there: 41 frames a second on average over all 96 algorithms, and no crash over a 30-minute run.</p></aside>
   </div>
 </section>
 </main>
-
-<footer>
-  <div class="wrap">
-    <p>A22 is <a href="{REPO}/blob/main/LICENSE">MIT</a>, derived from <a href="https://github.com/jakehandy/h1">h1</a> by Jake Handy.
-      Its package contains <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> by Charles Vestal and
-      <a href="https://github.com/hugelton/felucca-bsp">felucca-bsp</a> from Felucca by Leo Kuroshita, Hügelton Instruments (MPL-2.0).</p>
-    <p>M-VAVE and FM-1 are trademarks of their owners. A22 is not affiliated with M-VAVE.
-      <a href="{REPO}">GitHub</a> · <a href="{RELEASE}">Releases</a> · <a href="sim/">Simulator</a> · <a href="{COFFEE}">Buy me a coffee</a></p>
-  </div>
-</footer>
+""" + footer() + """<script>
+(() => {
+  const tabs = [...document.querySelectorAll('.tab')];
+  const sheet = document.querySelector('.sheet');
+  const vertical = () => matchMedia('(min-width: 821px)').matches;
+  function open(i, focus) {
+    tabs.forEach((t, j) => {
+      const on = j === i;
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    sheet.classList.remove('printing'); void sheet.offsetWidth; sheet.classList.add('printing');
+    if (focus) tabs[i].focus();
+    if (!vertical()) tabs[i].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => open(i, false));
+    t.addEventListener('keydown', e => {
+      const n = tabs.length;
+      const next = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: n - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      open((next + n) % n, true);
+    });
+  });
+  const m = location.hash.match(/^#bank-([a-l])$/);
+  if (m) open('abcdefghijkl'.indexOf(m[1]), false);
+})();
+</script>
 </body>
+</html>
+"""
+
+
+def manual():
+    idx_banks = "".join(f'<li><a href="#{bank_id(i)}"><span class="swatch" style="--ink-c:{hexc(ink)}">{BANKS[i]}</span>{esc(n)}</a></li>'
+                        for i, (n, ink, *_) in enumerate(ENGINES))
+    chapters = [("controls", "Controls"), ("tape", "Tape and sequencers"), ("effects", "Effects"),
+                ("pages", "Pages"), ("usb", "USB audio and MIDI"), ("install", "Install and recovery"),
+                ("questions", "Questions")]
+    idx_rest = "".join(f'<li><a href="#{k}">{esc(v)}</a></li>' for k, v in chapters)
+    banks = []
+    for i, (name, ink, pic, what, knobs, algos) in enumerate(ENGINES):
+        L = BANKS[i]
+        krows = "".join(f'<tr><td class="k"><span class="dot" style="--c:{KNOB_VARS[k]}"></span>K{k + 1} {esc(n)}</td>'
+                        f'<td class="d">{esc(d)}</td></tr>' for k, (n, d) in enumerate(knobs))
+        vrows = "".join(f'<tr><td class="n">{L}{j + 1}</td><td class="v">{esc(a)}</td><td class="d">{esc(d)}</td></tr>'
+                        for j, (a, d) in enumerate(algos))
+        banks.append(f"""
+    <article class="mbank" id="{bank_id(i)}">
+      <div class="screen"><img src="img/{pic}.png" width="200" height="200" alt="{esc(name)} on the FM-1's screen" loading="lazy"></div>
+      <div>
+        <h3><span class="swatch" style="--ink-c:{hexc(ink)}" aria-hidden="true">{L}</span>{esc(name)}</h3>
+        <p class="what">{esc(what)}</p>
+        <h4>Knobs</h4>
+        <table class="knobs">{krows}</table>
+        <h4>Algorithms</h4>
+        <table class="voices">{vrows}</table>
+      </div>
+    </article>""")
+    hot = "".join(f'<tr><th scope="row">{esc(k)}</th><td>{esc(v)}</td></tr>' for k, v in HOTKEYS)
+    fx = "".join(f'<tr><th scope="row">{esc(n)}</th><td>{esc(d)}</td><td>{esc(k)}</td></tr>' for n, d, k in EFFECTS)
+    pages = "".join(f'<tr><th scope="row">{esc(n)}</th><td>{esc(b)}</td><td>{esc(c)}</td></tr>' for n, b, c in PAGES)
+    faq = "".join(f"<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q, a in FAQ)
+    return head("A22 manual", "The A22 manual: every engine's knobs and algorithms, the controls, the tape, effects, "
+                "pages, USB audio and MIDI, install and recovery.") + masthead("manual") + f"""<main id="main" class="manual">
+  <nav class="index" aria-label="Manual contents">
+    <details open><summary>Contents</summary><div>
+      <h2>Banks</h2><ul>{idx_banks}</ul>
+      <h2>Playing</h2><ul>{idx_rest}</ul>
+    </div></details>
+  </nav>
+  <div class="pages">
+    <section class="chapter" aria-labelledby="banks">
+      <h2 id="banks">Banks</h2>
+      <p>PRESETS picks the engine and ALGORITHM one of its eight algorithms. The four knobs shape the sound and the picture
+        together, and each algorithm keeps its own knob settings. On the FM-1 the knobs are coloured blue, green, white and orange.</p>
+      {"".join(banks)}
+    </section>
+
+    <section class="chapter" id="controls" aria-labelledby="h-controls">
+      <h2 id="h-controls">Controls</h2>
+      <p>A button with a hold does its tap when you let go, so holding one only does its hold.</p>
+      <table class="chart">{hot}</table>
+    </section>
+
+    <section class="chapter" id="tape" aria-labelledby="h-tape">
+      <h2 id="h-tape">Tape and sequencers</h2>
+      <div class="two">
+        <div><h3>The tape</h3>
+          <p>Four tracks, T1 to T4, each with its own engine, algorithm, knobs, volume, pan, send and mute. 1 to 32 bars and
+            2,048 events (1,024 notes) across all four tracks, knob moves included; when it is full the screen says TAPE FULL.</p>
+          <p style="margin-top:12px">REC arms the track in hand and the first key starts the take; REC again closes it and the tape plays on.
+            REC while it plays overdubs, PLAY starts and stops it. Knobs turned while recording play back as automation. SPEED plays
+            it at half or double speed or backwards; TRICK adds a tape brake or stutters.</p>
+          <p style="margin-top:12px">Hold REC to clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC within three
+            seconds to clear the whole tape. Any other button, or waiting, keeps it.</p></div>
+        <div><h3>Step</h3>
+          <p>Hold SEQ to swap the tape for the step sequencer. REC turns step writing on and off, PLAY runs the pattern,
+            SELECT moves the cursor and a tap of EDIT leaves a rest. Up to eight notes a step.</p>
+          <h3>Riff and Shake</h3>
+          <p>Modes of the SEQ page (ARP, then ALGORITHM, or hold EDIT and turn ALGORITHM anywhere). RIFF: REC records a sequence
+            a note at a time, EDIT leaves a rest, REC finishes; then hold any key and it plays from there, transposed.
+            SHAKE: every key drops a ball into a spinning cage that plays its note each time it bounces.</p>
+          <h3>Chord memory</h3>
+          <p>Hold a chord and press EDIT + GLO: each key then plays that shape from itself. The CHORD page can also build chords
+            from the KEYS page's scale, or play a fixed shape.</p></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="effects" aria-labelledby="h-effects">
+      <h2 id="h-effects">Effects</h2>
+      <p>One effect at a time, chosen on the FX page with ALGORITHM; each track sets how much it sends. The master bus has its own
+        three-band EQ and drive.</p>
+      <table class="chart"><thead><tr><th>Effect</th><th>What it is</th><th>Knobs</th></tr></thead><tbody>{fx}</tbody></table>
+    </section>
+
+    <section class="chapter" id="pages" aria-labelledby="h-pages">
+      <h2 id="h-pages">Pages</h2>
+      <p>Each page's four columns are the four knobs, and SELECT steps through its subpages. HOME goes back.</p>
+      <table class="chart"><thead><tr><th>Page</th><th>Button</th><th>Columns</th></tr></thead><tbody>{pages}</tbody></table>
+    </section>
+
+    <section class="chapter" id="usb" aria-labelledby="h-usb">
+      <h2 id="h-usb">USB audio and MIDI</h2>
+      <div class="two">
+        <div><h3>Audio</h3><p>Pick the FM-1 as an input on a computer or phone and record the whole mix at the MASTER volume.
+          It only goes one way: the FM-1 isn't a sound card.</p></div>
+        <div><h3>MIDI in</h3><p>Over USB or the TRS jack, on any channel: notes at their velocity, CC 20 to 23 for the four knobs,
+          CC 123 to stop every note.</p></div>
+        <div><h3>MIDI out</h3><p>Over USB on channel 1: the notes of the keys, the arpeggiator and the tape, and CC 20 to 23 as the
+          knobs turn. Notes that came in over MIDI aren't sent back out.</p></div>
+        <div><h3>USB host</h3><p>Hold OCT − and OCT + for a second and the port turns host for a USB-MIDI keyboard with its own power
+          or a powered hub. Hold both again to go back.</p></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="install" aria-labelledby="h-install">
+      <h2 id="h-install">Install and recovery</h2>
+      <div class="two">
+        <div><h3>Install</h3><p>Download a22-X.Y.Z.fwsc from the <a href="{RELEASE}">latest release</a>, then from a clone of the
+          repository run <code>pip3 install mido python-rtmidi</code> and <code>python3 base/tools/fm1_install.py a22-X.Y.Z.fwsc</code>.
+          It works from the stock firmware (V15) and other custom firmwares.</p></div>
+        <div><h3>If something goes wrong</h3><p>An install that stopped halfway resumes when you run it again. After two failed
+          starts A22 comes up in SAFE MODE with USB working. Holding REC while you switch on enters the chip's own update mode;
+          the Hub's <a href="{HUB}/tools/rescue/">rescue page</a> takes it from there.</p></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="questions" aria-labelledby="h-questions">
+      <h2 id="h-questions">Questions</h2>
+      {faq}
+    </section>
+  </div>
+</main>
+""" + footer() + """</body>
 </html>
 """
 
@@ -503,14 +685,17 @@ def main():
         shutil.rmtree(out)
     os.makedirs(os.path.join(out, "img"))
     with open(os.path.join(out, "index.html"), "w") as f:
-        f.write(page())
+        f.write(front())
+    with open(os.path.join(out, "manual.html"), "w") as f:
+        f.write(manual())
     for _, _, pic, *_ in ENGINES:
         shutil.copy(os.path.join(ROOT, "docs", "img", "a22", pic + ".png"), os.path.join(out, "img"))
+    shutil.copytree(os.path.join(ROOT, "site", "fonts"), os.path.join(out, "fonts"))
     shutil.copytree(os.path.join(ROOT, "web"), os.path.join(out, "sim"))
     os.makedirs(os.path.join(out, "dist"))
     shutil.copy(os.path.join(ROOT, "dist", "a22.rfm1"), os.path.join(out, "dist"))
     open(os.path.join(out, ".nojekyll"), "w").close()
-    print(f"wrote {out}: index.html, img/ ({len(ENGINES)} pictures), sim/, dist/a22.rfm1")
+    print(f"wrote {out}: index.html, manual.html, img/ ({len(ENGINES)} screens), fonts/, sim/, dist/a22.rfm1")
 
 
 if __name__ == "__main__":

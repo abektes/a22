@@ -1,0 +1,567 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-21T21:56:07+00:00",
+  "title": "Design System: A22",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Coated Paper",
+        "canonical": "#e2e6eb",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#232426",
+          "#3e4043",
+          "#5b5e62",
+          "#7a7e82",
+          "#9c9fa2",
+          "#c2c4c7",
+          "#edeff0"
+        ]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet White",
+        "canonical": "#f5f7f9",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#232425",
+          "#3f4041",
+          "#5c5e5f",
+          "#7c7d7f",
+          "#9d9ea0",
+          "#c3c4c5",
+          "#eeeeef"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Print Black",
+        "canonical": "#14171c",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#222427",
+          "#3d4044",
+          "#5a5e63",
+          "#7a7d84",
+          "#9b9fa4",
+          "#c2c4c8",
+          "#edeef1"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Second Ink",
+        "canonical": "#485059",
+        "tonalRamp": [
+          "#090b0e",
+          "#212429",
+          "#3b4047",
+          "#575e67",
+          "#767e87",
+          "#989fa7",
+          "#bfc5cb",
+          "#ebeff3"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#b8bfc8",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#212428",
+          "#3c4045",
+          "#595e65",
+          "#787e86",
+          "#9a9fa6",
+          "#c0c4ca",
+          "#eceff2"
+        ]
+      },
+      "rule-soft": {
+        "role": "neutral",
+        "displayName": "Soft Rule",
+        "canonical": "#d2d7dd",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#222427",
+          "#3d4043",
+          "#5a5e63",
+          "#797e83",
+          "#9b9fa3",
+          "#c1c4c8",
+          "#edeff1"
+        ]
+      },
+      "screen-black": {
+        "role": "neutral",
+        "displayName": "Screen Black",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#7d7d7d",
+          "#9e9e9e",
+          "#c4c4c4",
+          "#eeeeee"
+        ]
+      },
+      "knob-blue": {
+        "role": "secondary",
+        "displayName": "Knob Blue (K1)",
+        "canonical": "#3b9eff",
+        "tonalRamp": [
+          "#000a25",
+          "#00234f",
+          "#00407d",
+          "#005eaf",
+          "#1f7fd7",
+          "#5da3ec",
+          "#94c9ff",
+          "#cff2ff"
+        ]
+      },
+      "knob-green": {
+        "role": "secondary",
+        "displayName": "Knob Green (K2)",
+        "canonical": "#2cc96b",
+        "tonalRamp": [
+          "#001200",
+          "#003005",
+          "#005114",
+          "#007526",
+          "#009843",
+          "#50b770",
+          "#8fd8a1",
+          "#cdfdd7"
+        ]
+      },
+      "knob-white": {
+        "role": "secondary",
+        "displayName": "Knob White (K3)",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#7d7d7d",
+          "#9e9e9e",
+          "#c4c4c4",
+          "#eeeeee"
+        ]
+      },
+      "knob-orange": {
+        "role": "secondary",
+        "displayName": "Knob Orange (K4)",
+        "canonical": "#ff6b1a",
+        "tonalRamp": [
+          "#220000",
+          "#4b0300",
+          "#781500",
+          "#a82900",
+          "#d24b00",
+          "#ea7b4a",
+          "#ffab87",
+          "#ffdfc6"
+        ]
+      },
+      "bank-a-fm4": {
+        "role": "primary",
+        "displayName": "Bank A, FM-4: Signal Blue",
+        "canonical": "#3b9eff",
+        "tonalRamp": [
+          "#000a25",
+          "#00234f",
+          "#00407d",
+          "#005eaf",
+          "#1f7fd7",
+          "#5da3ec",
+          "#94c9ff",
+          "#cff2ff"
+        ]
+      },
+      "bank-b-electric": {
+        "role": "primary",
+        "displayName": "Bank B, ELECTRIC: Phosphor Green",
+        "canonical": "#44e37e",
+        "tonalRamp": [
+          "#001200",
+          "#003103",
+          "#005210",
+          "#007621",
+          "#00993f",
+          "#4ab86d",
+          "#8cd99f",
+          "#cbfdd6"
+        ]
+      },
+      "bank-c-stack": {
+        "role": "primary",
+        "displayName": "Bank C, STACK: Leaf Green",
+        "canonical": "#4ce07a",
+        "tonalRamp": [
+          "#001200",
+          "#003002",
+          "#00520e",
+          "#00751f",
+          "#00993d",
+          "#50b76c",
+          "#8fd99e",
+          "#cdfdd5"
+        ]
+      },
+      "bank-d-analog": {
+        "role": "primary",
+        "displayName": "Bank D, ANALOG: Panel White",
+        "canonical": "#eef1f5",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#232426",
+          "#3e4042",
+          "#5b5e61",
+          "#7b7d81",
+          "#9c9ea1",
+          "#c2c4c6",
+          "#edeef0"
+        ]
+      },
+      "bank-e-shaper": {
+        "role": "primary",
+        "displayName": "Bank E, SHAPER: Cyan",
+        "canonical": "#2ae6e0",
+        "tonalRamp": [
+          "#001111",
+          "#002e2d",
+          "#004f4d",
+          "#00726f",
+          "#009490",
+          "#37b3af",
+          "#83d5d1",
+          "#c7faf7"
+        ]
+      },
+      "bank-f-wire": {
+        "role": "primary",
+        "displayName": "Bank F, WIRE: Brass Yellow",
+        "canonical": "#ffd24a",
+        "tonalRamp": [
+          "#150800",
+          "#342000",
+          "#573b00",
+          "#7c5700",
+          "#9f7700",
+          "#bb9b3a",
+          "#dbc27f",
+          "#feeec2"
+        ]
+      },
+      "bank-g-haze": {
+        "role": "primary",
+        "displayName": "Bank G, HAZE: Haze Violet",
+        "canonical": "#9b76ff",
+        "tonalRamp": [
+          "#0e0227",
+          "#281352",
+          "#452982",
+          "#6541b5",
+          "#8461de",
+          "#a38af3",
+          "#c6b6ff",
+          "#efe6ff"
+        ]
+      },
+      "bank-h-mono": {
+        "role": "primary",
+        "displayName": "Bank H, MONO: Knob Orange",
+        "canonical": "#ff6b1a",
+        "tonalRamp": [
+          "#220000",
+          "#4b0300",
+          "#781500",
+          "#a82900",
+          "#d24b00",
+          "#ea7b4a",
+          "#ffab87",
+          "#ffdfc6"
+        ]
+      },
+      "bank-i-kit": {
+        "role": "primary",
+        "displayName": "Bank I, KIT: Knob Orange",
+        "canonical": "#ff6b1a",
+        "tonalRamp": [
+          "#220000",
+          "#4b0300",
+          "#781500",
+          "#a82900",
+          "#d24b00",
+          "#ea7b4a",
+          "#ffab87",
+          "#ffdfc6"
+        ]
+      },
+      "bank-j-perc": {
+        "role": "primary",
+        "displayName": "Bank J, PERC: Marigold",
+        "canonical": "#ffc252",
+        "tonalRamp": [
+          "#170700",
+          "#381d00",
+          "#5c3700",
+          "#835200",
+          "#a77200",
+          "#c39647",
+          "#e1be85",
+          "#ffebc6"
+        ]
+      },
+      "bank-k-wave": {
+        "role": "primary",
+        "displayName": "Bank K, WAVE: Signal Blue",
+        "canonical": "#3b9eff",
+        "tonalRamp": [
+          "#000a25",
+          "#00234f",
+          "#00407d",
+          "#005eaf",
+          "#1f7fd7",
+          "#5da3ec",
+          "#94c9ff",
+          "#cff2ff"
+        ]
+      },
+      "bank-l-chip": {
+        "role": "primary",
+        "displayName": "Bank L, CHIP: Phosphor Green",
+        "canonical": "#44e37e",
+        "tonalRamp": [
+          "#001200",
+          "#003103",
+          "#005210",
+          "#007621",
+          "#00993f",
+          "#4ab86d",
+          "#8cd99f",
+          "#cbfdd6"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The A22 wordmark heading on the cover; once."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Part and manual chapter headings; the bank band title a step smaller (clamp 28-38px)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Manual bank headings, led by a lettered swatch."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "The one line under the wordmark, max 34ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text and table cells, max 60-64ch, tabular numerals."
+      },
+      "small": {
+        "displayName": "Small print",
+        "purpose": "Margin notes, reassurance line, footer."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table column heads and manual subheads in Second Ink; tab engine names at 11px +0.04em."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Shell commands and inline code only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tab-edge",
+        "value": "inset -1px 0 0 rgb(20 23 28 / .18)",
+        "purpose": "Inner edge of an unselected bank tab; removed when selected."
+      },
+      {
+        "name": "dot-ring",
+        "value": "inset 0 0 0 1px rgb(20 23 28 / .35)",
+        "purpose": "Ring on every knob dot, so the white knob reads on white."
+      },
+      {
+        "name": "strip-selected",
+        "value": "inset 0 -4px 0 #14171c",
+        "purpose": "Selected tab in the horizontal strip at <=820px."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-print",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Shared curve for the tab width and the print-in."
+      },
+      {
+        "name": "tab-width",
+        "value": "width .28s cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Tab grows 66 -> 76 (hover) -> 92px (selected)."
+      },
+      {
+        "name": "print-in",
+        "value": "print .42s cubic-bezier(.16, 1, .3, 1) both; from { opacity: .4; transform: translateY(4px) }; delay calc(var(--i) * 28ms)",
+        "purpose": "Voice rows and screen window settle in when a bank opens."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce)",
+        "purpose": "Removes the tab transition and the print-in."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "1180px"
+      },
+      {
+        "name": "manual",
+        "value": "980px"
+      },
+      {
+        "name": "cover",
+        "value": "820px"
+      },
+      {
+        "name": "narrow",
+        "value": "420px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Download Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one solid button: the release download, ink on paper.",
+      "html": "<a class=\"ds-btn\" href=\"#\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 2v10M3.5 8.5 8 13l4.5-4.5M2.5 15h11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"square\"/></svg>Download 0.1.0</a>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-btn{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:var(--sheet);font:700 18px var(--face);padding:14px 22px;border-radius:3px;text-decoration:none}.ds-btn svg{width:16px;height:16px}.ds-btn:hover{background:#2a2f37}.ds-btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}"
+    },
+    {
+      "name": "Arrow Link",
+      "kind": "button",
+      "refersTo": "arrow-link",
+      "description": "Secondary action: a bold ink link with a drawn arrow, underlined on hover.",
+      "html": "<a class=\"ds-more\" href=\"#\">Play it in your browser <svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M2 8h11M9 3.5 13.5 8 9 12.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"square\"/></svg></a>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-more{display:inline-flex;align-items:center;gap:8px;font:700 18px var(--face);color:var(--ink);text-decoration:none;text-underline-offset:3px}.ds-more svg{width:16px;height:16px}.ds-more:hover{text-decoration:underline}.ds-more:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:2px}"
+    },
+    {
+      "name": "Bank Tab Rail",
+      "kind": "nav",
+      "refersTo": "bank-tab",
+      "description": "Lettered tabs in each bank's ink; the selected one grows to 92px to meet the sheet.",
+      "html": "<div class=\"ds-rail\" role=\"tablist\" aria-orientation=\"vertical\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\" style=\"--ink-c:#3b9eff\"><b>A</b><span>FM-4</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" style=\"--ink-c:#44e37e\"><b>B</b><span>ELECTRIC</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" style=\"--ink-c:#4ce07a\"><b>C</b><span>STACK</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" style=\"--ink-c:#eef1f5\"><b>D</b><span>ANALOG</span></button></div>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-rail{display:flex;flex-direction:column;width:92px;background:var(--paper)}.ds-tab{min-height:44px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;border:0;border-bottom:1px solid rgb(20 23 28/.18);background:var(--ink-c);color:var(--ink);font:500 18px var(--face);text-align:left;cursor:pointer;padding:4px 0 4px 14px;width:66px;transition:width .28s cubic-bezier(.16,1,.3,1);box-shadow:inset -1px 0 0 rgb(20 23 28/.18)}.ds-tab b{font-size:22px;line-height:1;font-weight:700}.ds-tab span{font-size:11px;letter-spacing:.04em;line-height:1.35}.ds-tab:hover{width:76px}.ds-tab[aria-selected=\"true\"]{width:92px;box-shadow:none}.ds-tab:focus-visible{outline:2px solid var(--ink);outline-offset:3px}@media (prefers-reduced-motion:reduce){.ds-tab{transition:none}}"
+    },
+    {
+      "name": "Bank Sheet: Band, Screen and Voice Table",
+      "kind": "custom",
+      "refersTo": "bank-band",
+      "description": "The open bank: ink header band, a real capture in a black window, ruled voice table and knob legend.",
+      "html": "<div class=\"ds-bank\" style=\"--ink-c:#3b9eff\"><div class=\"ds-band\"><h2>A · FM-4</h2><span>Bank A · A1–A8</span></div><div class=\"ds-screen\"><div class=\"ds-cap\"></div></div><div><table class=\"ds-voices\"><thead><tr><th>No.</th><th>Voice</th><th>Character</th></tr></thead><tbody><tr><td class=\"ds-n\">A1</td><td class=\"ds-v\">KEYS</td><td class=\"ds-d\">two FM pairs side by side: electric piano</td></tr><tr><td class=\"ds-n\">A2</td><td class=\"ds-v\">BASS</td><td class=\"ds-d\">four operators in a stack, a sub under it</td></tr><tr><td class=\"ds-n\">A3</td><td class=\"ds-v\">BELL</td><td class=\"ds-d\">a branching stack with a fast chime on top</td></tr></tbody></table><div class=\"ds-knobs\"><span><i style=\"--c:var(--k1)\"></i>RATIO</span><span><i style=\"--c:var(--k2)\"></i>DEPTH</span><span><i style=\"--c:var(--k3)\"></i>FEEDBK</span><span><i style=\"--c:var(--k4)\"></i>FILTER</span></div></div></div>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-bank{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 32px;padding:0 24px 24px;background:var(--sheet);border:1px solid var(--rule);border-top:0;font:500 18px/1.55 var(--face);color:var(--ink)}.ds-band{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:16px;background:var(--ink-c);margin:0 -24px 24px;padding:12px 24px;border-block:1px solid rgb(20 23 28/.25)}.ds-band h2{margin:0;font-size:34px;font-weight:700;line-height:1.05;letter-spacing:-.01em}.ds-band span{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}.ds-screen{background:#000;padding:10px;border-radius:4px;align-self:start}.ds-cap{width:240px;height:240px;background:#000;image-rendering:pixelated}.ds-voices{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}.ds-voices th{text-align:left;font-size:13px;font-weight:700;color:var(--ink-2);padding:0 10px 6px 0}.ds-voices td{padding:7px 10px 7px 0;border-top:1px solid var(--rule-soft)}.ds-voices tr:last-child td{border-bottom:1px solid var(--rule-soft)}.ds-voices .ds-n{width:3.2ch;color:var(--ink-2)}.ds-voices .ds-v{width:11ch;font-weight:700}.ds-voices .ds-d{color:var(--ink-2)}.ds-knobs{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:16px;font-size:16px;font-weight:700}.ds-knobs span{display:inline-flex;align-items:center;gap:8px}.ds-knobs i{width:11px;height:11px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgb(20 23 28/.35)}"
+    },
+    {
+      "name": "Part with Margin Note",
+      "kind": "card",
+      "refersTo": "margin-note",
+      "description": "Three-column section: heading and aside, ruled spec table, small-print margin note.",
+      "html": "<section class=\"ds-part\"><div><h2>What's inside</h2><p class=\"ds-aside\">A22 turns the FM-1 into an FM workstation.</p></div><table class=\"ds-spec\"><tr><th>Sound</th><td>Twelve engines, eight algorithms each, four live knobs.</td></tr><tr><th>Runs on</th><td>The M-VAVE FM-1, with either flash chip.</td></tr></table><aside class=\"ds-note\">The firmware image is 406 KB of the FM-1's 568 KB slot.</aside></section>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-part{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(180px,.7fr);gap:24px 40px;padding:40px 24px;background:var(--paper);border-top:1px solid var(--rule);font:500 18px/1.55 var(--face);color:var(--ink)}.ds-part h2{margin:0;font-size:36px;font-weight:700;line-height:1.05;letter-spacing:-.01em}.ds-aside{margin:14px 0 0;color:var(--ink-2)}.ds-spec{border-collapse:collapse;width:100%}.ds-spec th,.ds-spec td{text-align:left;vertical-align:baseline;padding:14px 0;border-top:1px solid var(--rule)}.ds-spec tr:last-child th,.ds-spec tr:last-child td{border-bottom:1px solid var(--rule)}.ds-spec th{width:9.5em;padding-right:20px;font-weight:700}.ds-note{font-size:14px;line-height:1.45;color:var(--ink-2);border-top:1px solid var(--rule);padding-top:14px;align-self:start}"
+    },
+    {
+      "name": "Install Step with Code Block",
+      "kind": "custom",
+      "refersTo": "code-block",
+      "description": "Ruled numbered step; the command in a sheet-white monospace block.",
+      "html": "<ol class=\"ds-steps\"><li><span>Install the MIDI library the installer uses.</span><pre>pip3 install mido python-rtmidi</pre></li><li><span>Plug in the FM-1 and run the installer.</span><pre>python3 base/tools/fm1_install.py a22-0.1.0.fwsc</pre></li></ol>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-steps{list-style:none;margin:0;padding:0;counter-reset:s;font:500 18px/1.55 var(--face);color:var(--ink);background:var(--paper)}.ds-steps li{counter-increment:s;display:grid;grid-template-columns:2.2em minmax(0,1fr);gap:4px 12px;padding:16px 0;border-top:1px solid var(--rule)}.ds-steps li:last-child{border-bottom:1px solid var(--rule)}.ds-steps li::before{content:counter(s);font-weight:700;font-variant-numeric:tabular-nums}.ds-steps pre{grid-column:2;margin:8px 0 0;padding:12px 14px;background:var(--sheet);border:1px solid var(--rule);border-radius:3px;overflow-x:auto;font-family:var(--code);font-size:15px}"
+    },
+    {
+      "name": "Manual Index with Bank Swatches",
+      "kind": "nav",
+      "refersTo": "bank-swatch",
+      "description": "The manual's sticky contents: lettered ink swatches for banks, plain links for chapters.",
+      "html": "<nav class=\"ds-index\"><h2>Banks</h2><ul><li><a href=\"#\"><span class=\"ds-sw\" style=\"--ink-c:#3b9eff\">A</span>FM-4</a></li><li><a href=\"#\"><span class=\"ds-sw\" style=\"--ink-c:#44e37e\">B</span>ELECTRIC</a></li><li><a href=\"#\"><span class=\"ds-sw\" style=\"--ink-c:#9b76ff\">G</span>HAZE</a></li></ul><h2>Playing</h2><ul><li><a href=\"#\">Controls</a></li><li><a href=\"#\">Tape and sequencers</a></li></ul></nav>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-index{width:250px;padding:24px 20px;border-right:1px solid var(--rule);background:var(--paper);font:500 16px/1.55 var(--face)}.ds-index h2{font-size:15px;letter-spacing:.02em;color:var(--ink-2);margin:18px 0 8px;font-weight:700}.ds-index h2:first-child{margin-top:0}.ds-index ul{list-style:none;margin:0;padding:0}.ds-index a{display:flex;align-items:center;gap:10px;padding:3px 0;text-decoration:none;color:var(--ink)}.ds-index a:hover{text-decoration:underline}.ds-index a:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:2px}.ds-sw{width:18px;height:18px;display:inline-grid;place-items:center;font-size:12px;font-weight:700;background:var(--ink-c);border:1px solid rgb(20 23 28/.25);border-radius:2px}"
+    },
+    {
+      "name": "Masthead",
+      "kind": "nav",
+      "refersTo": "masthead",
+      "description": "Running head: A22 mark left, quiet second-ink links right.",
+      "html": "<header class=\"ds-mast\"><a class=\"ds-mark\" href=\"#\">A22</a><nav><a href=\"#\" aria-current=\"page\">Manual</a><a href=\"#\">Simulator</a><a href=\"#\">GitHub</a></nav></header>",
+      "css": ":host{--paper:#e2e6eb;--sheet:#f5f7f9;--ink:#14171c;--ink-2:#485059;--rule:#b8bfc8;--rule-soft:#d2d7dd;--k1:#3b9eff;--k2:#2cc96b;--k3:#ffffff;--k4:#ff6b1a;--face:\"Barlow SC\",\"Barlow Semi Condensed\",\"Arial Narrow\",sans-serif;--code:ui-monospace,\"SF Mono\",Menlo,Consolas,monospace} .ds-mast{display:flex;align-items:baseline;gap:28px;padding:22px 24px;border-bottom:1px solid var(--rule);background:var(--paper);font:500 17px var(--face)}.ds-mark{font-weight:700;font-size:24px;color:var(--ink);text-decoration:none}.ds-mast nav{display:flex;gap:24px;margin-left:auto}.ds-mast nav a{color:var(--ink-2);text-decoration:none;text-underline-offset:3px}.ds-mast nav a:hover,.ds-mast nav a[aria-current]{color:var(--ink);text-decoration:underline}.ds-mast a:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Voice-Bank Catalogue",
+    "overview": "A22's site is printed matter for a synthesiser: a voice-ROM catalogue on cool coated paper. Twelve lettered bank tabs (A to L) run down the edge, each printed in its engine's screen ink. One bank is open at a time. Its ink fills the header band across the sheet, and below it the eight voices are listed in a ruled table with catalogue numbers (A1 to A8). Everything else is black print on grey-white paper, set in one condensed face, the FM-1's own Barlow lettering.\n\nThe page is dense where a catalogue is dense (voice tables, the spec sheet, the manual's charts) and quiet in between. Wide paper margins separate the parts, and secondary facts sit in small print in a right-hand margin column. Colour belongs to the hardware. The bank inks are the engines' screen inks, the knob dots are the FM-1's knob colours, and the real 240×240 screen captures sit in black windows the way the screen sits in the device. The only motion is a short print-in when a bank is opened.\n\nThe site turns down the dark product page: no neon accents on black, no wall of feature cards.",
+    "keyCharacteristics": [
+      "Cool paper ground with a lighter sheet. Black ink and hairline rules do the structural work.",
+      "Bank inks used as flat, full-strength fills on tabs, header bands and swatches, never as tints or gradients.",
+      "One face, Barlow Semi Condensed (Medium for text, Bold for headings), with tabular numerals.",
+      "Ruled tables in place of cards. Catalogue codes (A1 to L8) in place of bullets.",
+      "Real device screen captures, shown pixel-exact in black windows.",
+      "Small-print margin notes for secondary facts."
+    ],
+    "rules": [
+      {
+        "name": "The Hardware Colour Rule",
+        "body": "Every colour on the page belongs to the FM-1: a bank's screen ink, a knob colour, or a real screen capture. Interface chrome (buttons, links, focus, rules) stays in black ink on paper.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Ink Rule",
+        "body": "Bank inks are printed solid at full strength. Lines that sit on an ink fill use translucent black (`rgb(20 23 28 / .18–.35)`), so the same edge works on every bank.",
+        "section": "colors"
+      },
+      {
+        "name": "The Device Lettering Rule",
+        "body": "Barlow Semi Condensed is the only text face. Monospace appears only inside code. Device vocabulary (PRESETS, ALGORITHM, REC, voice and knob names) is set in capitals as on the FM-1, and site prose stays in sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Tables set numerals tabular, so catalogue codes and figures line up down the column.",
+        "section": "typography"
+      },
+      {
+        "name": "The Paper Stack Rule",
+        "body": "Depth is paper on paper, drawn with rules and tone. Nothing floats, and no surface casts a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do fill tabs, bands and swatches with the bank's own screen ink at full strength, and keep the bank letter visible wherever an ink appears.",
+      "Do list voices in ruled tables with catalogue codes (A1–A8) and Bold capital names. Use tables, not cards.",
+      "Do show real FM-1 screen captures at their native 240×240 in a black window with `image-rendering: pixelated`.",
+      "Do put secondary facts in small-print margin notes (14px, Second Ink) under a Rule hairline.",
+      "Do keep the knob colours in the device's order (blue, green, white, orange) and ring each dot with the translucent black hairline.",
+      "Do sign the site as A22, and keep GitHub and Buy me a coffee as quiet links in the masthead or footer.",
+      "Do honour `prefers-reduced-motion` by dropping the tab transition and the print-in."
+    ],
+    "donts": [
+      "Don't introduce colour that isn't the FM-1's (a bank ink, a knob colour or a screen capture). Links, buttons and focus stay black ink.",
+      "Don't cast drop shadows, use gradients or tint the bank inks. Depth is paper, tone and rules.",
+      "Don't add a second text face. Monospace is only for code, and the user has declined a wide display face.",
+      "Don't build a dark product page with neon accents or a grid of feature cards.",
+      "Don't add a credits section or a \"related to h1\" FAQ. The repository carries the credits, and a small licence link in the footer is enough.",
+      "Don't attach a personal name to the site."
+    ]
+  }
+}
