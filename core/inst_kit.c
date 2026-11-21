@@ -178,13 +178,13 @@ static void kit_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             sw *= ks;
             at *= kt;
         }
-        /* Filtered noise (snare wires, clap bursts, shaker) */
+        /* Filtered noise (snare wires, multi-burst 808/909 clap, shaker) */
         if (nlev > 0.0f && an > 0.0002f) {
             f32 nz = noise_s(&v->u[0]);
             SVF_TICK(fn, &v->s[0], nz, lo, bp);
             x += nlev * an * (d->nmode == 0 ? lo : (d->nmode == 1 ? bp * 1.45f : (nz - lo - bp * fn.k)));
-            an *= kn;
-            if (clap && (v->u[1] == 390u || v->u[1] == 810u || v->u[1] == 1260u))
+            an *= (clap && v->u[1] < 1260u) ? (kn * kn * kn) : kn;
+            if (clap && (v->u[1] == 420u || v->u[1] == 840u || v->u[1] == 1260u))
                 an = 1.0f;
         }
         /* 6-oscillator metallic cluster (808/909 hats, cowbell, crash) */
@@ -279,38 +279,96 @@ static void kit_draw(const Vis *vis)
         }
     }
 
-    /* Clean 4x3 Kit Pad Matrix */
+    /* Clean 4x3 Kit Pad Matrix with bespoke instrument silhouettes */
     for (i = 0; i < NDRUM; i++) {
         int col = i % 4, row = i / 4;
         f32 cx = 42.0f + (f32)col * 52.0f;
         f32 cy = 66.0f + (f32)row * 54.0f;
-        f32 scale = (0.78f + 0.36f * tune) * (1.0f + 0.25f * pad_pop[i]);
-        f32 r = (i == KICK ? 19.0f : (i == SNARE ? 17.0f : 14.0f)) * scale;
+        f32 scale = (0.82f + 0.32f * tune) * (1.0f + 0.22f * pad_pop[i]);
+        f32 r = (i == KICK ? 16.5f : (i == SNARE ? 15.0f : 13.5f)) * scale;
         f32 e = pad_hit[i];
+        f32 a = 0.55f + 0.45f * e;
+        f32 w = 1.7f + 1.2f * punch;
         pad_hit[i] = maxf(0.0f, pad_hit[i] - dt / (0.14f + 0.75f * dec));
         spring_z(&pad_pop[i], &pad_popv[i], 0.0f, 26.0f, 0.35f, dt);
 
-        /* subtle cell outline */
-        g_color(GC_SLATE);
-        g_box(cx - 22.0f, cy - 22.0f, 44.0f, 44.0f, 1.0f, 0.22f + 0.25f * e);
+        /* Pad cell outline & active glow */
+        g_color(e > 0.1f ? PCOL[i] : GC_SLATE);
+        g_box(cx - 22.0f, cy - 22.0f, 44.0f, 44.0f, 1.0f + 0.8f * e, 0.24f + 0.45f * e);
+        if (e > 0.04f) {
+            g_color(PCOL[i]);
+            g_glow(cx, cy, 22.0f, 0.38f * e);
+        }
 
         g_color(PCOL[i]);
-        if (i == KICK || i == TOML || i == TOMM || i == TOMH) {
-            g_ring(cx, cy, r, 2.0f + 1.8f * punch, 0.45f + 0.55f * e);
-            if (e > 0.05f) g_disc(cx, cy, r * e * 0.85f, 0.85f * e);
-        } else if (i == SNARE || i == CLAP) {
-            f32 tri[6] = {cx, cy - r, cx + r * 0.9f, cy + r * 0.75f, cx - r * 0.9f, cy + r * 0.75f};
-            g_poly(tri, 3, 1, 2.0f + 1.5f * punch, 0.48f + 0.52f * e);
-            if (e > 0.05f) g_fill(tri, 3, 0.55f * e);
-        } else {
-            /* metallic hats/perc: crossed diamond / burst */
-            g_line(cx - r, cy, cx + r, cy, 1.8f + 1.2f * grit, 0.45f + 0.55f * e);
-            g_line(cx, cy - r, cx, cy + r, 1.8f + 1.2f * grit, 0.45f + 0.55f * e);
-            g_ring(cx, cy, r * 0.55f, 1.6f, 0.4f + 0.6f * e);
+        switch (i) {
+        case KICK: /* Bass drum: outer shell + inner beater dome + sub punch arc */
+            g_ring(cx, cy, r, w + 0.5f, a);
+            g_ring(cx, cy, r * 0.58f, 1.3f, a * 0.75f);
+            g_disc(cx, cy, 3.2f + 4.5f * e, a);
+            break;
+        case RIM: /* Cross-stick rim + diagonal drumstick */
+            g_ring(cx, cy, r * 0.82f, 1.5f, a * 0.8f);
+            g_line(cx - r, cy + r * 0.7f, cx + r, cy - r * 0.7f, w, a);
+            g_disc(cx + r * 0.7f, cy - r * 0.5f, 2.4f, a);
+            break;
+        case SNARE: /* Snare shell + 3 parallel snare wires across head */
+            g_ring(cx, cy, r, w, a);
+            g_line(cx - r * 0.72f, cy - 3.5f, cx + r * 0.72f, cy - 3.5f, 1.2f, a * 0.8f);
+            g_line(cx - r * 0.82f, cy,        cx + r * 0.82f, cy,        1.4f, a);
+            g_line(cx - r * 0.72f, cy + 3.5f, cx + r * 0.72f, cy + 3.5f, 1.2f, a * 0.8f);
+            break;
+        case CLAP: /* Multi-burst stacked chevron fan */
+        {
+            f32 tri[6] = {cx, cy - r, cx + r * 0.88f, cy + r * 0.55f, cx - r * 0.88f, cy + r * 0.55f};
+            g_poly(tri, 3, 1, w, a);
+            g_line(cx - r * 0.68f, cy + r * 0.85f, cx + r * 0.68f, cy + r * 0.85f, 1.6f, a * 0.85f);
+            if (e > 0.05f) g_fill(tri, 3, 0.50f * e);
+            break;
         }
-        /* expanding sonar ring on strike */
+        case TOML:
+        case TOMM:
+        case TOMH: /* Graduated toms with center head disc */
+        {
+            f32 tr = r * (i == TOML ? 1.08f : (i == TOMM ? 0.94f : 0.80f));
+            g_ring(cx, cy, tr, w, a);
+            g_disc(cx, cy, tr * (0.28f + 0.45f * e), a * 0.85f);
+            break;
+        }
+        case HAT: /* Closed hi-hat: tightly paired horizontal cymbals + stand rod */
+            g_line(cx, cy - r * 0.85f, cx, cy + r * 0.85f, 1.3f, a * 0.7f);
+            g_ellipse(cx, cy - 1.5f, r, 3.2f, 1.6f, a);
+            g_ellipse(cx, cy + 1.8f, r, 3.2f, 1.6f, a * 0.85f);
+            break;
+        case SHAKE: /* Shaker capsule + internal grit grains */
+            g_ellipse(cx, cy, r * 0.65f, r * 0.95f, w, a);
+            g_disc(cx - 2.5f, cy - 2.5f, 1.6f, a);
+            g_disc(cx + 2.5f, cy + 2.0f, 1.6f, a);
+            g_disc(cx + 1.5f, cy - 3.0f, 1.4f, a);
+            break;
+        case COW: /* Classic 808 trapezoidal cowbell + clapper */
+        {
+            f32 cb[8] = {cx - r * 0.52f, cy - r * 0.85f, cx + r * 0.52f, cy - r * 0.85f,
+                         cx + r * 0.88f, cy + r * 0.82f, cx - r * 0.88f, cy + r * 0.82f};
+            g_poly(cb, 4, 1, w, a);
+            g_disc(cx, cy + r * 0.45f, 2.5f + 2.0f * e, a);
+            break;
+        }
+        case OHAT: /* Open hi-hat: separated top/bottom cymbal pair */
+            g_line(cx, cy - r * 0.95f, cx, cy + r * 0.95f, 1.3f, a * 0.7f);
+            g_ellipse(cx, cy - 4.8f, r, 3.4f, 1.6f, a);
+            g_ellipse(cx, cy + 4.8f, r, 3.4f, 1.6f, a);
+            break;
+        default: /* CRASH: ribbed crash/ride cymbal dome + shimmer rays */
+            g_ring(cx, cy, r, w, a);
+            g_ring(cx, cy, r * 0.42f, 1.4f, a * 0.85f);
+            g_line(cx - r * 0.8f, cy - r * 0.8f, cx + r * 0.8f, cy + r * 0.8f, 1.2f + grit, a * 0.65f);
+            g_line(cx + r * 0.8f, cy - r * 0.8f, cx - r * 0.8f, cy + r * 0.8f, 1.2f + grit, a * 0.65f);
+            break;
+        }
+        /* Expanding sonar ring on strike */
         if (e > 0.02f)
-            g_ring(cx, cy, r + (1.0f - e) * (16.0f + 22.0f * dec), 1.6f, e * 0.85f);
+            g_ring(cx, cy, r + (1.0f - e) * (14.0f + 18.0f * dec), 1.6f, e * 0.85f);
     }
     g_color(GC_WHITE);
 }

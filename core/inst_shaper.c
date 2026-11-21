@@ -93,10 +93,14 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
     f32 f, d0, d1, dm, fc;
     f32 p0 = v->ph[0], p1 = v->ph[1], pm = v->ph[2];
     f32 plk = (algo == 3) ? exp2fx(-v->age * 2.2f) : 1.0f;
-    f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f), isteps = 1.0f / steps;   /* CRUSH's phase steps */
-    PdWarp kw = pd_warp_k(warp);
-    PdPulse kp = pd_pulse_k(warp * (algo == 3 ? plk : 0.8f));
+    f32 steps = 3.0f + 28.0f * (1.0f - warp * 0.88f);
+    f32 isteps = (algo == 7) ? (1.0f / steps) : 0.0f;
+    PdWarp kw = {0.5f, 2.0f, 2.0f};
+    PdPulse kp = {0.5f, 2.0f};
     Svf fl;
+
+    if (algo == 0 || algo == 5) kw = pd_warp_k(warp);
+    else if (algo == 3 || algo == 6) kp = pd_pulse_k(warp * (algo == 3 ? plk : 0.8f));
 
     if (b->punch > 0.01f) pitch += b->punch * v->s[7] * 0.85f;
     f = mtof(pitch);
@@ -165,11 +169,13 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
                 break;
             }
             case 6: /* GLASSY: delicate double-pulse PD chime + soft 2nd-harmonic shimmer */
-                xl = -tcos(pd_pulse(p0, &kp)) * 0.65f + 0.40f * tsin(pm + tsin(p0) * warp * 0.6f);
-                xr = -tcos(pd_pulse(p1, &kp)) * 0.65f + 0.40f * tsin(pm + tsin(p1) * warp * 0.6f);
-                xl = fold_sin(xl * (1.0f + 0.45f * (fold_g - 1.0f)) + b0 * 0.5f) - dc1;
-                xr = fold_sin(xr * (1.0f + 0.45f * (fold_g - 1.0f)) + b0 * 0.5f) - dc1;
+            {
+                f32 c0 = -tcos(pd_pulse(p0, &kp)), c1 = -tcos(pd_pulse(p1, &kp));
+                f32 fg = 1.0f + 0.45f * (fold_g - 1.0f);
+                xl = fold_sin((c0 * 0.65f + 0.40f * tsin(pm + c0 * warp * 0.55f)) * fg + b0 * 0.5f) - dc1;
+                xr = fold_sin((c1 * 0.65f + 0.40f * tsin(pm + c1 * warp * 0.55f)) * fg + b0 * 0.5f) - dc1;
                 break;
+            }
             default: /* CRUSH: stepped digital phase-quantized wavefolder */
             {
                 f32 q0 = (f32)(int)(p0 * steps) * isteps;
@@ -206,12 +212,14 @@ static uint32_t dg_seen;
 static void digital_draw(const Vis *vis)
 {
     f32 dt = vis->dt, warp = vis->k[0], fold = vis->k[1], bias = vis->k[2], tone = vis->k[3];
-    f32 xy[2 * 72], xy2[2 * 72];
+    f32 xy[2 * 72], xy2[2 * 74];
     f32 x0 = 26.0f, x1 = 214.0f, cy = 114.0f, amp = 48.0f;
     f32 fold_g = 1.0f + fold * fold * 3.6f;
     f32 b0 = bias * 0.65f, dc0 = fold_sin(b0);
-    PdWarp kw;
-    int i;
+    f32 steps = 3.0f + 22.0f * (1.0f - warp * 0.85f), isteps = 1.0f / steps;
+    PdWarp kw = pd_warp_k(warp);
+    PdPulse kp = pd_pulse_k(warp * 0.8f);
+    int algo = vis->algo & 7, i;
 
     if (vis->fresh) {
         dg_seen = vis->notes;
@@ -241,30 +249,64 @@ static void digital_draw(const Vis *vis)
         g_line(26.0f, 176.0f, 26.0f + 188.0f * tone, 176.0f, 2.4f, 0.80f);
     }
 
-    /* Sculpted mathematical PD waveform (Blue) & Folded waveform (Green) */
-    kw = pd_warp_k(warp);
+    /* Sculpted algorithm-specific PD waveform (Blue) & Shaded Folded waveform (Green) */
+    xy2[0] = x0;
+    xy2[1] = cy;
     for (i = 0; i < 72; i++) {
         f32 p = (f32)i * (1.0f / 71.0f);
+        f32 ph = fractf(p + dg_ph * 0.15f);
         f32 px = lerpf(x0, x1, p);
-        f32 pd = -tcos(pd_warp(fractf(p + dg_ph * 0.15f), &kw));
-        f32 fl = fold_sin(pd * (fold_g + 0.6f * dg_lev) + b0) - dc0;
-        f32 sc = vis->scope[(vis->scope_pos + i * 3) & (SCOPE_N - 1)] * 20.0f;
-        xy[2 * i]      = px;
-        xy[2 * i + 1]  = clampf(cy - pd * (amp * 0.65f), 48.0f, 178.0f);
-        xy2[2 * i]     = px;
-        xy2[2 * i + 1] = clampf(cy - fl * (amp * (0.78f + 0.22f * dg_lev + 0.08f * dg_kick)) - sc * 0.55f, 48.0f, 178.0f);
+        f32 pd, fl;
+        switch (algo) {
+        case 1: /* CZ-RES: windowed resonant sync */
+            pd = tsin(ph * (1.0f + 8.0f * warp)) * (1.0f - ph);
+            break;
+        case 2: /* BUCHLA: FM + 2-stage wavefolder */
+            pd = tsin(ph + tsin(ph * 1.5f) * warp * 0.45f);
+            break;
+        case 3: /* PLUCK: double-pulse PD */
+        case 6: /* GLASSY */
+            pd = -tcos(pd_pulse(ph, &kp));
+            break;
+        case 4: /* METRIC: inharmonic FM */
+            pd = tsin(ph + tsin(ph * 2.76f) * (0.2f + 0.65f * warp));
+            break;
+        case 5: /* CYBER: octave-split PD */
+            pd = 0.48f * tsin(ph) - 0.52f * tcos(pd_warp(fractf(ph * 2.0f), &kw));
+            break;
+        case 7: /* CRUSH: stepped phase quantizer */
+            pd = tsin((f32)(int)(ph * steps) * isteps);
+            break;
+        default: /* CZ-SAW */
+            pd = -tcos(pd_warp(ph, &kw));
+            break;
+        }
+        fl = fold_sin(pd * (fold_g + 0.6f * dg_lev) + b0) - dc0;
+        if (algo == 2) fl = fold_sin(fl * (1.0f + 1.1f * fold) + b0 * 0.5f) - fold_sin(b0 * 0.5f);
+        {
+            f32 sc = vis->scope[(vis->scope_pos + i * 3) & (SCOPE_N - 1)] * 20.0f;
+            xy[2 * i]          = px;
+            xy[2 * i + 1]      = clampf(cy - pd * (amp * 0.65f), 48.0f, 174.0f);
+            xy2[2 * (i + 1)]     = px;
+            xy2[2 * (i + 1) + 1] = clampf(cy - fl * (amp * (0.78f + 0.22f * dg_lev + 0.08f * dg_kick)) - sc * 0.55f, 48.0f, 174.0f);
+        }
     }
+    xy2[2 * 73]     = x1;
+    xy2[2 * 73 + 1] = cy;
+
+    g_color(GC_CYAN);
+    g_fillv(xy2, 74, 52.0f, 0.28f + 0.16f * dg_lev, 172.0f, 0.04f);
     g_color(GC_BLUE);
-    g_poly(xy, 72, 0, 1.5f, 0.52f);
+    g_poly(xy, 72, 0, 1.5f, 0.55f);
     g_color(GC_GREEN);
-    g_poly(xy2, 72, 0, 2.5f, 0.95f);
+    g_poly(xy2 + 2, 72, 0, 2.5f, 0.95f);
 
     /* Phase distortion kink marker (White = K3 BIAS / K1 WARP node) */
     {
         f32 kx = lerpf(x0, x1, clampf(0.5f - 0.44f * warp, 0.06f, 0.5f));
         f32 ky = cy - bias * 28.0f;
         g_color(GC_WHITE);
-        g_line(kx, 48.0f, kx, 178.0f, 1.1f, 0.35f);
+        g_line(kx, 48.0f, kx, 174.0f, 1.1f, 0.35f);
         g_ring(kx, ky, 6.5f + 3.0f * dg_lev, 2.0f, 0.92f);
         g_disc(kx, ky, 2.6f, 0.95f);
     }

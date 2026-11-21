@@ -131,9 +131,9 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
                 ol = 0.78f * tsin(p1 + o2 * idx) + 0.25f * tsin(p1);
                 or_ = 0.78f * tsin(p1r + o2 * idx * 0.98f) + 0.25f * tsin(p1r);
                 break;
-            case 2: /* BELL: Y-branch (4+3)->2->1 with stereo carrier split */
+            case 2: /* BELL: Y-branch (4+3)->2->1 with faster decay on upper chime Op4 */
                 o3 = tsin(p3);
-                o2 = tsin(p2 + (o4 * 0.55f + o3 * 0.55f) * idx);
+                o2 = tsin(p2 + (o4 * (0.24f + 0.44f * v->menv) + o3 * 0.54f) * idx);
                 ol = tsin(p1 + o2 * idx * 0.85f);
                 or_ = tsin(p1r + o2 * idx * 0.85f + 0.15f * o3 * idx);
                 break;
@@ -143,17 +143,20 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
                 ol = 0.45f * tsin(p1 + o4 * idx) + 0.38f * o2 + 0.25f * o3;
                 or_ = 0.45f * tsin(p1r + o4 * idx * 0.92f) + 0.25f * o2 + 0.38f * o3;
                 break;
-            case 4: /* BRASS: parallel rich mod pairs */
-                o3 = tsin(p3 + o4 * idx * 0.8f);
-                o2 = tsin(p2 + o4 * idx * 0.4f);
+            case 4: /* BRASS: parallel rich horn pairs with swell bloom */
+                o3 = tsin(p3 + o4 * idx * (0.45f + 0.45f * matt));
+                o2 = tsin(p2 + o4 * idx * 0.42f);
                 ol = 0.6f * tsin(p1 + o2 * idx) + 0.45f * o3;
                 or_ = 0.6f * tsin(p1r + o3 * idx * 0.9f) + 0.45f * o2;
                 break;
-            case 5: /* PLUCK: 3 modulators -> 1 carrier */
+            case 5: /* PLUCK: 3 modulators -> 1 carrier with percussive upper partial decay */
                 o3 = tsin(p3);
                 o2 = tsin(p2);
-                ol = tsin(p1 + (o2 * 0.5f + o3 * 0.35f + o4 * 0.3f) * idx);
-                or_ = tsin(p1r + (o2 * 0.45f + o3 * 0.4f + o4 * 0.3f) * idx);
+                {
+                    f32 pm_env = 0.25f + 0.75f * v->menv;
+                    ol = tsin(p1 + (o2 * 0.52f + (o3 * 0.36f + o4 * 0.28f) * pm_env) * idx);
+                    or_ = tsin(p1r + (o2 * 0.46f + (o3 * 0.40f + o4 * 0.28f) * pm_env) * idx);
+                }
                 break;
             case 6: /* ORGAN: 4-parallel harmonic additive + soft cross-FM */
                 o2 = tsin(p2 + 0.18f * o4 * idx);
@@ -221,6 +224,18 @@ static const int8_t EDGES[8][4][2] = {
     {{0, 1}, {1, 2}, {2, 3}, {3, 0}},
 };
 
+/* carrier bitmask per topology (bit i = 1 if node i is an audible carrier) */
+static const uint8_t CAR_MASK[8] = {
+    0x0A, /* 0 KEYS: Op3, Op1 */
+    0x08, /* 1 BASS: Op1 */
+    0x08, /* 2 BELL: Op1 */
+    0x0E, /* 3 PAD:  Op3, Op2, Op1 */
+    0x0A, /* 4 BRASS:Op3, Op1 */
+    0x08, /* 5 PLUCK:Op1 */
+    0x0F, /* 6 ORGAN:all 4 parallel */
+    0x0C, /* 7 ALIEN:Op2, Op1 ring */
+};
+
 static void fm4_draw(const Vis *vis)
 {
     f32 dt = vis->dt, ratio = vis->k[0], depth = vis->k[1], fb = vis->k[2], flt = vis->k[3];
@@ -240,15 +255,36 @@ static void fm4_draw(const Vis *vis)
     fm_lev += (minf(1.0f, vis->level * 3.4f) - fm_lev) * minf(1.0f, dt * 16.0f);
     fm_rot = fractf(fm_rot + dt * (0.04f + 0.14f * depth + 0.12f * fm_lev));
 
+    /* Soft ambient core glow responding to K4 FILTER & output level */
+    g_color(GC_CYAN);
+    g_glow(cx, cy, 34.0f + 24.0f * flt + 12.0f * fm_lev, 0.16f + 0.22f * flt * (0.4f + 0.6f * fm_lev));
+
     /* Subtle coordinate crosshairs in Slate */
     g_color(GC_SLATE);
     g_ring(cx, cy, 78.0f, 1.1f, 0.28f);
+    g_ring(cx, cy, 38.0f, 1.0f, 0.16f);
     g_line(cx - 86.0f, cy, cx + 86.0f, cy, 1.0f, 0.16f);
     g_line(cx, cy - 78.0f, cx, cy + 78.0f, 1.0f, 0.16f);
 
     /* Filter halo ring (Orange = K4 FILTER) */
     g_color(GC_ORANGE);
     g_arc(cx, cy, 78.0f, -0.25f, -0.25f + 0.99f * flt, 2.4f, 0.72f + 0.25f * fm_lev);
+
+    /* Inner 2D FM Lissajous harmonic orbit (morphs with topology + K1 RATIO + K2 DEPTH) */
+    {
+        f32 wx = 1.0f + (f32)((algo + 1) & 3);
+        f32 wy = 1.0f + (f32)(int)(ratio * 4.0f + 0.5f);
+        f32 rl = 26.0f + 10.0f * flt + 6.0f * fm_lev;
+        f32 pm = (0.08f + 0.38f * depth) * (0.6f + 0.4f * fm_lev);
+        for (i = 0; i < 64; i++) {
+            f32 u = (f32)i * (1.0f / 64.0f);
+            f32 m = sin_turns((wx + wy) * u + fm_rot * 2.0f) * pm;
+            xy[2 * i]     = cx + sin_turns(wx * u + m + fm_rot) * rl;
+            xy[2 * i + 1] = cy + cos_turns(wy * u - m * fb) * rl * 0.86f;
+        }
+        g_color(GC_CYAN);
+        g_poly(xy, 64, 1, 1.3f, 0.32f + 0.32f * fm_lev);
+    }
 
     /* Outer FM Phase-Modulated Waveform Ring (Green = K2 DEPTH, Blue = K1 RATIO) */
     {
@@ -277,14 +313,18 @@ static void fm4_draw(const Vis *vis)
         g_poly(xy, 80, 1, 2.2f, 0.85f);
     }
 
-    /* Modulation routing cables between the 4 operator nodes */
+    /* Modulation routing cables + traveling signal pulses between the 4 operator nodes */
     for (i = 0; i < 4; i++) {
         int a0 = EDGES[algo][i][0], a1 = EDGES[algo][i][1];
+        f32 x0, y0, x1, y1, u;
         if (a0 < 0) continue;
+        x0 = NODE_XY[algo][a0][0]; y0 = NODE_XY[algo][a0][1];
+        x1 = NODE_XY[algo][a1][0]; y1 = NODE_XY[algo][a1][1];
         g_color(NC[a0]);
-        g_line(NODE_XY[algo][a0][0], NODE_XY[algo][a0][1],
-               NODE_XY[algo][a1][0], NODE_XY[algo][a1][1],
-               1.6f + 1.8f * depth, 0.55f + 0.4f * fm_lev);
+        g_line(x0, y0, x1, y1, 1.6f + 1.8f * depth, 0.55f + 0.4f * fm_lev);
+        u = fractf(fm_rot * 3.0f + (f32)i * 0.25f);
+        g_color(GC_GOLD);
+        g_disc(lerpf(x0, x1, u), lerpf(y0, y1, u), 2.2f + 1.5f * fm_lev, 0.65f + 0.35f * fm_lev);
     }
 
     /* Feedback self-loop on Op4 (White = K3 FEEDBK) */
@@ -294,14 +334,17 @@ static void fm4_draw(const Vis *vis)
                7.0f + 5.0f * fb, 1.6f, 0.5f + 0.5f * fb);
     }
 
-    /* Draw the 4 Operator Nodes */
+    /* Draw the 4 Operator Nodes (carriers get a double outer ring, modulators get single ring) */
     for (i = 0; i < 4; i++) {
         f32 nx = NODE_XY[algo][i][0], ny = NODE_XY[algo][i][1];
         f32 nr = 10.5f + 4.0f * vis->k[i] + 3.0f * fm_lev + 2.0f * fm_kick;
+        int is_car = (CAR_MASK[algo] >> i) & 1;
         g_mode(G_PAINT);
-        g_disc(nx, ny, nr + 2.0f, 0.0f);
+        g_disc(nx, ny, nr + (is_car ? 4.0f : 2.0f), 0.0f);
         g_mode(G_MAX);
         g_color(NC[i]);
+        if (is_car)
+            g_ring(nx, ny, nr + 3.2f, 1.2f, 0.52f + 0.35f * fm_lev);
         g_ring(nx, ny, nr, 2.2f, 0.95f);
         g_disc(nx, ny, 3.0f + 4.5f * vis->k[i] * (0.45f + 0.55f * fm_lev), 0.9f);
     }

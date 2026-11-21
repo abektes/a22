@@ -162,9 +162,17 @@ static void pulse_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         }
         }
 
-        /* 24 dB/oct ZDF Non-Linear Stereo Ladder Filter */
-        xl = ladder_tick(&fl, &v->s[0], xl * P.drive) * comp * vel;
-        xr = ladder_tick(&fl, &v->s[4], xr * P.drive) * comp * vel;
+        /* 24 dB/oct ZDF Non-Linear Stereo Ladder Filter (+ subtle JP-8000 high-air shelf on SUPER) */
+        {
+            f32 rl = xl, rr = xr;
+            xl = ladder_tick(&fl, &v->s[0], xl * P.drive) * comp * vel;
+            xr = ladder_tick(&fl, &v->s[4], xr * P.drive) * comp * vel;
+            if (algo == 2) {
+                f32 air = 0.11f * P.tzfm * vel;
+                xl += (rl - xl) * air;
+                xr += (rr - xr) * air;
+            }
+        }
         out_l[i] = xl;
         out_r[i] = xr;
 
@@ -187,30 +195,46 @@ static void pulse_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     v->s[8] *= 1.0f - onepole_k(0.030f, b->sr / (f32)n);
 }
 
-/* ---- 4-Color Analog Graphic: Dual Oscilloscope + Live 24 dB Ladder Curve ---------- */
+/* ---- 4-Color Analog Graphic: Dual Oscilloscope + Shaded 24 dB Ladder Curve ------- */
 static void pulse_draw(const Vis *vis)
 {
     f32 shape = vis->k[0], tzfm = vis->k[1], cut = vis->k[2], reso = vis->k[3];
     f32 lev = minf(1.0f, vis->level * 3.0f);
-    f32 xy[2 * 64];
-    int i;
+    f32 xy[2 * 66];
+    int algo = vis->algo & 7, i;
 
     /* Grid frame (Slate) */
     g_color(GC_SLATE);
-    g_box(18.0f, 44.0f, 204.0f, 68.0f, 1.0f, 0.26f);
-    g_box(18.0f, 124.0f, 204.0f, 76.0f, 1.0f, 0.26f);
+    g_box(18.0f, 44.0f, 204.0f, 68.0f, 1.0f, 0.28f);
+    g_box(18.0f, 124.0f, 204.0f, 76.0f, 1.0f, 0.28f);
     g_line(18.0f, 78.0f, 222.0f, 78.0f, 1.0f, 0.16f);
+    g_line(120.0f, 44.0f, 120.0f, 112.0f, 1.0f, 0.12f);
 
-    /* Top Box: Dual Waveform / TZFM Oscilloscope (Blue = SHAPE, Green = TZFM) */
+    /* Top Box: Algorithm-Aware Oscillator Waveform (Blue = SHAPE) + Live Scope (Green = TZFM) */
     for (i = 0; i < 64; i++) {
         f32 u = (f32)i * (1.0f / 63.0f);
         f32 ph = fractf(u * 2.0f + vis->t * 0.35f);
-        f32 w = lerpf(2.0f * ph - 1.0f, ph < (0.5f - 0.4f * shape) ? 1.0f : -1.0f, 0.35f + 0.65f * shape);
+        f32 w;
+        if (algo == 1) {
+            /* TZFM: thru-zero phase reversal */
+            w = sin_turns(ph + tzfm * 0.85f * sin_turns(ph * (1.0f + (f32)(int)(shape * 3.0f))));
+        } else if (algo == 4) {
+            /* SYNC: hard-synced slave sawtooth */
+            f32 sp = fractf(ph * (1.4f + 4.2f * shape));
+            w = (2.0f * sp - 1.0f) * (1.0f - 0.35f * ph);
+        } else if (algo == 2) {
+            /* SUPER: multi-saw unison interference */
+            w = 0.45f * (2.0f * ph - 1.0f)
+              + 0.35f * (2.0f * fractf(ph * 1.02f + vis->t * 0.25f) - 1.0f)
+              + 0.25f * (2.0f * fractf(ph * 0.98f - vis->t * 0.22f) - 1.0f);
+        } else {
+            w = lerpf(2.0f * ph - 1.0f, ph < (0.5f - 0.4f * shape) ? 1.0f : -1.0f, 0.35f + 0.65f * shape);
+        }
         xy[2 * i]     = 22.0f + u * 196.0f;
         xy[2 * i + 1] = 78.0f - w * (18.0f + 8.0f * lev);
     }
     g_color(GC_BLUE);
-    g_poly(xy, 64, 0, 2.0f, 0.85f);
+    g_poly(xy, 64, 0, 1.8f, 0.78f);
 
     for (i = 0; i < 64; i++) {
         f32 u = (f32)i * (1.0f / 63.0f);
@@ -220,28 +244,40 @@ static void pulse_draw(const Vis *vis)
         xy[2 * i + 1] = 78.0f - clampf(s * 34.0f + m, -28.0f, 28.0f);
     }
     g_color(GC_GREEN);
-    g_poly(xy, 64, 0, 2.2f, 0.92f);
+    g_poly(xy, 64, 0, 2.2f, 0.94f);
 
-    /* Bottom Box: Iconic 24 dB Ladder Filter Curve (White = CUTOFF, Orange = RESO peak) */
+    /* Bottom Box: Shaded 24 dB Ladder Filter Curve (White = CUTOFF, Orange = RESO peak) */
     {
         f32 cx_cut = 30.0f + cut * 174.0f;
         f32 peak_h = reso * (36.0f + 16.0f * lev);
+        f32 py_peak = clampf(160.0f - peak_h, 128.0f, 196.0f);
+        xy[0] = 22.0f;
+        xy[1] = 196.0f;
         for (i = 0; i < 64; i++) {
             f32 x = 22.0f + (f32)i * (196.0f / 63.0f);
             f32 d = (x - cx_cut) * (1.0f / 22.0f);
             f32 pass = d < 0.0f ? 1.0f : 1.0f / (1.0f + d * d * d * d * 0.55f);
             f32 bump = peak_h / (1.0f + d * d * 4.5f);
             f32 y = 194.0f - pass * 34.0f - bump;
-            xy[2 * i]     = x;
-            xy[2 * i + 1] = clampf(y, 128.0f, 196.0f);
+            xy[2 * (i + 1)]     = x;
+            xy[2 * (i + 1) + 1] = clampf(y, 128.0f, 196.0f);
         }
-        g_color(GC_WHITE);
-        g_poly(xy, 64, 0, 2.5f, 0.95f);
+        xy[2 * 65]     = 218.0f;
+        xy[2 * 65 + 1] = 196.0f;
 
-        /* Orange resonance handle & vertical cutoff marker */
+        /* Shaded vertical gradient fill under filter curve */
+        g_color(GC_CYAN);
+        g_fillv(xy, 66, 128.0f, 0.34f + 0.16f * lev, 196.0f, 0.03f);
+
+        g_color(GC_WHITE);
+        g_poly(xy + 2, 64, 0, 2.5f, 0.95f);
+
+        /* Orange resonance glow, handle & vertical cutoff marker */
         g_color(GC_ORANGE);
-        g_line(cx_cut, 196.0f, cx_cut, clampf(160.0f - peak_h, 128.0f, 196.0f), 1.4f, 0.48f);
-        g_disc(cx_cut, clampf(160.0f - peak_h, 128.0f, 196.0f), 4.0f + 3.0f * reso, 0.95f);
+        g_glow(cx_cut, py_peak, 12.0f + 16.0f * reso, 0.28f + 0.35f * reso);
+        g_line(cx_cut, 196.0f, cx_cut, py_peak, 1.4f, 0.52f);
+        g_disc(cx_cut, py_peak, 4.0f + 3.0f * reso, 0.96f);
+        g_ring(cx_cut, py_peak, 7.5f + 3.5f * reso, 1.2f, 0.55f);
     }
     g_color(GC_WHITE);
 }

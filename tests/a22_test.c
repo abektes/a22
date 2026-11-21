@@ -181,18 +181,29 @@ static void sections_3_to_6(void)
     assert(h1_instrument() == 4 && h1_algorithm() == 5);
     printf("PASS: snapshot 2 kept SHAPER algorithm 6 and brought it back\n");
 
-    /* 4) every algorithm its own knobs */
-    fresh();
-    h1_control_set(H1_ENC_ALGO, 0);
-    h1_control_set(H1_ENC_K1, 10);
-    h1_control_set(H1_ENC_ALGO, 1);
-    h1_control_set(H1_ENC_K1, 90);
-    h1_control_set(H1_ENC_ALGO, 0);
-    assert(KNOBS_NOW(st.inst)[0] == 10);
-    h1_control_set(H1_ENC_ALGO, 1);
-    assert(KNOBS_NOW(st.inst)[0] == 90);
-    assert(KNOBS(st.inst, 0)[0] == 10);
-    printf("PASS: each algorithm keeps its own knobs\n");
+    /* 4) every algorithm its own curated factory knobs, and keeps edits independently */
+    {
+        int i, a, k, diff;
+        fresh();
+        for (i = 0; i < NINST; i++) {
+            for (a = 1; a < NALGO; a++) {
+                diff = 0;
+                for (k = 0; k < 4; k++)
+                    if (KNOBS(i, a)[k] != KNOBS(i, 0)[k]) diff = 1;
+                assert(diff);
+            }
+        }
+        h1_control_set(H1_ENC_ALGO, 0);
+        h1_control_set(H1_ENC_K1, 10);
+        h1_control_set(H1_ENC_ALGO, 1);
+        h1_control_set(H1_ENC_K1, 90);
+        h1_control_set(H1_ENC_ALGO, 0);
+        assert(KNOBS_NOW(st.inst)[0] == 10);
+        h1_control_set(H1_ENC_ALGO, 1);
+        assert(KNOBS_NOW(st.inst)[0] == 90);
+        assert(KNOBS(st.inst, 0)[0] == 10);
+        printf("PASS: each of the 80 algorithms starts with curated factory knobs and keeps its own\n");
+    }
 
     /* 5) varispeed */
     {

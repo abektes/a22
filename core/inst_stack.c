@@ -200,17 +200,19 @@ static void cluster_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
             o[2] = saw_bl(p2, d[2]) * 0.65f;
             o[3] = tsin(p3 + mod * sh_idx * 0.90f) * 0.65f;
             break;
-        case 6: /* CHOIR: rich saw/FM stack fed into dual vowel formant filters */
+        case 6: /* CHOIR: rich saw/FM stack fed into dual vowel formant filters + airy singer presence */
         {
             f32 raw_l = 0.45f * saw_bl(p0, d[0]) + 0.35f * saw_bl(p2, d[2]) + 0.25f * tsin(p1 + mod * sh_idx * 0.5f);
             f32 raw_r = 0.45f * saw_bl(p1, d[1]) + 0.35f * saw_bl(p3, d[3]) + 0.25f * tsin(p0 + mod * sh_idx * 0.5f);
-            f32 lp, b1l, b2l, b1r, b2r;
-            SVF_TICK(fm1, &v->s[8],  raw_l, lp, b1l); (void)lp;
-            SVF_TICK(fm2, &v->s[10], raw_l, lp, b2l); (void)lp;
-            SVF_TICK(fm1, &v->s[0],  raw_r, lp, b1r); (void)lp;
-            SVF_TICK(fm2, &v->s[2],  raw_r, lp, b2r); (void)lp;
-            o[0] = (b1l * 0.9f + b2l * 0.7f + raw_l * 0.16f);
-            o[1] = (b1r * 0.9f + b2r * 0.7f + raw_r * 0.16f);
+            f32 lp1, lp2, b1l, b2l, b1r, b2r, hpl, hpr;
+            SVF_TICK(fm1, &v->s[8],  raw_l, lp1, b1l); (void)lp1;
+            SVF_TICK(fm2, &v->s[10], raw_l, lp2, b2l);
+            hpl = raw_l - lp2 - b2l * fm2.k;
+            SVF_TICK(fm1, &v->s[0],  raw_r, lp1, b1r); (void)lp1;
+            SVF_TICK(fm2, &v->s[2],  raw_r, lp2, b2r);
+            hpr = raw_r - lp2 - b2r * fm2.k;
+            o[0] = (b1l * 0.90f + b2l * 0.72f + hpl * (0.10f + 0.16f * C.glow) + raw_l * 0.12f);
+            o[1] = (b1r * 0.90f + b2r * 0.72f + hpr * (0.10f + 0.16f * C.glow) + raw_r * 0.12f);
             o[2] = o[0] * 0.45f;
             o[3] = o[1] * 0.45f;
             break;
@@ -258,7 +260,7 @@ static void cluster_draw(const Vis *vis)
     f32 cx = 120.0f, cy = 112.0f;
     f32 sat_x[4], sat_y[4], poly[8];
     static const int ORBC[4] = {GC_BLUE, GC_GREEN, GC_WHITE, GC_ORANGE};
-    int i;
+    int algo = vis->algo & 7, i;
 
     if (vis->fresh) {
         cl_seen = vis->notes;
@@ -274,7 +276,7 @@ static void cluster_draw(const Vis *vis)
 
     /* Background glow aura (Orange = K4 GLOW) */
     g_color(GC_ORANGE);
-    g_glow(cx, cy, 24.0f + 38.0f * glow + 16.0f * cl_lev, 0.25f + 0.35f * glow);
+    g_glow(cx, cy, 30.0f + 42.0f * glow + 18.0f * cl_lev, 0.25f + 0.35f * glow);
 
     /* Subtle reference crosshairs */
     g_color(GC_SLATE);
@@ -286,9 +288,9 @@ static void cluster_draw(const Vis *vis)
     for (i = 0; i < 4; i++) {
         f32 fi = (f32)i;
         f32 rx = 28.0f + (12.0f + 34.0f * spread) * (0.45f + 0.22f * fi) + 4.0f * cl_kick;
-        f32 ry = rx * (0.42f + 0.45f * glow);
+        f32 ry = rx * (0.38f + 0.48f * glow + 0.04f * (f32)(algo & 3));
         f32 wob = drift * 6.5f * sin_turns(cl_rot * (1.5f + 0.4f * fi) + fi * 0.25f);
-        f32 ang = cl_rot * (1.0f + 0.25f * fi) + fi * (0.14f + 0.18f * chord);
+        f32 ang = cl_rot * (1.0f + 0.25f * fi) + fi * (0.14f + 0.18f * chord) + (f32)algo * 0.07f;
         f32 sx = cx + cos_turns(ang) * rx + wob;
         f32 sy = cy + sin_turns(ang) * ry + wob * 0.5f;
         sat_x[i] = sx;
@@ -298,11 +300,14 @@ static void cluster_draw(const Vis *vis)
 
         g_color(ORBC[i]);
         g_ellipse(cx, cy, rx, ry, 1.3f, 0.38f + 0.25f * cl_lev);
+        /* radial spoke to center */
+        g_line(cx, cy, sx, sy, 1.1f, 0.22f + 0.22f * cl_lev);
     }
 
-    /* Chord constellation connecting polygon */
+    /* Shaded Chord Constellation Polygon (vertical gradient fill + bright outline) */
     g_color(GC_CYAN);
-    g_poly(poly, 4, 1, 1.4f, 0.42f + 0.38f * cl_lev);
+    g_fillv(poly, 4, cy - 52.0f, 0.26f + 0.18f * cl_lev, cy + 52.0f, 0.04f);
+    g_poly(poly, 4, 1, 1.7f, 0.55f + 0.38f * cl_lev);
 
     /* Center harmonic core + glowing satellite nodes */
     g_color(GC_WHITE);
@@ -312,6 +317,7 @@ static void cluster_draw(const Vis *vis)
     for (i = 0; i < 4; i++) {
         f32 nr = 5.5f + 3.5f * vis->k[i] + 3.0f * cl_lev;
         g_color(ORBC[i]);
+        g_glow(sat_x[i], sat_y[i], nr * 2.2f, 0.25f + 0.25f * cl_lev);
         g_disc(sat_x[i], sat_y[i], nr, 0.92f);
         g_ring(sat_x[i], sat_y[i], nr + 3.5f, 1.3f, 0.50f);
     }

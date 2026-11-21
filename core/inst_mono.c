@@ -74,9 +74,10 @@ static void mono_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     if (algo == 0 || algo == 1 || algo == 3 || algo == 4 || algo == 5)
         pitch -= 12.0f;
 
-    /* Exponential pitch zap / punch transient */
+    /* Exponential pitch zap / punch transient (or Alpha Juno upward Hoover swoop) */
     if (algo == 3)      pitch += zap * (5.0f + 14.0f * V.bite);   /* ZAP-BASS punch */
     else if (algo == 6) pitch += zap * (2.5f + 9.0f * V.bite);    /* LASER sci-fi sweep */
+    else if (algo == 7) pitch -= zap * (2.8f + 4.5f * V.bite);    /* HOOVER upward rave swoop */
     else if (b->punch > 0.01f) pitch += zap * b->punch * 2.2f;
 
     f = clampf(mtof(pitch), 22.0f, 8000.0f);
@@ -182,15 +183,16 @@ static void mono_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             pm += dm; if (pm >= 1.0f) pm -= 1.0f;
             goto after_step;
         }
-        default: /* HOOVER: thick detuned PWM + FM rave mono monster */
+        default: /* HOOVER: thick detuned PWM + sub-square rave mono monster */
         {
             f32 pw = clampf(0.5f - 0.38f * V.bite + V.pwm, 0.08f, 0.92f);
             f32 o0 = pulse_bl(p0, d0, pw);
             f32 o1 = saw_bl(p1, d1);
             f32 o2 = saw_bl(p2, d2);
-            f32 o3 = tsin(pm) * 0.45f;
-            xl = 0.42f * o0 + 0.44f * o1 + 0.22f * o2 + o3 * 0.25f + sub * 0.45f;
-            xr = 0.42f * o0 + 0.22f * o1 + 0.44f * o2 + o3 * 0.25f + sub * 0.45f;
+            f32 sq_sub = pulse_bl(psub, dsub, 0.5f) * sub_g;
+            f32 o3 = tsin(pm) * 0.40f;
+            xl = 0.42f * o0 + 0.44f * o1 + 0.22f * o2 + o3 * 0.22f + sq_sub * 0.46f;
+            xr = 0.42f * o0 + 0.22f * o1 + 0.44f * o2 + o3 * 0.22f + sq_sub * 0.46f;
             break;
         }
         }
@@ -211,7 +213,7 @@ after_step:
     }
 
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = p2; v->ph[3] = pm; v->ph[4] = psub;
-    v->s[13] *= 1.0f - onepole_k(algo == 3 ? 0.022f : 0.038f, b->sr / (f32)n);
+    v->s[13] *= 1.0f - onepole_k(algo == 3 ? 0.022f : (algo == 7 ? 0.11f : 0.038f), b->sr / (f32)n);
     v->s[14] = fb0; v->s[15] = fb1;
 }
 
@@ -222,7 +224,7 @@ static uint32_t vt_seen;
 static void mono_draw(const Vis *vis)
 {
     f32 dt = vis->dt, bite = vis->k[0], cut = vis->k[1], glide = vis->k[2], subdrv = vis->k[3];
-    f32 xy[2 * 56];
+    f32 xy[2 * 56], xy2[2 * 56];
     int i;
 
     if (vis->fresh) {
@@ -245,53 +247,74 @@ static void mono_draw(const Vis *vis)
         g_color(GC_SLATE);
         g_box(22.0f, 44.0f, 92.0f, 64.0f, 1.4f, 0.55f);
         g_arc(gx, gy, gr, -0.43f, -0.07f, 1.6f, 0.45f);
+        for (i = 0; i < 6; i++) {
+            f32 ta = lerpf(-0.42f, -0.08f, (f32)i * 0.2f);
+            g_line(gx + cos_turns(ta) * (gr - 4.5f), gy + sin_turns(ta) * (gr - 4.5f),
+                   gx + cos_turns(ta) * (gr + 1.5f), gy + sin_turns(ta) * (gr + 1.5f), 1.1f, 0.4f);
+        }
         g_color(GC_RED);
         g_arc(gx, gy, gr, -0.17f, -0.07f, 2.2f, 0.85f);
         g_color(GC_ORANGE);
+        g_glow(gx, gy, 18.0f + 16.0f * subdrv, 0.18f + 0.22f * vt_lev);
         g_line(gx, gy, gx + cos_turns(nang) * (gr - 4.0f), gy + sin_turns(nang) * (gr - 4.0f), 2.2f, 0.95f);
-        g_disc(gx, gy, 3.6f, 0.92f);
+        g_disc(gx, gy, 3.8f, 0.94f);
     }
 
-    /* Top-right: Portamento Glide Slew Monitor (White = K3 GLIDE) */
+    /* Top-right: Shaded Portamento Glide Slew Monitor (White = K3 GLIDE) */
     {
         f32 bx = 124.0f, by = 44.0f, bw = 94.0f, bh = 64.0f;
-        f32 gxy[2 * 24];
+        f32 gxy[2 * 26];
         g_color(GC_SLATE);
         g_box(bx, by, bw, bh, 1.4f, 0.55f);
+        gxy[0] = bx + 8.0f;
+        gxy[1] = by + bh - 12.0f;
         for (i = 0; i < 24; i++) {
             f32 u = (f32)i * (1.0f / 23.0f);
             f32 k = 1.0f + (1.0f - glide) * 14.0f;
             f32 curve = u < 0.2f ? 0.0f : (1.0f - exp2fx(-(u - 0.2f) * k));
-            gxy[2 * i]     = bx + 8.0f + u * (bw - 16.0f);
-            gxy[2 * i + 1] = by + bh - 12.0f - curve * (bh - 24.0f);
+            gxy[2 * (i + 1)]     = bx + 8.0f + u * (bw - 16.0f);
+            gxy[2 * (i + 1) + 1] = by + bh - 12.0f - curve * (bh - 24.0f);
         }
+        gxy[2 * 25]     = bx + bw - 8.0f;
+        gxy[2 * 25 + 1] = by + bh - 12.0f;
+
+        g_color(GC_CYAN);
+        g_fillv(gxy, 26, by + 12.0f, 0.28f, by + bh - 12.0f, 0.03f);
         g_color(GC_WHITE);
-        g_poly(gxy, 24, 0, 2.1f, 0.88f);
+        g_poly(gxy + 2, 24, 0, 2.1f, 0.90f);
         g_color(GC_GREEN);
         g_line(bx + 8.0f, by + bh - 8.0f - cut * (bh - 16.0f),
-               bx + bw - 8.0f, by + bh - 8.0f - cut * (bh - 16.0f), 1.3f, 0.55f);
+               bx + bw - 8.0f, by + bh - 8.0f - cut * (bh - 16.0f), 1.3f, 0.65f);
     }
 
-    /* Bottom: High-Voltage Arc Oscilloscope between two terminal posts (Blue = FM-BITE, Green = CUTOFF) */
+    /* Bottom: High-Voltage Plasma Arc between two terminal coils (Blue = FM-BITE, Green = CUTOFF) */
     {
-        f32 x0 = 32.0f, x1 = 208.0f, cy = 152.0f;
-        g_color(GC_WHITE);
-        g_disc(x0, cy, 5.5f, 0.90f);
-        g_disc(x1, cy, 5.5f, 0.90f);
-        g_color(GC_SLATE);
-        g_line(x0, cy, x1, cy, 1.0f, 0.20f);
+        f32 x0 = 32.0f, x1 = 208.0f, cy = 152.0f, bw = 8.0f + 12.0f * vt_lev, ba = 0.14f + 0.22f * vt_lev;
+        g_color(GC_CYAN);
+        g_beam(x0, cy, x1, cy, bw, bw, ba, ba, 0.85f);
         for (i = 0; i < 56; i++) {
             f32 u = (f32)i * (1.0f / 55.0f);
             f32 env_x = sin_turns(u * 0.5f);
             f32 sc = vis->scope[(vis->scope_pos + i * 4) & (SCOPE_N - 1)];
-            f32 zap_j = bite * 14.0f * sin_turns(u * (3.0f + 9.0f * bite) + vis->t * 6.0f);
-            xy[2 * i]     = lerpf(x0, x1, u);
-            xy[2 * i + 1] = clampf(cy + (sc * 44.0f + zap_j * (0.35f + 0.85f * vt_lev)) * env_x, 118.0f, 186.0f);
+            f32 zap_j = bite * 15.0f * sin_turns(u * (3.0f + 9.0f * bite) + vis->t * 6.0f);
+            f32 zap_2 = (0.2f + 0.8f * bite) * 9.0f * cos_turns(u * (5.0f + 7.0f * cut) - vis->t * 4.5f);
+            xy[2 * i]      = lerpf(x0, x1, u);
+            xy[2 * i + 1]  = clampf(cy + (sc * 36.0f + zap_j * (0.4f + 0.85f * vt_lev)) * env_x, 116.0f, 188.0f);
+            xy2[2 * i]     = lerpf(x0, x1, u);
+            xy2[2 * i + 1] = clampf(cy + (sc * 44.0f - zap_2 * (0.3f + 0.7f * vt_lev)) * env_x, 116.0f, 188.0f);
         }
         g_color(GC_BLUE);
-        g_poly(xy, 56, 0, 2.8f, 0.45f + 0.40f * bite);
+        g_poly(xy, 56, 0, 2.2f, 0.52f + 0.42f * bite);
         g_color(GC_GREEN);
-        g_poly(xy, 56, 0, 1.8f, 0.95f);
+        g_poly(xy2, 56, 0, 2.0f, 0.95f);
+
+        /* Terminal posts with glowing rings */
+        g_color(GC_ORANGE);
+        g_ring(x0, cy, 8.5f + 2.5f * vt_lev, 1.4f, 0.55f + 0.4f * vt_lev);
+        g_ring(x1, cy, 8.5f + 2.5f * vt_lev, 1.4f, 0.55f + 0.4f * vt_lev);
+        g_color(GC_WHITE);
+        g_disc(x0, cy, 4.8f, 0.95f);
+        g_disc(x1, cy, 4.8f, 0.95f);
     }
     g_color(GC_WHITE);
 }

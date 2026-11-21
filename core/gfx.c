@@ -701,7 +701,6 @@ static void fill_poly(const f32 *xy, int n, f32 a, f32 ya, f32 b, f32 yb)
 }
 
 void g_fill(const f32 *xy, int n, f32 a) { fill_poly(xy, n, a, 0.0f, a, 0.0f); }
-void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b) { fill_poly(xy, n, a, ya, b, yb); }
 
 /* ---- soft things: light, not line --------------------------------------------------------
  * Their ink changes from pixel to pixel, so it is worked out to 16 bits and brought down to the
@@ -734,6 +733,42 @@ static inline void put_soft(int x, int y, int v)
         if (nv > 31) nv = 31;
         *p = (uint8_t)((q >= old_lv ? gbank : (old & 0xE0)) | nv);
     }
+}
+
+void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b)
+{
+    /* Curve polygon anchored to a horizontal baseline (xy[1] == xy[2*n-1]): Bayer-dithered column gradient */
+    if (n >= 5 && absf(xy[1] - xy[2 * n - 1]) < 0.5f) {
+        f32 y_base = xy[1] + goy, ya_g = ya + goy;
+        f32 grad = yb != ya ? 1.0f / (yb - ya) : 0.0f;
+        f32 sc = gdim * 65535.0f;
+        int k, x, y, last_x = -1;
+        G_POLL();
+        for (k = 0; k < n - 1; k++) {
+            f32 xa = xy[2 * k] + gox, ya_c = xy[2 * k + 1] + goy;
+            f32 xb = xy[2 * (k + 1)] + gox, yb_c = xy[2 * (k + 1) + 1] + goy;
+            f32 inv_dx;
+            int x0, x1;
+            if (xb <= xa + 0.05f) continue;
+            x0 = imax(0, ifloor(xa + 0.5f));
+            x1 = imin(FB_W - 1, ifloor(xb + 0.5f));
+            if (x0 <= last_x) x0 = last_x + 1;
+            inv_dx = 1.0f / (xb - xa);
+            for (x = x0; x <= x1; x++) {
+                f32 t = clampf(((f32)x - xa) * inv_dx, 0.0f, 1.0f);
+                f32 yc = ya_c + (yb_c - ya_c) * t;
+                int y0 = imax(0, ifloor(minf(yc, y_base) + 0.5f));
+                int y1 = imin(FB_H - 1, ifloor(maxf(yc, y_base) + 0.5f));
+                for (y = y0; y <= y1; y++) {
+                    f32 u = sat(((f32)y - ya_g) * grad);
+                    put_soft(x, y, (int)(lerpf(a, b, u) * sc));
+                }
+            }
+            if (x1 > last_x) last_x = x1;
+        }
+        return;
+    }
+    fill_poly(xy, n, a, ya, b, yb);
 }
 
 void g_glow(f32 cx, f32 cy, f32 r, f32 a)

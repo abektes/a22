@@ -1041,6 +1041,11 @@ static void draw_topbar(const char *left_tag, const char *title, const char *rig
     }
     g_color(GC_SLATE);
     g_line(0.0f, 26.0f, 240.0f, 26.0f, 1.0f, 0.35f);
+    if (vis.level > 0.01f) {
+        f32 mw = minf(120.0f, vis.level * 320.0f);
+        g_color(KCOL[st.track & 3]);
+        g_line(120.0f - mw, 26.0f, 120.0f + mw, 26.0f, 1.6f, minf(0.95f, 0.35f + vis.level * 2.2f));
+    }
     g_color(GC_WHITE);
 }
 
@@ -1110,7 +1115,7 @@ static void draw_env_page(void)
     g_line(16.0f, 152.0f, 224.0f, 152.0f, 1.0f, 0.3f);
 
     if (sub == 0) {
-        /* Classic 4-Color Animated ADSR Curve */
+        /* Classic 4-Color Animated ADSR Curve + Shaded Vertical Gradient Fill */
         f32 x0 = 26.0f, y0 = 152.0f, ytop = 52.0f, h = y0 - ytop;
         f32 xa = x0 + 6.0f + (f32)ev[0] * 0.46f;
         f32 xd = xa + 12.0f + (f32)ev[1] * 0.46f;
@@ -1119,11 +1124,12 @@ static void draw_env_page(void)
         f32 xr = minf(216.0f, xs + 8.0f + (f32)ev[3] * 0.44f);
         f32 pts[10] = {x0, y0, xa, ytop, xd, ys, xs, ys, xr, y0};
 
+        g_color(GC_CYAN);
+        g_fillv(pts, 5, ytop, 0.30f, y0, 0.03f);
         g_color(GC_BLUE);   g_line(x0, y0, xa, ytop, 2.8f, 0.95f); g_disc(xa, ytop, 4.0f, 1.0f);
         g_color(GC_GREEN);  g_line(xa, ytop, xd, ys, 2.8f, 0.95f); g_disc(xd, ys, 4.0f, 1.0f);
         g_color(GC_WHITE);  g_line(xd, ys, xs, ys, 2.8f, 0.95f);   g_disc(xs, ys, 3.8f, 1.0f);
         g_color(GC_ORANGE); g_line(xs, ys, xr, y0, 2.8f, 0.95f);   g_disc(xr, y0, 4.0f, 1.0f);
-        (void)pts;
 
         /* Live Gold voice playhead dot along envelope! */
         for (i = 0; i < NVOICE; i++) {
@@ -1136,23 +1142,37 @@ static void draw_env_page(void)
             }
         }
     } else {
-        /* Mod / Filter Exponential Decay Envelope + Punch Spike */
-        f32 xy[2 * 48], depth = (f32)ev[0] * 0.01f, dec = 0.08f + (f32)ev[1] * 0.01f * 0.92f;
+        /* Mod / Filter Exponential Decay Envelope + Shaded Fill + Punch Spike */
+        f32 xy[2 * 50], depth = (f32)ev[0] * 0.01f, dec = 0.08f + (f32)ev[1] * 0.01f * 0.92f;
         f32 vel = (f32)ev[2] * 0.01f, punch = (f32)ev[3] * 0.01f;
+        xy[0] = 26.0f;
+        xy[1] = 152.0f;
         for (i = 0; i < 48; i++) {
             f32 u = (f32)i * (1.0f / 47.0f);
             f32 y = depth * exp2fx(-u * (5.5f - 4.2f * dec)) + punch * 0.3f * exp2fx(-u * 26.0f);
-            xy[2 * i]     = 26.0f + u * 188.0f;
-            xy[2 * i + 1] = 152.0f - sat(y) * 102.0f;
+            xy[2 * (i + 1)]     = 26.0f + u * 188.0f;
+            xy[2 * (i + 1) + 1] = 152.0f - sat(y) * 102.0f;
         }
+        xy[2 * 49]     = 214.0f;
+        xy[2 * 49 + 1] = 152.0f;
+
         g_color(GC_GREEN);
-        g_poly(xy, 48, 0, 2.8f, 0.95f);
+        g_fillv(xy, 50, 50.0f, 0.30f, 152.0f, 0.03f);
+        g_poly(xy + 2, 48, 0, 2.8f, 0.95f);
         g_color(GC_BLUE);
         g_disc(26.0f, 152.0f - depth * 102.0f, 4.2f, 1.0f);
         g_color(GC_ORANGE);
         g_line(26.0f, 152.0f, 26.0f, 152.0f - sat(depth + punch * 0.3f) * 102.0f, 2.4f, 0.9f);
         g_color(GC_WHITE);
         g_line(26.0f, 152.0f - vel * 95.0f, 214.0f, 152.0f - vel * 95.0f, 1.2f, 0.35f);
+        for (i = 0; i < NVOICE; i++) {
+            if (vis.v[i].on && vis.v[i].menv > 0.01f) {
+                f32 u = 1.0f - vis.v[i].menv;
+                g_color(GC_GOLD);
+                g_disc(26.0f + u * 188.0f, 152.0f - sat(vis.v[i].menv * depth) * 102.0f, 4.2f, 1.0f);
+                break;
+            }
+        }
     }
     draw_bottom_cols(PG_ENV, 182.0f);
 }
@@ -1192,15 +1212,21 @@ static void draw_fx_page(void)
         }
         break;
     case FX_FILTER: {
-        f32 xy[2 * 48], xl = 30.0f + k0 * 175.0f, xh = 30.0f + k1 * 175.0f;
+        f32 xy[2 * 50], xl = 30.0f + k0 * 175.0f, xh = 30.0f + k1 * 175.0f;
+        xy[0] = 24.0f;
+        xy[1] = 146.0f;
         for (i = 0; i < 48; i++) {
             f32 x = 24.0f + (f32)i * (192.0f / 47.0f);
             f32 lp = x < xl ? 1.0f : 1.0f / (1.0f + (x - xl) * (x - xl) * 0.004f);
             f32 hp = x > xh ? 1.0f : 1.0f / (1.0f + (xh - x) * (xh - x) * 0.004f);
             f32 pk = k2 * 28.0f / (1.0f + (x - xl) * (x - xl) * 0.02f);
-            xy[2 * i] = x; xy[2 * i + 1] = clampf(144.0f - lp * hp * 48.0f - pk, 48.0f, 146.0f);
+            xy[2 * (i + 1)] = x;
+            xy[2 * (i + 1) + 1] = clampf(144.0f - lp * hp * 48.0f - pk, 48.0f, 146.0f);
         }
-        g_color(GC_WHITE); g_poly(xy, 48, 0, 2.4f, 0.95f);
+        xy[2 * 49] = 216.0f;
+        xy[2 * 49 + 1] = 146.0f;
+        g_color(GC_CYAN);  g_fillv(xy, 50, 48.0f, 0.30f, 146.0f, 0.03f);
+        g_color(GC_WHITE); g_poly(xy + 2, 48, 0, 2.4f, 0.95f);
         g_color(GC_BLUE);  g_disc(xl, 96.0f - k2 * 26.0f, 4.5f, 1.0f);
         g_color(GC_GREEN); g_disc(xh, 118.0f, 4.0f, 1.0f);
         break;
@@ -1285,25 +1311,30 @@ static void draw_mix_page(void)
     draw_topbar(O_TRK[st.track], SUBT[sub & 3], sub == 3 ? "EQ+DRV" : "4-TRK");
 
     if (sub == 3) {
-        /* Master 3-Band EQ Curve + Tape Drive Gauge */
+        /* Master 3-Band EQ Curve + Shaded Vertical Gradient + Tape Drive Gauge */
         f32 lo = ((f32)st.master[0] - 50.0f) * 0.02f;
         f32 md = ((f32)st.master[1] - 50.0f) * 0.02f;
         f32 hi = ((f32)st.master[2] - 50.0f) * 0.02f;
         f32 drv = (f32)st.master[3] * 0.01f;
-        f32 xy[2 * 48];
+        f32 xy[2 * 50];
         g_color(GC_SLATE);
         g_box(18.0f, 42.0f, 204.0f, 118.0f, 1.0f, 0.26f);
         g_line(18.0f, 101.0f, 222.0f, 101.0f, 1.0f, 0.25f);
+        xy[0] = 24.0f;
+        xy[1] = 154.0f;
         for (i = 0; i < 48; i++) {
             f32 u = (f32)i * (1.0f / 47.0f);
             f32 wl = maxf(0.0f, 1.0f - u * 2.2f);
             f32 wm = maxf(0.0f, 1.0f - absf(u - 0.5f) * 3.0f);
             f32 wh = maxf(0.0f, (u - 0.55f) * 2.2f);
             f32 y = 101.0f - (lo * wl + md * wm + hi * wh) * 38.0f;
-            xy[2 * i] = 24.0f + u * 192.0f;
-            xy[2 * i + 1] = clampf(y, 48.0f, 154.0f);
+            xy[2 * (i + 1)] = 24.0f + u * 192.0f;
+            xy[2 * (i + 1) + 1] = clampf(y, 48.0f, 154.0f);
         }
-        g_color(GC_WHITE); g_poly(xy, 48, 0, 2.6f, 0.95f);
+        xy[2 * 49] = 216.0f;
+        xy[2 * 49 + 1] = 154.0f;
+        g_color(GC_CYAN);   g_fillv(xy, 50, 56.0f, 0.26f, 154.0f, 0.03f);
+        g_color(GC_WHITE);  g_poly(xy + 2, 48, 0, 2.6f, 0.95f);
         g_color(GC_BLUE);   g_disc(44.0f,  101.0f - lo * 38.0f, 4.2f, 1.0f);
         g_color(GC_GREEN);  g_disc(120.0f, 101.0f - md * 38.0f, 4.2f, 1.0f);
         g_color(GC_WHITE);  g_disc(196.0f, 101.0f - hi * 38.0f, 4.2f, 1.0f);

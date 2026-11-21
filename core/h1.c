@@ -1,6 +1,51 @@
 /* A22 - start-up defaults, saved state persistence, and public introspection. */
 #include "internal.h"
 
+/* Curated K1..K4 sweet spots for all 80 factory presets (10 engines x 8 algorithms).
+ * Algorithm 0 of each engine matches insts[inst]->def.knob0. */
+static const uint8_t ALGO_K0[NINST][NALGO][4] = {
+    /* 0 FM-4      (K1 RATIO, K2 DEPTH, K3 FEEDBK, K4 FILTER):
+     *   KEYS, BASS, BELL, PAD, BRASS, PLUCK, ORGAN, ALIEN */
+    {{25, 58, 20, 76}, {34, 64, 36, 54}, {52, 56, 16, 86}, {30, 44, 48, 64},
+     {38, 66, 44, 72}, {46, 68, 24, 78}, {28, 42, 30, 80}, {64, 62, 54, 74}},
+    /* 1 ELECTRIC  (K1 BARK, K2 TINE, K3 TREM, K4 WARMTH):
+     *   RHODES, WURLI, DX-EP, CLAV, ORGAN, FELT, VIBES, TAPE */
+    {{42, 48, 30, 22}, {64, 34, 38, 32}, {48, 72, 26, 12}, {72, 62, 10, 18},
+     {52, 56, 62, 26}, {26, 32, 12, 48}, {28, 64, 54, 24}, {46, 36, 28, 62}},
+    /* 2 STACK     (K1 SPREAD, K2 CHORD, K3 DRIFT, K4 GLOW):
+     *   CLOUD, CHORD, JUNO, GLASS, ORGAN, DRONE, CHOIR, DREAM */
+    {{56, 35, 34, 66}, {62, 44, 28, 70}, {68, 42, 32, 72}, {64, 58, 42, 82},
+     {48, 54, 24, 74}, {72, 52, 56, 58}, {60, 48, 38, 76}, {66, 68, 58, 62}},
+    /* 3 ANALOG    (K1 SHAPE, K2 TZFM, K3 CUTOFF, K4 RESO):
+     *   DUAL, TZFM, SUPER, SUB, SYNC, ACID, BRASS, CHORD */
+    {{35, 28, 62, 26}, {44, 56, 68, 32}, {28, 64, 78, 22}, {48, 42, 52, 34},
+     {58, 34, 66, 46}, {32, 24, 42, 74}, {26, 36, 58, 28}, {38, 46, 66, 26}},
+    /* 4 SHAPER    (K1 WARP, K2 FOLD, K3 BIAS, K4 TONE):
+     *   CZ-SAW, CZ-RES, BUCHLA, PLUCK, METRIC, CYBER, GLASSY, CRUSH */
+    {{48, 45, 22, 74}, {62, 38, 28, 72}, {52, 64, 36, 70}, {58, 54, 26, 78},
+     {54, 52, 44, 72}, {60, 58, 32, 68}, {42, 34, 38, 84}, {56, 48, 30, 68}},
+    /* 5 WIRE      (K1 DAMP, K2 PLUCK, K3 BODY, K4 TENSION):
+     *   NYLON, STEEL, HARP, KOTO, CLAV, BASS, SITAR, BOWED */
+    {{64, 54, 48, 24}, {78, 68, 44, 42}, {84, 42, 62, 22}, {70, 74, 52, 56},
+     {58, 82, 40, 34}, {54, 46, 68, 16}, {76, 66, 56, 68}, {74, 58, 64, 32}},
+    /* 6 HAZE      (K1 MORPH, K2 FORMANT, K3 DRIFT, K4 SHIMMER):
+     *   AETHER, VOX, SOLAR, ICE, MIST, ABYSS, PRISM, GHOST */
+    {{46, 48, 38, 56}, {54, 52, 34, 46}, {62, 42, 44, 68}, {58, 66, 32, 78},
+     {34, 38, 56, 44}, {64, 30, 48, 38}, {56, 60, 42, 74}, {48, 58, 68, 52}},
+    /* 7 MONO      (K1 FM-BITE, K2 CUTOFF, K3 GLIDE, K4 SUB-DRV):
+     *   ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER */
+    {{42, 46, 18, 52}, {54, 44, 28, 64}, {38, 64, 22, 46}, {58, 54, 10, 58},
+     {66, 52, 20, 62}, {28, 36, 24, 74}, {62, 68, 16, 44}, {56, 62, 34, 58}},
+    /* 8 KIT       (K1 TUNE, K2 DECAY, K3 PUNCH, K4 FM-GRIT):
+     *   808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD */
+    {{50, 52, 48, 18}, {52, 48, 64, 24}, {50, 46, 56, 46}, {50, 50, 54, 16},
+     {46, 44, 52, 42}, {54, 46, 66, 38}, {52, 56, 54, 58}, {50, 56, 46, 14}},
+    /* 9 PERC      (K1 PITCH, K2 MALLET, K3 RING, K4 SPACE):
+     *   HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH */
+    {{50, 52, 58, 52}, {50, 48, 46, 44}, {50, 62, 54, 48}, {50, 58, 56, 46},
+     {50, 66, 36, 40}, {50, 60, 72, 64}, {50, 56, 60, 58}, {56, 68, 42, 62}},
+};
+
 void knobs_default(int inst, int algo)
 {
     int a, k;
@@ -9,7 +54,7 @@ void knobs_default(int inst, int algo)
     for (a = 0; a < NALGO; a++)
         if (algo < 0 || a == algo)
             for (k = 0; k < 4; k++)
-                KNOBS(inst, a)[k] = insts[inst]->def.knob0[k];
+                KNOBS(inst, a)[k] = ALGO_K0[inst][a][k];
 }
 
 static void inst_default(int i)
@@ -41,7 +86,7 @@ static void track_default(int t)
     tr->has_snap = 0;
     tr->rsv = 0;
     for (k = 0; k < 4; k++) {
-        tr->knob[k] = insts[inst]->def.knob0[k];
+        tr->knob[k] = ALGO_K0[inst][algo][k];
         tr->env[k]  = insts[inst]->def.env[k];
         tr->menv[k] = insts[inst]->def.menv[k];
         tr->lfo[k]  = insts[inst]->def.lfo[k];

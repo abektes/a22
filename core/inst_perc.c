@@ -175,7 +175,7 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 }
 
 /* ---- 4-Color Vector Picture: Handpan / Modal Resonant Drum & Chladni Ripples ----- */
-static f32 pr_rip[4], pr_rx[4], pr_ry[4], pr_lev;
+static f32 pr_rip[4], pr_rx[4], pr_ry[4], pr_dimp[8], pr_lev;
 static int pr_ridx;
 static uint32_t pr_seen;
 
@@ -184,18 +184,20 @@ static void perc_draw(const Vis *vis)
     f32 dt = vis->dt, stretch = vis->k[0], mallet = vis->k[1], ring = vis->k[2], space = vis->k[3];
     f32 cx = 120.0f, cy = 114.0f, body_r = 62.0f + 10.0f * space;
     static const int RC[4] = {GC_BLUE, GC_GREEN, GC_ORANGE, GC_GOLD};
-    int i;
+    int algo = vis->algo & 7, i;
 
     if (vis->fresh) {
         pr_seen = vis->notes;
         pr_lev = 0.0f;
         pr_ridx = 0;
         for (i = 0; i < 4; i++) { pr_rip[i] = 1.0f; pr_rx[i] = cx; pr_ry[i] = cy; }
+        for (i = 0; i < 8; i++) pr_dimp[i] = 0.0f;
     }
     if (vis->notes != pr_seen) {
         int dimple = ((int)vis->last_pitch) & 7;
         f32 th = (f32)dimple * (1.0f / 8.0f) - 0.25f;
         pr_seen = vis->notes;
+        pr_dimp[dimple] = 1.0f;
         pr_rip[pr_ridx] = 0.0f;
         pr_rx[pr_ridx] = cx + cos_turns(th) * (body_r * 0.58f);
         pr_ry[pr_ridx] = cy + sin_turns(th) * (body_r * 0.58f);
@@ -203,25 +205,49 @@ static void perc_draw(const Vis *vis)
     }
     pr_lev += (minf(1.0f, vis->level * 3.8f) - pr_lev) * minf(1.0f, dt * 16.0f);
 
-    /* Outer acoustic shell & Chladni modal stretch ring (Slate / Orange) */
+    /* Acoustic cavity aura glow (Orange = K4 SPACE) */
+    g_color(GC_ORANGE);
+    g_glow(cx, cy, 38.0f + 24.0f * space + 16.0f * pr_lev, 0.20f + 0.25f * space * (0.4f + 0.6f * pr_lev));
+
+    /* Outer acoustic shell & Chladni modal standing-wave petal ring */
     g_color(GC_SLATE);
     g_ring(cx, cy, body_r + 8.0f, 1.2f, 0.25f + 0.35f * space);
+    {
+        f32 xy[2 * 64];
+        f32 petals = 3.0f + (f32)((algo + (int)(stretch * 4.0f)) % 6);
+        f32 amp = (3.5f + 7.5f * pr_lev + 3.0f * mallet) * (0.5f + 0.5f * stretch);
+        for (i = 0; i < 64; i++) {
+            f32 th = (f32)i * (1.0f / 64.0f);
+            f32 r = body_r * 0.84f + amp * cos_turns(petals * th + vis->t * 0.35f);
+            xy[2 * i]     = cx + cos_turns(th) * r;
+            xy[2 * i + 1] = cy + sin_turns(th) * r;
+        }
+        g_color(GC_CYAN);
+        g_poly(xy, 64, 1, 1.4f, 0.36f + 0.42f * pr_lev);
+    }
     g_color(GC_WHITE);
-    g_ring(cx, cy, body_r, 2.2f, 0.85f);
+    g_ring(cx, cy, body_r, 2.2f, 0.88f);
 
     /* Center Gu / Helmholtz dome (Blue = K1 PITCH stretch) */
     g_color(GC_BLUE);
-    g_ring(cx, cy, 13.0f + 7.0f * stretch + 4.0f * pr_lev, 2.0f, 0.72f + 0.25f * pr_lev);
-    g_disc(cx, cy, 3.5f + 3.5f * mallet, 0.85f);
+    g_ring(cx, cy, 13.0f + 7.0f * stretch + 4.0f * pr_lev, 2.0f, 0.78f + 0.22f * pr_lev);
+    g_disc(cx, cy, 3.8f + 3.8f * mallet + 2.5f * pr_lev, 0.90f);
 
-    /* 8 tonal dimples around the Handpan shell */
+    /* 8 tonal dimples around the Handpan shell with active strike glow & resonance spokes */
     for (i = 0; i < 8; i++) {
         f32 th = (f32)i * (1.0f / 8.0f) - 0.25f;
         f32 dx = cx + cos_turns(th) * (body_r * 0.58f);
         f32 dy = cy + sin_turns(th) * (body_r * 0.58f);
         f32 dr = 9.0f + 2.5f * (1.0f - (f32)(i & 3) * 0.2f);
-        g_color((i & 1) ? GC_CYAN : GC_SLATE);
-        g_ring(dx, dy, dr, 1.4f, 0.55f);
+        f32 de = pr_dimp[i];
+        pr_dimp[i] = maxf(0.0f, de - dt / (0.18f + 0.75f * ring));
+        if (de > 0.04f) {
+            g_color(RC[i & 3]);
+            g_line(cx, cy, dx, dy, 1.3f, 0.45f * de);
+            g_disc(dx, dy, dr * 0.72f * de, 0.80f * de);
+        }
+        g_color(de > 0.1f ? RC[i & 3] : ((i & 1) ? GC_CYAN : GC_SLATE));
+        g_ring(dx, dy, dr + 2.0f * de, 1.5f + 0.8f * de, 0.55f + 0.45f * de);
     }
 
     /* Animated expanding Chladni modal strike ripples */

@@ -133,7 +133,7 @@ static void string_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
     for (i = 0; i < n; i++) {
         f32 exc = 0.0f;
-        f32 r_raw, ap, y, y_dc, tl, tr, bl, br, lp;
+        f32 r_raw, ap, y, y_dc, tl, tr, bl, br;
 
         /* 1) Synthesized FM + noise pluck / bow exciter */
         if (exc_left > 0u) {
@@ -180,9 +180,9 @@ static void string_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
         ks[wp] = (int16_t)clampf(y * 16384.0f, -32700.0f, 32700.0f);
 
-        /* 6) Dual stereo pickup tapping + pick-position comb notch + sympathetic shimmer */
-        tl = (f32)ks[(wp - tap_off_l) & KS_MASK] * (1.0f / 16384.0f);
-        tr = (f32)ks[(wp - tap_off_r) & KS_MASK] * (1.0f / 16384.0f);
+        /* 6) Dual stereo pickup tapping + direct plectrum transient + pick-position comb notch + sympathetic shimmer */
+        tl = (f32)ks[(wp - tap_off_l) & KS_MASK] * (1.0f / 16384.0f) + exc * 0.24f;
+        tr = (f32)ks[(wp - tap_off_r) & KS_MASK] * (1.0f / 16384.0f) + exc * 0.20f;
         {
             f32 notch = (f32)ks[(wp - pick_comb) & KS_MASK] * (1.0f / 16384.0f);
             f32 p_mix = 0.25f * ST.pluck;
@@ -195,16 +195,19 @@ static void string_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             tr -= sym * 0.85f;
         }
 
-        /* 7) Acoustic soundboard body resonator (stereo) */
-        SVF_TICK(body_f, &v->s[8],  tl, lp, bl); (void)lp;
-        SVF_TICK(body_f, &v->s[10], tr, lp, br); (void)lp;
+        /* 7) Acoustic soundboard body resonator (stereo bandpass + low-end wooden cavity thump) */
         {
-            f32 wid = 0.20f + 0.80f * ST.body;
-            f32 xl = tl * (1.0f - body_mix * 0.35f) + bl * body_mix * 1.25f;
-            f32 xr = tr * (1.0f - body_mix * 0.35f) + br * body_mix * 1.25f;
-            f32 mid = 0.5f * (xl + xr), side = 0.5f * (xl - xr) * wid;
-            out_l[i] = mid + side;
-            out_r[i] = mid - side;
+            f32 lpl, lpr;
+            SVF_TICK(body_f, &v->s[8],  tl, lpl, bl);
+            SVF_TICK(body_f, &v->s[10], tr, lpr, br);
+            {
+                f32 wid = 0.20f + 0.80f * ST.body;
+                f32 xl = tl * (1.0f - body_mix * 0.35f) + (bl * 1.15f + lpl * 0.24f) * body_mix;
+                f32 xr = tr * (1.0f - body_mix * 0.35f) + (br * 1.15f + lpr * 0.24f) * body_mix;
+                f32 mid = 0.5f * (xl + xr), side = 0.5f * (xl - xr) * wid;
+                out_l[i] = mid + side;
+                out_r[i] = mid - side;
+            }
         }
 
         wp = (wp + 1u) & KS_MASK;
@@ -228,7 +231,7 @@ static void string_draw(const Vis *vis)
     f32 dt = vis->dt, damp = vis->k[0], pluck = vis->k[1], body = vis->k[2], tens = vis->k[3];
     f32 x0 = 26.0f, x1 = 214.0f, cx = 120.0f, cy = 114.0f;
     f32 pick_x = lerpf(48.0f, 192.0f, pluck);
-    int s, i;
+    int algo = vis->algo & 7, s, i;
     static const int SC[6] = {GC_BLUE, GC_CYAN, GC_GREEN, GC_WHITE, GC_GOLD, GC_ORANGE};
 
     if (vis->fresh) {
@@ -245,23 +248,36 @@ static void string_draw(const Vis *vis)
     st_lev += (minf(1.0f, vis->level * 3.8f) - st_lev) * minf(1.0f, dt * 16.0f);
     st_ph = fractf(st_ph + dt * (5.5f + 7.5f * tens));
 
-    /* Acoustic soundboard soundhole rings (White/Gold = K3 BODY) */
+    /* Acoustic soundboard soundhole glow & rosette rings (White/Gold = K3 BODY) */
+    g_color(GC_ORANGE);
+    g_glow(cx, cy, 36.0f + 22.0f * body + 12.0f * st_lev, 0.20f + 0.26f * body);
     g_color(GC_SLATE);
-    g_ring(cx, cy, 44.0f + 16.0f * body, 1.4f, 0.35f + 0.30f * body);
+    g_ring(cx, cy, 48.0f + 16.0f * body, 1.3f, 0.35f + 0.30f * body);
+    g_ring(cx, cy, 41.0f + 15.0f * body, 1.0f, 0.24f + 0.22f * body);
     g_color(GC_GOLD);
-    g_ring(cx, cy, 34.0f + 14.0f * body + 8.0f * st_lev, 1.8f, 0.25f + 0.45f * body + 0.25f * st_lev);
+    g_ring(cx, cy, 34.0f + 14.0f * body + 8.0f * st_lev, 1.8f, 0.30f + 0.45f * body + 0.25f * st_lev);
 
-    /* Nut & bridge posts */
+    /* Nut & bridge posts (SITAR gets curved jawari bridge on right) */
     g_color(GC_WHITE);
     g_line(x0, 50.0f, x0, 178.0f, 2.4f, 0.85f);
-    g_line(x1, 50.0f, x1, 178.0f, 2.4f, 0.85f);
+    if (algo == 6) {
+        g_color(GC_ORANGE);
+        g_arc(x1 - 8.0f, cy, 66.0f, -0.18f, 0.18f, 2.6f, 0.90f);
+    } else {
+        g_line(x1, 50.0f, x1, 178.0f, 2.4f, 0.85f);
+    }
 
-    /* Pick position vertical guide (Green = K2 PLUCK) */
+    /* Pick position vertical guide or Bow hair ribbon (Green = K2 PLUCK) */
     g_color(GC_GREEN);
-    g_line(pick_x, 46.0f, pick_x, 182.0f, 1.2f, 0.45f);
-    g_disc(pick_x, 46.0f, 3.5f, 0.85f);
+    if (algo == 7) {
+        f32 bow_x = pick_x + sin_turns(vis->t * 0.65f) * (10.0f + 12.0f * st_lev);
+        g_box(bow_x - 2.5f, 44.0f, 5.0f, 140.0f, 1.4f, 0.55f + 0.35f * st_lev);
+    } else {
+        g_line(pick_x, 46.0f, pick_x, 182.0f, 1.2f, 0.45f);
+        g_disc(pick_x, 46.0f, 3.5f, 0.85f);
+    }
 
-    /* 6 vibrating physical strings */
+    /* 6 vibrating physical strings (+ movable Koto ji bridges on algo 3) */
     for (s = 0; s < 6; s++) {
         f32 sy = 62.0f + (f32)s * 20.8f;
         f32 xy[2 * 48];
@@ -277,8 +293,19 @@ static void string_draw(const Vis *vis)
             xy[2 * i]     = lerpf(x0, x1, u);
             xy[2 * i + 1] = sy + (mode1 * env_x + mode2) * v_amp;
         }
+        if (algo == 3) {
+            /* KOTO movable triangular ji bridge per string */
+            f32 jx = 76.0f + (f32)s * 18.0f + tens * 16.0f;
+            f32 tri[6] = {jx, sy, jx - 5.0f, sy + 8.0f, jx + 5.0f, sy + 8.0f};
+            g_color(GC_GOLD);
+            g_poly(tri, 3, 1, 1.4f, 0.72f);
+        }
         g_color(SC[s]);
         g_poly(xy, 48, 0, 1.6f + 1.4f * st_vib[s], 0.52f + 0.46f * maxf(st_vib[s], st_lev));
+        if (st_vib[s] > 0.08f) {
+            g_color(GC_WHITE);
+            g_disc(pick_x, sy, 2.2f + 2.5f * st_vib[s], st_vib[s]);
+        }
     }
     g_color(GC_WHITE);
 }

@@ -151,11 +151,13 @@ static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             }
             break;
         }
-        case 1: /* WURLI */ {
+        case 1: /* WURLI: asymmetric reed bite + 4x/9x metallic attack ping */ {
             f32 m = bark * (0.18f + 0.82f * hit) * 0.38f;
+            f32 reed;
             fb = tsin(p0 + m * fb + 0.30f * body * bark * tsin(p1));
-            xl = softclip((fb + tine * 0.35f * hit * tsin(p2) + 0.14f * hit * hit * tsin(p3)) * (1.0f + 0.8f * E.bark));
-            xr = xl;
+            reed = fb + 0.16f * E.bark * fb * fb + tine * 0.35f * hit * tsin(p2) + 0.14f * hit * hit * tsin(p3);
+            xl = softclip(reed * (1.0f + 0.82f * E.bark));
+            xr = softclip((reed - 0.08f * hit * tsin(p2)) * (1.0f + 0.78f * E.bark));
             break;
         }
         case 2: /* DX-EP */ {
@@ -181,17 +183,19 @@ static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             xr = drw * (0.85f - 0.15f * tsin(E.rot_ph + 0.15f));
             break;
         }
-        case 5: /* FELT */ {
-            f32 thump = hit * hit * hit * noise_s(&v->u[0]) * 0.32f * (0.4f + E.tine);
-            f32 hi = 0.42f * body * tsin(p1) + 0.22f * body * body * tsin(p2) + 0.10f * hit * tsin(p3);
-            xl = 0.75f * tsin(p0) + hi + thump;
-            xr = 0.75f * tsin(p4) + hi * 0.95f + thump;
+        case 5: /* FELT: low-passed wooden felt hammer thud + stretched partials */ {
+            f32 h_lp = v->s[3] + 0.16f * (noise_s(&v->u[0]) - v->s[3]);
+            f32 thump = hit * hit * h_lp * 0.44f * (0.35f + E.tine);
+            f32 hi = (0.38f + 0.18f * E.bark) * body * tsin(p1) + 0.20f * body * body * tsin(p2) + 0.10f * hit * tsin(p3);
+            v->s[3] = h_lp;
+            xl = 0.76f * tsin(p0) + hi + thump;
+            xr = 0.76f * tsin(p4) + hi * 0.94f + thump;
             break;
         }
-        default: /* 6 VIBES */ {
-            f32 bar = tsin(p0) + 0.32f * tine * hit * tsin(p1) + 0.12f * tine * hit * hit * tsin(p2);
-            xl = bar;
-            xr = bar;
+        default: /* 6 VIBES: resonant aluminum bar + 4x/10x overtone + stereo motor shimmer */ {
+            f32 ov = 0.34f * tine * hit * tsin(p1) + 0.14f * tine * hit * hit * tsin(p2);
+            xl = tsin(p0) + ov;
+            xr = tsin(p0 + 0.015f * E.trem) + ov * 0.92f;
             break;
         }
         }
@@ -211,19 +215,23 @@ static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = p2; v->ph[3] = p3; v->ph[4] = p4;
     v->s[0] = body * (key < 1.0f ? E.kd * (1.0f - (1.0f - E.kd) * (1.0f - key) * 2.5f) : E.kd);
-    v->s[1] = hit * (1.0f - onepole_k(algo == 4 ? 0.015f : (algo == 5 ? 0.06f : 0.14f), b->sr / (f32)n));
+    {
+        f32 h_tau = algo == 4 ? 0.015f : (algo == 5 ? 0.06f : (0.09f + 0.07f * key));
+        v->s[1] = hit * (1.0f - onepole_k(h_tau, b->sr / (f32)n));
+    }
     v->s[2] = fb;
     v->s[4] = lpl; v->s[5] = lpr;
 }
 
-/* ---- 4-Color Graphic: Mechanical Tines, Hammers, Stereo Tremolo & Tube Warmth ---- */
+/* ---- 4-Color Graphic: Mechanical Tines, B3 Drawbars, Vibes Fans & Stereo Tremolo -- */
 static f32 tine_vib[12], tine_vel[12];
 static uint32_t el_seen[NVOICE];
 
 static void elec_draw(const Vis *vis)
 {
     f32 dt = vis->dt, bark = vis->k[0], tine = vis->k[1], trem = vis->k[2], warm = vis->k[3];
-    int i;
+    f32 lev = minf(1.0f, vis->level * 3.0f);
+    int algo = vis->algo & 7, i;
 
     if (vis->fresh) {
         for (i = 0; i < 12; i++) tine_vib[i] = tine_vel[i] = 0.0f;
@@ -242,45 +250,89 @@ static void elec_draw(const Vis *vis)
     /* Harp frame rail (Slate) */
     g_color(GC_SLATE);
     g_line(22.0f, 184.0f, 218.0f, 184.0f, 2.5f, 0.55f);
-    g_line(22.0f, 52.0f, 218.0f, 52.0f, 1.2f, 0.28f);
+    g_line(22.0f, 54.0f, 218.0f, 54.0f, 1.2f, 0.28f);
 
     /* Warmth glow arc behind pickup rail (Orange = K4 WARMTH) */
     g_color(GC_ORANGE);
-    g_glow(120.0f, 130.0f, 45.0f + 55.0f * warm, 0.28f + 0.42f * warm * (0.4f + 0.6f * minf(1.0f, vis->level * 3.0f)));
+    g_glow(120.0f, 128.0f, 46.0f + 56.0f * warm, 0.24f + 0.42f * warm * (0.4f + 0.6f * lev));
     g_arc(120.0f, 184.0f, 18.0f + 10.0f * warm, 0.5f, 1.0f, 2.2f, 0.6f + 0.4f * warm);
 
-    /* 12 vibrating vertical tines & pickup coils (Blue = K1 BARK, Green = K2 TINE) */
+    if (algo == 4) {
+        /* ORGAN: 9 Sliding B3 Drawbars + Spinning Leslie Rotary Horn */
+        static const int DBC[9] = {GC_ORANGE, GC_ORANGE, GC_WHITE, GC_WHITE, GC_BLUE, GC_WHITE, GC_GREEN, GC_GREEN, GC_WHITE};
+        static const f32 DB0[9] = {0.75f, 0.55f, 0.85f, 0.65f, 0.45f, 0.50f, 0.35f, 0.30f, 0.40f};
+        f32 r_ang = vis->t * (1.2f + 4.8f * trem);
+        for (i = 0; i < 9; i++) {
+            f32 x = 32.0f + (f32)i * 22.0f;
+            f32 pull = clampf(DB0[i] * (i < 4 ? (0.7f + 0.4f * warm) : (0.35f + 0.85f * (i & 1 ? bark : tine))), 0.12f, 0.96f);
+            f32 act = sat(absf(tine_vib[i]) * 0.4f);
+            f32 y = 64.0f + pull * 102.0f + act * 5.0f;
+            g_color(GC_SLATE);
+            g_line(x, 60.0f, x, 178.0f, 1.4f, 0.32f);
+            g_color(DBC[i]);
+            g_line(x, 60.0f, x, y, 4.2f, 0.82f + 0.18f * act);
+            g_rect(x - 6.0f, y - 4.0f, 12.0f, 8.0f, 0.95f);
+        }
+        /* Spinning Leslie horn above drawbars */
+        g_color(GC_GOLD);
+        g_ellipse(120.0f, 42.0f, 38.0f, 7.0f, 1.3f, 0.45f);
+        g_line(120.0f - cos_turns(r_ang) * 34.0f, 42.0f - sin_turns(r_ang) * 5.5f,
+               120.0f + cos_turns(r_ang) * 34.0f, 42.0f + sin_turns(r_ang) * 5.5f, 2.4f, 0.95f);
+        g_disc(120.0f + cos_turns(r_ang) * 34.0f, 42.0f + sin_turns(r_ang) * 5.5f, 3.4f, 1.0f);
+        g_disc(120.0f - cos_turns(r_ang) * 34.0f, 42.0f - sin_turns(r_ang) * 5.5f, 3.4f, 1.0f);
+        g_color(GC_WHITE);
+        return;
+    }
+
+    /* 12 vibrating vertical tines / resonator tubes & pickup coils (Blue = K1 BARK, Green = K2 TINE) */
     for (i = 0; i < 12; i++) {
         f32 x = 32.0f + (f32)i * 16.0f;
         f32 len = 112.0f - (f32)i * 4.5f;
         f32 ytop = 182.0f - len;
         f32 bend = clampf(tine_vib[i] * (0.6f + 0.8f * bark), -10.0f, 10.0f);
         f32 act = sat(absf(tine_vib[i]) * 0.45f);
-        /* tine rod (Blue) */
-        g_color(GC_BLUE);
-        g_line(x, 182.0f, x + bend * 0.4f, ytop + len * 0.5f, 1.6f + 1.0f * act, 0.65f + 0.35f * act);
-        g_line(x + bend * 0.4f, ytop + len * 0.5f, x + bend, ytop, 1.8f + 1.4f * act, 0.85f + 0.15f * act);
-        /* tine tip / pickup bell (Green) */
-        g_color(GC_GREEN);
-        g_disc(x + bend, ytop, 2.2f + 2.8f * tine + 2.2f * act, 0.7f + 0.3f * act);
-        /* hammer strike block at bottom */
-        if (act > 0.15f) {
-            g_color(GC_ORANGE);
-            g_rect(x - 3.5f, 186.0f - 5.0f * act, 7.0f, 4.0f, act);
+        if (algo == 6) {
+            /* VIBES: graduated tubular resonator + spinning motor pulley vane at top */
+            f32 vane = absf(cos_turns(vis->t * (1.0f + 2.8f * trem) + (f32)i * 0.08f));
+            g_color(GC_SLATE);
+            g_box(x - 5.0f, ytop, 10.0f, len, 1.2f, 0.38f + 0.45f * act);
+            g_color(GC_BLUE);
+            g_line(x + bend * 0.5f, 180.0f, x + bend * 0.5f, ytop + 8.0f, 2.4f, 0.65f + 0.35f * act);
+            g_color(GC_GREEN);
+            g_ellipse(x, ytop + 5.0f, 4.5f, 1.2f + 3.4f * vane, 1.6f, 0.85f);
+        } else {
+            /* Tonebar + vibrating tine rod + magnetic pickup coil */
+            g_color(GC_SLATE);
+            g_line(x - 3.2f, 182.0f, x - 3.2f, ytop + 14.0f, 2.0f, 0.32f);
+            g_color(GC_BLUE);
+            g_line(x, 182.0f, x + bend * 0.4f, ytop + len * 0.5f, 1.6f + 1.0f * act, 0.65f + 0.35f * act);
+            g_line(x + bend * 0.4f, ytop + len * 0.5f, x + bend, ytop, 1.8f + 1.4f * act, 0.85f + 0.15f * act);
+            /* magnetic pickup lug above tine tip (Green) */
+            g_color(GC_GREEN);
+            g_rect(x - 2.5f, ytop - 8.0f, 5.0f, 5.0f, 0.55f + 0.45f * tine);
+            g_disc(x + bend, ytop, 2.2f + 2.8f * tine + 2.2f * act, 0.75f + 0.25f * act);
         }
+        /* Hammer strike block at bottom */
+        g_color(act > 0.12f ? GC_ORANGE : GC_SLATE);
+        g_rect(x - 3.5f, 185.0f - 6.0f * act, 7.0f, 4.0f, 0.28f + 0.72f * act);
     }
 
-    /* Stereo tremolo wave across the upper pickup rail (White = K3 TREM) */
+    /* Dual-trace stereo autopan tremolo wave across the upper rail (White L / Cyan R = K3 TREM) */
     {
-        f32 xy[2 * 48];
-        f32 amp = 2.0f + 16.0f * trem * (0.4f + 0.6f * minf(1.0f, vis->level * 3.0f));
+        f32 xy[2 * 48], xy2[2 * 48];
+        f32 amp = 2.0f + 14.0f * trem * (0.4f + 0.6f * lev);
         for (i = 0; i < 48; i++) {
             f32 u = (f32)i * (1.0f / 47.0f);
-            xy[2 * i]     = 24.0f + u * 192.0f;
-            xy[2 * i + 1] = 46.0f + amp * sin_turns(u * (1.5f + 2.5f * trem) + vis->t * (1.2f + 2.4f * trem));
+            f32 w = amp * sin_turns(u * (1.5f + 2.5f * trem) + vis->t * (1.2f + 2.4f * trem));
+            xy[2 * i]      = 24.0f + u * 192.0f;
+            xy[2 * i + 1]  = 43.0f + w;
+            xy2[2 * i]     = 24.0f + u * 192.0f;
+            xy2[2 * i + 1] = 43.0f - w * 0.85f;
         }
+        g_color(GC_CYAN);
+        g_poly(xy2, 48, 0, 1.4f, 0.42f + 0.35f * trem);
         g_color(GC_WHITE);
-        g_poly(xy, 48, 0, 2.0f, 0.65f + 0.35f * trem);
+        g_poly(xy, 48, 0, 2.0f, 0.68f + 0.32f * trem);
     }
     g_color(GC_WHITE);
 }

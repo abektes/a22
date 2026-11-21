@@ -122,18 +122,20 @@ static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         f32 shim_l = tsin(psh + m0 * idx * 0.5f) * sh_amt * 0.48f;
         f32 shim_r = tsin(psh + 0.25f - m1 * idx * 0.5f) * sh_amt * 0.48f;
 
-        f32 lp, b1l, b2l, b1r, b2r, xl, xr;
-        SVF_TICK(fm1, &v->s[0], body_l, lp, b1l); (void)lp;
-        SVF_TICK(fm2, &v->s[2], body_l, lp, b2l); (void)lp;
-        SVF_TICK(fm1, &v->s[4], body_r, lp, b1r); (void)lp;
-        SVF_TICK(fm2, &v->s[6], body_r, lp, b2r); (void)lp;
+        f32 lp1, lp2, b1l, b2l, b1r, b2r, hpl, hpr, xl, xr;
+        SVF_TICK(fm1, &v->s[0], body_l, lp1, b1l); (void)lp1;
+        SVF_TICK(fm2, &v->s[2], body_l, lp2, b2l);
+        hpl = body_l - lp2 - b2l * fm2.k;
+        SVF_TICK(fm1, &v->s[4], body_r, lp1, b1r); (void)lp1;
+        SVF_TICK(fm2, &v->s[6], body_r, lp2, b2r);
+        hpr = body_r - lp2 - b2r * fm2.k;
 
-        xl = lerpf(body_l, b1l * 0.95f + b2l * 0.80f, fmix) + shim_l;
-        xr = lerpf(body_r, b1r * 0.95f + b2r * 0.80f, fmix) + shim_r;
+        xl = lerpf(body_l, b1l * 0.95f + b2l * 0.82f + hpl * 0.14f * sh_amt, fmix) + shim_l;
+        xr = lerpf(body_r, b1r * 0.95f + b2r * 0.82f + hpr * 0.14f * sh_amt, fmix) + shim_r;
 
         /* Warm airy stereo smoothing LPF */
-        SVF_TICK(air, &v->s[8],  xl, lp, b1l); (void)b1l; xl = lp;
-        SVF_TICK(air, &v->s[10], xr, lp, b1r); (void)b1r; xr = lp;
+        SVF_TICK(air, &v->s[8],  xl, lp1, b1l); (void)b1l; xl = lp1;
+        SVF_TICK(air, &v->s[10], xr, lp2, b1r); (void)b1r; xr = lp2;
 
         out_l[i] = xl;
         out_r[i] = xr;
@@ -149,34 +151,33 @@ static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = pm; v->ph[3] = ps; v->ph[4] = psh; v->ph[7] = pw;
 }
 
-/* ---- 4-Color Vector Picture: Isometric Morphing Portal & Shimmer Stars ----------- */
+/* ---- 4-Color Vector Picture: 3D Spectral Formant Terrain + Morphing Portal ------- */
 static f32 dm_z, dm_rot, dm_lev;
 
 static void haze_draw(const Vis *vis)
 {
     f32 dt = vis->dt, morph = vis->k[0], form = vis->k[1], drift = vis->k[2], shim = vis->k[3];
-    f32 cx = 120.0f, cy = 112.0f;
+    f32 cx = 120.0f, cy = 84.0f;
     static const int LC[5] = {GC_BLUE, GC_CYAN, GC_GREEN, GC_WHITE, GC_ORANGE};
-    int k, i;
+    int algo = vis->algo & 7, k, i;
 
     if (vis->fresh) dm_lev = 0.0f;
     dm_lev += (minf(1.0f, vis->level * 3.8f) - dm_lev) * minf(1.0f, dt * 14.0f);
     dm_z   = fractf(dm_z + dt * (0.14f + 0.30f * drift + 0.18f * dm_lev));
     dm_rot = fractf(dm_rot + dt * (0.025f + 0.09f * drift));
 
-    /* Perspective corner rails (Slate) */
-    g_color(GC_SLATE);
-    g_line(34.0f, 42.0f, 206.0f, 182.0f, 1.0f, 0.20f);
-    g_line(206.0f, 42.0f, 34.0f, 182.0f, 1.0f, 0.20f);
+    /* Soft spectral aura glow in upper sky */
+    g_color(GC_CYAN);
+    g_glow(cx, cy, 32.0f + 26.0f * shim + 14.0f * dm_lev, 0.18f + 0.24f * shim);
 
-    /* 5 nested zooming perspective polygons morphing from diamond -> hexagon -> star */
-    for (k = 0; k < 5; k++) {
-        f32 depth = fractf(dm_z + (f32)k * 0.20f);
-        f32 rad = 14.0f + depth * depth * 72.0f;
-        f32 sq = 0.55f + 0.45f * form;
-        f32 ang0 = dm_rot + depth * (0.18f * morph) + 0.125f;
+    /* Upper Sky: 4 nested morphing portal rings (diamond -> octagon -> star) */
+    for (k = 0; k < 4; k++) {
+        f32 depth = fractf(dm_z + (f32)k * 0.25f);
+        f32 rad = 10.0f + depth * depth * 42.0f;
+        f32 sq = 0.55f + 0.35f * form;
+        f32 ang0 = dm_rot + depth * (0.18f * morph) + 0.125f + (f32)algo * 0.04f;
         f32 xy[2 * 8];
-        f32 alpha = sin_turns(depth * 0.5f) * (0.55f + 0.45f * dm_lev);
+        f32 alpha = sin_turns(depth * 0.5f) * (0.50f + 0.45f * dm_lev);
         for (i = 0; i < 8; i++) {
             f32 th = ang0 + (f32)i * (1.0f / 8.0f);
             f32 star = (i & 1) ? (1.0f - 0.38f * morph) : (1.0f + 0.14f * morph);
@@ -185,7 +186,41 @@ static void haze_draw(const Vis *vis)
             xy[2 * i + 1] = cy + sin_turns(th) * r * sq;
         }
         g_color(LC[k]);
-        g_poly(xy, 8, 1, 1.3f + 1.2f * depth, alpha);
+        g_poly(xy, 8, 1, 1.2f + 1.1f * depth, alpha);
+    }
+
+    /* Lower Horizon: 5 3D Isometric Stacked Spectral/Formant Ridges (back to front) */
+    for (k = 0; k < 5; k++) {
+        f32 z = (f32)k * 0.25f;                         /* 0 = back horizon, 1 = front ridge */
+        f32 y_base = lerpf(134.0f, 184.0f, z);
+        f32 x_span = lerpf(64.0f, 96.0f, z);
+        f32 p1 = 0.24f + 0.22f * form + 0.04f * sin_turns(dm_rot + z * 0.5f);
+        f32 p2 = 0.54f + 0.30f * form - 0.04f * cos_turns(dm_rot * 1.3f + z);
+        f32 h_scale = (14.0f + 18.0f * morph + 12.0f * dm_lev) * (0.55f + 0.45f * z);
+        f32 rxy[2 * 42];
+        rxy[0] = cx - x_span;
+        rxy[1] = y_base;
+        for (i = 0; i < 40; i++) {
+            f32 u = (f32)i * (1.0f / 39.0f);
+            f32 d1 = (u - p1) * (7.0f + 4.0f * morph);
+            f32 d2 = (u - p2) * (6.5f + 4.0f * morph);
+            f32 f1_pk = 1.0f / (1.0f + d1 * d1);
+            f32 f2_pk = (0.75f + 0.25f * shim) / (1.0f + d2 * d2);
+            f32 rip = 0.18f * morph * sin_turns(u * (3.0f + (f32)algo) + dm_z * 2.0f + z);
+            f32 env = sin_turns(u * 0.5f);
+            f32 h = (f1_pk + f2_pk + rip) * env * h_scale;
+            rxy[2 * (i + 1)]     = cx + (u * 2.0f - 1.0f) * x_span;
+            rxy[2 * (i + 1) + 1] = clampf(y_base - h, 46.0f, 192.0f);
+        }
+        rxy[2 * 41]     = cx + x_span;
+        rxy[2 * 41 + 1] = y_base;
+
+        if (k == 4) {
+            g_color(GC_CYAN);
+            g_fillv(rxy, 42, y_base - 36.0f, 0.30f + 0.16f * dm_lev, y_base, 0.03f);
+        }
+        g_color(LC[k]);
+        g_poly(rxy + 2, 40, 0, 1.2f + 1.2f * z, 0.35f + 0.60f * z);
     }
 
     /* Shimmer harmonic star particles (Orange/Gold = K4 SHIMMER) */
@@ -193,9 +228,9 @@ static void haze_draw(const Vis *vis)
         int nstar = 4 + (int)(shim * 8.0f);
         for (i = 0; i < nstar; i++) {
             f32 th = (f32)i * 0.161803f + dm_rot * (1.0f + 0.3f * (f32)(i & 3));
-            f32 r = 20.0f + 56.0f * fractf((f32)i * 0.37f + dm_z * 0.6f);
-            f32 sx = cx + cos_turns(th) * r;
-            f32 sy = cy + sin_turns(th) * r * 0.72f;
+            f32 r = 18.0f + 54.0f * fractf((f32)i * 0.37f + dm_z * 0.6f);
+            f32 sx = cx + cos_turns(th) * r * 1.15f;
+            f32 sy = cy + sin_turns(th) * r * 0.58f;
             f32 tw = 0.45f + 0.55f * sin_turns(vis->t * 1.4f + (f32)i * 0.21f);
             g_color((i & 1) ? GC_ORANGE : GC_GOLD);
             g_disc(sx, sy, 1.6f + 2.6f * shim * tw + 2.0f * dm_lev, 0.50f + 0.50f * tw);
