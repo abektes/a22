@@ -168,7 +168,7 @@ static void haze_draw(const Vis *vis)
 
     /* Soft spectral aura glow in upper sky */
     g_color(GC_CYAN);
-    g_glow(cx, cy, 32.0f + 26.0f * shim + 14.0f * dm_lev, 0.18f + 0.24f * shim);
+    g_glow(cx, cy, 32.0f + 26.0f * shim, 0.18f + 0.24f * shim);
 
     /* Upper Sky: 4 nested morphing portal rings (diamond -> octagon -> star) */
     for (k = 0; k < 4; k++) {

@@ -250,7 +250,7 @@ static void string_draw(const Vis *vis)
 
     /* Acoustic soundboard soundhole glow & rosette rings (White/Gold = K3 BODY) */
     g_color(GC_ORANGE);
-    g_glow(cx, cy, 36.0f + 22.0f * body + 12.0f * st_lev, 0.20f + 0.26f * body);
+    g_glow(cx, cy, 36.0f + 22.0f * body, 0.20f + 0.26f * body);
     g_color(GC_SLATE);
     g_ring(cx, cy, 48.0f + 16.0f * body, 1.3f, 0.35f + 0.30f * body);
     g_ring(cx, cy, 41.0f + 15.0f * body, 1.0f, 0.24f + 0.22f * body);

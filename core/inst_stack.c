@@ -276,7 +276,7 @@ static void cluster_draw(const Vis *vis)
 
     /* Background glow aura (Orange = K4 GLOW) */
     g_color(GC_ORANGE);
-    g_glow(cx, cy, 30.0f + 42.0f * glow + 18.0f * cl_lev, 0.25f + 0.35f * glow);
+    g_glow(cx, cy, 30.0f + 42.0f * glow, 0.25f + 0.35f * glow);
 
     /* Subtle reference crosshairs */
     g_color(GC_SLATE);

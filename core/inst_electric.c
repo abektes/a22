@@ -254,7 +254,7 @@ static void elec_draw(const Vis *vis)
 
     /* Warmth glow arc behind pickup rail (Orange = K4 WARMTH) */
     g_color(GC_ORANGE);
-    g_glow(120.0f, 128.0f, 46.0f + 56.0f * warm, 0.24f + 0.42f * warm * (0.4f + 0.6f * lev));
+    g_glow(120.0f, 128.0f, 46.0f + 56.0f * warm, 0.24f + 0.42f * warm * 0.7f);
     g_arc(120.0f, 184.0f, 18.0f + 10.0f * warm, 0.5f, 1.0f, 2.2f, 0.6f + 0.4f * warm);
 
     if (algo == 4) {

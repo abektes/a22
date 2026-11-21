@@ -207,7 +207,7 @@ static void perc_draw(const Vis *vis)
 
     /* Acoustic cavity aura glow (Orange = K4 SPACE) */
     g_color(GC_ORANGE);
-    g_glow(cx, cy, 38.0f + 24.0f * space + 16.0f * pr_lev, 0.20f + 0.25f * space * (0.4f + 0.6f * pr_lev));
+    g_glow(cx, cy, 38.0f + 24.0f * space, 0.20f + 0.25f * space * 0.7f);
 
     /* Outer acoustic shell & Chladni modal standing-wave petal ring */
     g_color(GC_SLATE);
