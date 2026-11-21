@@ -49,13 +49,15 @@ enum {
     D_AP1B = 932, D_DL1B = 4217, D_AP2B = 2656, D_DL2B = 3163,
     D_NSEG = 12
 };
-static const uint16_t D_LEN[D_NSEG] = {
-    D_IN1, D_IN2, D_IN3, D_IN4,
-    D_AP1A, D_DL1A, D_AP2A, D_DL2A,
-    D_AP1B, D_DL1B, D_AP2B, D_DL2B
+/* (each segment's start in rev_buf: known when it compiles, so no table to load per read) */
+enum {
+    D_O0 = 0, D_O1 = D_O0 + D_IN1, D_O2 = D_O1 + D_IN2, D_O3 = D_O2 + D_IN3, D_O4 = D_O3 + D_IN4,
+    D_O5 = D_O4 + D_AP1A, D_O6 = D_O5 + D_DL1A, D_O7 = D_O6 + D_AP2A, D_O8 = D_O7 + D_DL2A,
+    D_O9 = D_O8 + D_AP1B, D_O10 = D_O9 + D_DL1B, D_O11 = D_O10 + D_AP2B, D_OEND = D_O11 + D_DL2B
 };
-static uint32_t d_off[D_NSEG];
+typedef char d_fits[D_OEND <= REV_N ? 1 : -1];
 static uint16_t d_pos[D_NSEG];
+static uint32_t pl_quiet;                    /* samples the tank has been all 0 (fx_plate) */
 static f32 d_inlp, d_dampa, d_dampb, d_lfo1, d_lfo2;
 
 /* ---- DELAY / SHIFT / CHORUS / TANK state ---------------------------------------------- */
@@ -73,7 +75,7 @@ static f32 punch_fast, punch_slow, punch_lp_l, punch_lp_r, punch_hi_l, punch_hi_
 /* ---- Master EQ, Glue & Tape Trick state ----------------------------------------------- */
 static f32 eq_lo[2], eq_hi[2], eq_mid[2][2];
 static f32 glue_env = 0.0f;
-static uint32_t tfx_w;
+static uint32_t tfx_w;                       /* the ring's write frame, 0..TFX_FRAMES-1 */
 static int tfx_prev;
 static f32 tfx_rpos, tfx_spd = 1.0f, tfx_stut_len = 5512.0f, tfx_stut_pos, tfx_stut_anchor;
 
@@ -96,6 +98,7 @@ void fx_reset(void)
     for (i = 0; i < TFX_FRAMES * 2u; i++) tfx_buf[i] = 0;
     for (i = 0; i < D_NSEG; i++) d_pos[i] = 0;
     d_inlp = d_dampa = d_dampb = d_lfo1 = d_lfo2 = 0.0f;
+    pl_quiet = 0;
     echo_w = 0;
     echo_t = 4000.0f;
     echo_lpl = echo_lpr = echo_ol = echo_or = wow_ph = ch_ph = shf_ph = spr_lp = 0.0f;
@@ -117,123 +120,203 @@ void fx_reset(void)
 
 void fx_init(f32 sr)
 {
-    uint32_t off = 0, i;
     SRf = sr > 1000.0f ? sr : 44100.0f;
     ISRf = 1.0f / SRf;
-    for (i = 0; i < D_NSEG; i++) {
-        d_off[i] = off;
-        off += D_LEN[i];
-    }
     fx_last = -1;
     fx_reset();
 }
 
 /* ---- Dattorro helpers ----------------------------------------------------------------- */
-static inline f32 d_read(int seg, int delay)
-{
-    int len = D_LEN[seg];
-    int idx = (int)d_pos[seg] - delay;
-    while (idx < 0) idx += len;
-    while (idx >= len) idx -= len;
-    return i16_to_f(rev_buf[d_off[seg] + (uint32_t)idx]);
-}
+/* A segment's read and write, on its own position kept by the caller (in a register, not d_pos). Every delay read
+ * here is shorter than its segment, so one wrap is enough. */
+#define D_AT(o, len, pos, delay) rev_buf[(o) + ((pos) >= (delay) ? (pos) - (delay) : (pos) + (len) - (delay))]
 
-static inline f32 d_read_frac(int seg, f32 delay)
+static inline f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
 {
-    int len = D_LEN[seg];
     int d = ifloor(delay);
     f32 fr = delay - (f32)d;
-    int i0 = (int)d_pos[seg] - d;
+    int i0 = (int)pos - d;
     int i1;
     f32 a, b;
-    while (i0 < 0) i0 += len;
-    while (i0 >= len) i0 -= len;
+    while (i0 < 0) i0 += (int)len;
+    while (i0 >= (int)len) i0 -= (int)len;
     i1 = i0 - 1;
-    if (i1 < 0) i1 += len;
-    a = i16_to_f(rev_buf[d_off[seg] + (uint32_t)i0]);
-    b = i16_to_f(rev_buf[d_off[seg] + (uint32_t)i1]);
+    if (i1 < 0) i1 += (int)len;
+    a = i16_to_f(rev_buf[o + (uint32_t)i0]);
+    b = i16_to_f(rev_buf[o + (uint32_t)i1]);
     return a + (b - a) * fr;
 }
 
-static inline void d_write(int seg, f32 x)
+/* write x at pos and step on; *nz gathers the bits written (all zero: the tank is silent) */
+static inline uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint32_t *nz)
 {
-    uint16_t p = d_pos[seg];
-    rev_buf[d_off[seg] + p] = f_to_i16(x);
-    if (++p >= D_LEN[seg]) p = 0;
-    d_pos[seg] = p;
+    int16_t v = f_to_i16(x);
+    rev_buf[o + pos] = v;
+    *nz |= (uint16_t)v;
+    return pos + 1u >= len ? 0u : pos + 1u;
 }
 
-static inline f32 d_allpass(int seg, f32 x, f32 g)
+/* the allpass: its oldest sample (at pos) out, the new one in */
+static inline f32 d_allpass(uint32_t o, uint32_t len, uint32_t *pos, f32 x, f32 g, uint32_t *nz)
 {
-    f32 buf = i16_to_f(rev_buf[d_off[seg] + d_pos[seg]]);
+    f32 buf = i16_to_f(rev_buf[o + *pos]);
     f32 v = x + buf * g;
-    d_write(seg, v);
+    *pos = d_put(o, len, *pos, v, nz);
     return buf - v * g;
 }
 
 /* ---- 0: PLATE (True Dattorro Modulated Stereo Plate Reverb) -------------------------- */
+/* The tank's two halves meet only through their long delays: half A reads half B's last delay (segment 11) a whole
+ * segment back, half B reads A's (7), and the output taps read 121 samples back or more, so within a block of CTRL
+ * samples neither half reads anything the other writes in it. With the samples each reads from the other taken
+ * first (pl_x7, pl_x11), the halves run apart: A and the left taps on the second core, B and the right taps on this
+ * one, to the bit the same as one after the other. When input and tank have been silent for a whole longest
+ * segment, every sample in the tank is 0 and stays 0: the plate sleeps until something comes in. */
+static int (*fx_c2_run)(void (*fn)(uint32_t), uint32_t arg);
+static int (*fx_c2_wait)(void);
+
+void fx_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void))
+{
+    fx_c2_run = run;
+    fx_c2_wait = wait;
+}
+
+static f32 pl_ap[CTRL];                      /* the input diffusers' output */
+static f32 pl_x7[CTRL], pl_x11[CTRL];        /* what each half reads of the other's last delay */
+static uint16_t pl_p0[D_NSEG];               /* the positions at the block's start */
+static f32 pl_dec, pl_damp, pl_mod, pl_wet;
+static f32 *pl_dl, *pl_dr;
+static uint32_t pl_nz_a, pl_nz_b;
+
+/* a tap on the other half's segment: q its position after this sample's write */
+#define PL_TAP(seg, len, q, delay) i16_to_f(D_AT(D_O##seg, len, q, delay))
+#define PL_STEP(q, len) ((q) = (q) + 1u >= (len) ? 0u : (q) + 1u)
+
+static void plate_half_a(uint32_t arg)
+{
+    uint32_t p4 = pl_p0[4], p5 = pl_p0[5], p6 = pl_p0[6], p7 = pl_p0[7], nz = 0;
+    uint32_t q9 = pl_p0[9], q10 = pl_p0[10], q11 = pl_p0[11];
+    f32 dec = pl_dec, damp = pl_damp, mod = pl_mod, wet = pl_wet, lfo = d_lfo1, damps = d_dampa;
+    int n;
+    (void)arg;
+    for (n = 0; n < CTRL; n++) {
+        f32 ta, ma, va, ol;
+        lfo += 0.67f * ISRf; if (lfo >= 1.0f) lfo -= 1.0f;
+        ta = pl_ap[n] + pl_x11[n] * dec;
+        ma = d_read_frac(D_O4, D_AP1A, p4, 672.0f + mod * tsin(lfo));
+        va = softclip(ta + ma * 0.68f);
+        p4 = d_put(D_O4, D_AP1A, p4, va, &nz);
+        ta = ma - va * 0.68f;
+        p5 = d_put(D_O5, D_DL1A, p5, ta, &nz);
+        ta = i16_to_f(D_AT(D_O5, D_DL1A, p5, D_DL1A - 1));
+        damps += (ta - damps) * (1.0f - damp);
+        ta = d_allpass(D_O6, D_AP2A, &p6, damps * dec, -0.50f, &nz);
+        p7 = d_put(D_O7, D_DL2A, p7, softclip(ta), &nz);
+        /* (B's segments where B leaves them at this sample: the taps read none it writes in this block) */
+        PL_STEP(q9, D_DL1B); PL_STEP(q10, D_AP2B); PL_STEP(q11, D_DL2B);
+        ol = 0.6f * (PL_TAP(9, D_DL1B, q9, 266) + PL_TAP(9, D_DL1B, q9, 2974) - PL_TAP(10, D_AP2B, q10, 1913)
+                   + PL_TAP(11, D_DL2B, q11, 1996) - i16_to_f(D_AT(D_O5, D_DL1A, p5, 1990))
+                   - i16_to_f(D_AT(D_O6, D_AP2A, p6, 187)) - i16_to_f(D_AT(D_O7, D_DL2A, p7, 1066)));
+        pl_dl[n] += ol * wet * 0.55f;
+    }
+    d_pos[4] = (uint16_t)p4; d_pos[5] = (uint16_t)p5; d_pos[6] = (uint16_t)p6; d_pos[7] = (uint16_t)p7;
+    d_lfo1 = lfo;
+    d_dampa = damps;
+    pl_nz_a = nz;
+}
+
+static void plate_half_b(void)
+{
+    uint32_t p8 = pl_p0[8], p9 = pl_p0[9], p10 = pl_p0[10], p11 = pl_p0[11], nz = 0;
+    uint32_t q5 = pl_p0[5], q6 = pl_p0[6], q7 = pl_p0[7];
+    f32 dec = pl_dec, damp = pl_damp, mod = pl_mod, wet = pl_wet, lfo = d_lfo2, damps = d_dampb;
+    int n;
+    for (n = 0; n < CTRL; n++) {
+        f32 tb, mb, vb, or_;
+        lfo += 0.91f * ISRf; if (lfo >= 1.0f) lfo -= 1.0f;
+        tb = pl_ap[n] + pl_x7[n] * dec;
+        mb = d_read_frac(D_O8, D_AP1B, p8, 908.0f + mod * tsin(lfo));
+        vb = softclip(tb + mb * 0.68f);
+        p8 = d_put(D_O8, D_AP1B, p8, vb, &nz);
+        tb = mb - vb * 0.68f;
+        p9 = d_put(D_O9, D_DL1B, p9, tb, &nz);
+        tb = i16_to_f(D_AT(D_O9, D_DL1B, p9, D_DL1B - 1));
+        damps += (tb - damps) * (1.0f - damp);
+        tb = d_allpass(D_O10, D_AP2B, &p10, damps * dec, -0.50f, &nz);
+        p11 = d_put(D_O11, D_DL2B, p11, softclip(tb), &nz);
+        PL_STEP(q5, D_DL1A); PL_STEP(q6, D_AP2A); PL_STEP(q7, D_DL2A);
+        or_ = 0.6f * (PL_TAP(5, D_DL1A, q5, 353) + PL_TAP(5, D_DL1A, q5, 3627) - PL_TAP(6, D_AP2A, q6, 1228)
+                    + PL_TAP(7, D_DL2A, q7, 2673) - i16_to_f(D_AT(D_O9, D_DL1B, p9, 2111))
+                    - i16_to_f(D_AT(D_O10, D_AP2B, p10, 335)) - i16_to_f(D_AT(D_O11, D_DL2B, p11, 121)));
+        pl_dr[n] += or_ * wet * 0.55f;
+    }
+    d_pos[8] = (uint16_t)p8; d_pos[9] = (uint16_t)p9; d_pos[10] = (uint16_t)p10; d_pos[11] = (uint16_t)p11;
+    d_lfo2 = lfo;
+    d_dampb = damps;
+    pl_nz_b = nz;
+}
+
 static void fx_plate(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
 {
     f32 mix = (f32)p[0] * 0.01f;
-    f32 dec = 0.35f + 0.59f * ((f32)p[1] * 0.01f);
-    f32 damp = 0.08f + 0.72f * ((f32)p[2] * 0.01f);
-    f32 mod = (f32)p[3] * 0.01f * 10.0f;
-    f32 wet = mix * (0.45f + 0.75f * mix);
-    f32 bw = 0.65f;
+    f32 bw = 0.65f, inlp = d_inlp;
+    uint32_t p0 = d_pos[0], p1 = d_pos[1], p2 = d_pos[2], p3 = d_pos[3], nz = 0, x7, x11, heard = 0;
     int n;
 
     if (mix <= 0.001f)
         return;
-
-    for (n = 0; n < CTRL; n++) {
-        f32 in = (sl[n] + sr[n]) * 0.35f + 1e-18f;
-        f32 ap, ta, tb, ma, mb, va, vb, ol, or_;
-
-        d_lfo1 += 0.67f * ISRf; if (d_lfo1 >= 1.0f) d_lfo1 -= 1.0f;
-        d_lfo2 += 0.91f * ISRf; if (d_lfo2 >= 1.0f) d_lfo2 -= 1.0f;
-
-        /* input bandwidth filter + 4 cascaded input diffusers */
-        d_inlp += (in - d_inlp) * bw;
-        ap = d_allpass(0, d_inlp, 0.72f);
-        ap = d_allpass(1, ap, 0.72f);
-        ap = d_allpass(2, ap, 0.60f);
-        ap = d_allpass(3, ap, 0.60f);
-
-        /* cross-coupled tank inputs from opposite halves */
-        ta = ap + d_read(11, D_DL2B - 1) * dec;
-        tb = ap + d_read(7, D_DL2A - 1) * dec;
-
-        /* Half A: modulated decay allpass -> delay -> HF damp -> allpass -> delay */
-        ma = d_read_frac(4, 672.0f + mod * tsin(d_lfo1));
-        va = softclip(ta + ma * 0.68f);
-        d_write(4, va);
-        ta = ma - va * 0.68f;
-        d_write(5, ta);
-        ta = d_read(5, D_DL1A - 1);
-        d_dampa += (ta - d_dampa) * (1.0f - damp);
-        ta = d_allpass(6, d_dampa * dec, -0.50f);
-        d_write(7, softclip(ta));
-
-        /* Half B */
-        mb = d_read_frac(8, 908.0f + mod * tsin(d_lfo2));
-        vb = softclip(tb + mb * 0.68f);
-        d_write(8, vb);
-        tb = mb - vb * 0.68f;
-        d_write(9, tb);
-        tb = d_read(9, D_DL1B - 1);
-        d_dampb += (tb - d_dampb) * (1.0f - damp);
-        tb = d_allpass(10, d_dampb * dec, -0.50f);
-        d_write(11, softclip(tb));
-
-        /* Dattorro 7-tap stereo matrix */
-        ol = 0.6f * (d_read(9, 266) + d_read(9, 2974) - d_read(10, 1913) + d_read(11, 1996)
-                   - d_read(5, 1990) - d_read(6, 187) - d_read(7, 1066));
-        or_ = 0.6f * (d_read(5, 353) + d_read(5, 3627) - d_read(6, 1228) + d_read(7, 2673)
-                    - d_read(9, 2111) - d_read(10, 335) - d_read(11, 121));
-
-        dl[n] += ol * wet * 0.55f;
-        dr[n] += or_ * wet * 0.55f;
+    for (n = 0; n < CTRL; n++)
+        heard |= sl[n] != 0.0f || sr[n] != 0.0f;
+    if (!heard && pl_quiet >= D_DL1A + CTRL) {
+        for (n = 0; n < CTRL; n++) {         /* asleep: the tank is all 0 and nothing comes in */
+            d_lfo1 += 0.67f * ISRf; if (d_lfo1 >= 1.0f) d_lfo1 -= 1.0f;
+            d_lfo2 += 0.91f * ISRf; if (d_lfo2 >= 1.0f) d_lfo2 -= 1.0f;
+        }
+        return;
     }
+    pl_dec = 0.35f + 0.59f * ((f32)p[1] * 0.01f);
+    pl_damp = 0.08f + 0.72f * ((f32)p[2] * 0.01f);
+    pl_mod = (f32)p[3] * 0.01f * 10.0f;
+    pl_wet = mix * (0.45f + 0.75f * mix);
+    pl_dl = dl;
+    pl_dr = dr;
+
+    /* input bandwidth filter + 4 cascaded input diffusers */
+    for (n = 0; n < CTRL; n++) {
+        f32 in = (sl[n] + sr[n]) * 0.35f + 1e-18f, ap;
+        inlp += (in - inlp) * bw;
+        ap = d_allpass(D_O0, D_IN1, &p0, inlp, 0.72f, &nz);
+        ap = d_allpass(D_O1, D_IN2, &p1, ap, 0.72f, &nz);
+        ap = d_allpass(D_O2, D_IN3, &p2, ap, 0.60f, &nz);
+        pl_ap[n] = d_allpass(D_O3, D_IN4, &p3, ap, 0.60f, &nz);
+    }
+    d_inlp = inlp;
+    d_pos[0] = (uint16_t)p0; d_pos[1] = (uint16_t)p1; d_pos[2] = (uint16_t)p2; d_pos[3] = (uint16_t)p3;
+
+    /* what each half reads of the other: a whole segment back, the oldest sample, before it is written over */
+    for (n = 0; n < D_NSEG; n++)
+        pl_p0[n] = d_pos[n];
+    x7 = pl_p0[7];
+    x11 = pl_p0[11];
+    for (n = 0; n < CTRL; n++) {
+        x7 = x7 + 1u >= D_DL2A ? 0u : x7 + 1u;
+        x11 = x11 + 1u >= D_DL2B ? 0u : x11 + 1u;
+        pl_x7[n] = i16_to_f(rev_buf[D_O7 + x7]);
+        pl_x11[n] = i16_to_f(rev_buf[D_O11 + x11]);
+    }
+
+    if (fx_c2_run && fx_c2_run(plate_half_a, 0)) {
+        plate_half_b();
+        if (fx_c2_wait() != 0)
+            plate_half_a(0);                 /* (the second core gave up: the job was dropped) */
+    } else {
+        plate_half_a(0);
+        plate_half_b();
+    }
+    if (heard || nz || pl_nz_a || pl_nz_b)
+        pl_quiet = 0;
+    else if (pl_quiet < D_DL1A + CTRL)
+        pl_quiet += CTRL;
 }
 
 /* ---- echo_buf integer-indexed fractional reader --------------------------------------- */
@@ -605,11 +688,11 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
     }
 
     for (n = 0; n < CTRL; n++) {
-        uint32_t wi = tfx_w % TFX_FRAMES;
+        uint32_t wi = tfx_w;                     /* (kept below TFX_FRAMES: no division a sample) */
         if (trick < TRICK_STUT8) {
             tfx_buf[wi * 2u]     = f_to_i16(l[n]);
             tfx_buf[wi * 2u + 1] = f_to_i16(r[n]);
-            tfx_w++;
+            tfx_w = wi + 1u >= TFX_FRAMES ? 0u : wi + 1u;
         }
         if (trick == TRICK_BRAKE) {
             uint32_t back, i0, i1, curw = tfx_w % TFX_FRAMES;

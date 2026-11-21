@@ -1590,6 +1590,7 @@ void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(v
 {
     c2_run = run;
     c2_wait = wait;
+    fx_two_cores(run, wait);                    /* (PLATE's two halves: fx.c) */
 }
 
 static void voice_block(int i)
