@@ -119,8 +119,17 @@ static void hspan(int y, f32 xa, f32 xb, int cy)
         return;
     }
     put(x0, y, (cov_of((f32)x0 + 0.5f - xa) * cy) >> 8);
-    for (x = x0 + 1; x < x1; x++)
-        put(x, y, cy);
+    {                                          /* the inside, with the pen's state in registers */
+        uint8_t *p = &g_fb[y * FB_W + x0 + 1];
+        const int mode = gm, lev = glevel, lev5 = glevel5, bank = gbank, n = x1 - x0 - 1;
+        if (mode == G_PAINT && lev == 0 && cy >= 256) {
+            for (x = 0; x < n; x++)            /* (painting out, wholly: what ink() would leave) */
+                p[x] = 0;
+        } else {
+            for (x = 0; x < n; x++)
+                ink(p + x, cy, mode, lev, lev5, bank);
+        }
+    }
     put(x1, y, (cov_of(xb - ((f32)x1 - 0.5f)) * cy) >> 8);
 }
 
@@ -240,7 +249,7 @@ void g_ring(f32 cx, f32 cy, f32 r, f32 w, f32 a)
 void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
 {
     int y0, y1, x0, x1, x, y;
-    f32 pad, irx2, iry2, h;
+    f32 pad, irx2, iry2, h, e, fo2, fi2;
     G_POLL();
     if (rx <= 0.05f || ry <= 0.05f) {
         if (rx > 0.05f)
@@ -259,11 +268,38 @@ void g_ellipse(f32 cx, f32 cy, f32 rx, f32 ry, f32 w, f32 a)
     y1 = imin(FB_H - 1, ifloor(cy + ry + pad) + 1);
     x0 = imax(0, ifloor(cx - rx - pad));
     x1 = imin(FB_W - 1, ifloor(cx + rx + pad) + 1);
+    /* Only the pixels near the edge are worked out. The distance below is (f - 1) f / |grad f|, and
+     * |grad f| <= f / min(rx, ry), so it is at least |f - 1| min(rx, ry): a pixel with f outside
+     * 1 -+ e, e = reach / min(rx, ry), gets no ink, and each row is two runs between those two ellipses
+     * (one run, or the whole row inside for a filled one). */
+    e = ((w > 0.0f ? h + 0.5f : 0.5f) + 0.1f) / minf(rx, ry);
+    fo2 = (1.0f + e) * (1.0f + e);
+    fi2 = w > 0.0f && e < 1.0f ? (1.0f - e) * (1.0f - e) : 0.0f;
     for (y = y0; y <= y1; y++) {
-        f32 dy = (f32)y - cy;
-        for (x = x0; x <= x1; x++) {
+        f32 dy = (f32)y - cy, q = dy * dy * iry2, hwo, hwi;
+        int xa, xb, xc, xd;
+        if (q >= fo2)
+            continue;
+        hwo = rx * sqrtfx(fo2 - q) + 1.0f;
+        hwi = q < fi2 ? rx * sqrtfx(fi2 - q) - 1.0f : -1.0f;
+        xa = imax(x0, ifloor(cx - hwo));
+        xd = imin(x1, ifloor(cx + hwo) + 1);
+        if (hwi > 0.0f) {
+            xb = imin(xd, ifloor(cx - hwi));
+            xc = imax(xa, -ifloor(-(cx + hwi)));
+            if (xc <= xb + 1) { xb = xd; xc = xd + 1; }
+        } else {
+            xb = xd;
+            xc = xd + 1;
+        }
+        for (x = xa; x <= xd; x++) {
             f32 dx = (f32)x - cx;
-            f32 f2 = dx * dx * irx2 + dy * dy * iry2, f, g2, d;
+            f32 f2, f, g2, d;
+            if (x > xb && x < xc) {                 /* the inside of an outline: skip to its far edge */
+                x = xc - 1;
+                continue;
+            }
+            f2 = dx * dx * irx2 + dy * dy * iry2;
             if (w <= 0.0f && f2 < 0.5f) {      /* well inside a filled one */
                 put(x, y, 256);
                 continue;
@@ -707,43 +743,56 @@ void g_fill(const f32 *xy, int n, f32 a) { fill_poly(xy, n, a, 0.0f, a, 0.0f); }
  * framebuffer's 8 through a 4 x 4 ordered dither: a slow gradient on a 16-bit panel would band. */
 static const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
 
-/* one pixel of soft ink, v = 0..65535. MAX and ADD as for lines; PAINT darkens what is there. */
-static inline void put_soft(int x, int y, int v)
+/* one pixel of soft ink at p, v = 0..65535, d its dither (a BAYER entry << 7). MAX and ADD as for lines;
+ * PAINT darkens what is there. The mode and bank come in as arguments so a loop keeps them in registers: a
+ * store to the framebuffer is a byte store, which may alias any global, so read from those they would be
+ * fetched again for every pixel. */
+static inline void soft_at(uint8_t *p, int v, int d, int mode, int bank)
 {
-    uint8_t *p = &g_fb[y * FB_W + x];
     uint8_t old;
     int q, old_lv;
     if (v <= 0)
         return;
     old = *p;
     old_lv = old & 31;
-    if (gm == G_PAINT) {
+    if (mode == G_PAINT) {
         int nv = (old_lv * (65536 - v)) >> 16;
         *p = nv > 0 ? (uint8_t)((old & 0xE0) | nv) : 0;
         return;
     }
-    q = (v + (BAYER[(y & 3) * 4 + (x & 3)] << 7)) >> 11;    /* dithered 5-bit intensity (0..31) */
+    q = (v + d) >> 11;                                      /* dithered 5-bit intensity (0..31) */
     if (q > 31) q = 31;
     if (!q)
         return;
-    if (gm == G_MAX) {
-        if (q > old_lv) *p = (uint8_t)(gbank | q);
+    if (mode == G_MAX) {
+        if (q > old_lv) *p = (uint8_t)(bank | q);
     } else {
         int nv = old_lv + q;
         if (nv > 31) nv = 31;
-        *p = (uint8_t)((q >= old_lv ? gbank : (old & 0xE0)) | nv);
+        *p = (uint8_t)((q >= old_lv ? bank : (old & 0xE0)) | nv);
     }
 }
+
+/* the gradient's ink for each row, worked out once a fill rather than once a pixel (it depends on y alone) */
+static int fv_row[FB_H];
 
 void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b)
 {
     /* Curve polygon anchored to a horizontal baseline (xy[1] == xy[2*n-1]): Bayer-dithered column gradient */
     if (n >= 5 && absf(xy[1] - xy[2 * n - 1]) < 0.5f) {
-        f32 y_base = xy[1] + goy, ya_g = ya + goy;
+        f32 y_base = xy[1] + goy, ya_g = ya + goy, ylo = y_base, yhi = y_base;
         f32 grad = yb != ya ? 1.0f / (yb - ya) : 0.0f;
         f32 sc = gdim * 65535.0f;
-        int k, x, y, last_x = -1;
+        int k, x, y, last_x = -1, r0, r1, mode = gm, bank = gbank;
         G_POLL();
+        for (k = 0; k < n; k++) {                           /* the rows it can reach, and their ink */
+            ylo = minf(ylo, xy[2 * k + 1] + goy);
+            yhi = maxf(yhi, xy[2 * k + 1] + goy);
+        }
+        r0 = imax(0, ifloor(ylo + 0.5f));
+        r1 = imin(FB_H - 1, ifloor(yhi + 0.5f));
+        for (y = r0; y <= r1; y++)
+            fv_row[y] = (int)(lerpf(a, b, sat(((f32)y - ya_g) * grad)) * sc);
         for (k = 0; k < n - 1; k++) {
             f32 xa = xy[2 * k] + gox, ya_c = xy[2 * k + 1] + goy;
             f32 xb = xy[2 * (k + 1)] + gox, yb_c = xy[2 * (k + 1) + 1] + goy;
@@ -759,10 +808,10 @@ void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b)
                 f32 yc = ya_c + (yb_c - ya_c) * t;
                 int y0 = imax(0, ifloor(minf(yc, y_base) + 0.5f));
                 int y1 = imin(FB_H - 1, ifloor(maxf(yc, y_base) + 0.5f));
-                for (y = y0; y <= y1; y++) {
-                    f32 u = sat(((f32)y - ya_g) * grad);
-                    put_soft(x, y, (int)(lerpf(a, b, u) * sc));
-                }
+                const uint8_t *bc = BAYER + (x & 3);
+                uint8_t *p = &g_fb[y0 * FB_W + x];
+                for (y = y0; y <= y1; y++, p += FB_W)
+                    soft_at(p, fv_row[y], bc[(y & 3) * 4] << 7, mode, bank);
             }
             if (x1 > last_x) last_x = x1;
         }
@@ -773,7 +822,7 @@ void g_fillv(const f32 *xy, int n, f32 ya, f32 a, f32 yb, f32 b)
 
 void g_glow(f32 cx, f32 cy, f32 r, f32 a)
 {
-    int x, y, x0, x1, y0, y1;
+    int x, y, x0, x1, y0, y1, mode = gm, bank = gbank;
     f32 ir2, peak;
     G_POLL();
     a = sat(a * gdim);
@@ -785,16 +834,18 @@ void g_glow(f32 cx, f32 cy, f32 r, f32 a)
     y0 = imax(0, ifloor(cy - r) + 1);
     y1 = imin(FB_H - 1, ifloor(cy + r));
     for (y = y0; y <= y1; y++) {
-        f32 dy = (f32)y - cy, hw2 = r * r - dy * dy, hw;
+        f32 dy = (f32)y - cy, dy2 = dy * dy, hw2 = r * r - dy2, hw;
+        const uint8_t *br = BAYER + (y & 3) * 4;
+        uint8_t *row = &g_fb[y * FB_W];
         if (hw2 <= 0.0f)
             continue;
         hw = sqrtfx(hw2);
         x0 = imax(0, ifloor(cx - hw) + 1);
         x1 = imin(FB_W - 1, ifloor(cx + hw));
         for (x = x0; x <= x1; x++) {
-            f32 dx = (f32)x - cx, f = 1.0f - (dx * dx + dy * dy) * ir2;
+            f32 dx = (f32)x - cx, f = 1.0f - (dx * dx + dy2) * ir2;
             if (f > 0.0f)
-                put_soft(x, y, (int)(f * f * peak));
+                soft_at(row + x, (int)(f * f * peak), br[x & 3] << 7, mode, bank);
         }
     }
 }
@@ -802,7 +853,7 @@ void g_glow(f32 cx, f32 cy, f32 r, f32 a)
 void g_beam(f32 x0, f32 y0, f32 x1, f32 y1, f32 w0, f32 w1, f32 a0, f32 a1, f32 soft)
 {
     f32 dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy, len, il, ux, uy, h0 = w0 * 0.5f, h1 = w1 * 0.5f, hm = maxf(h0, h1) + 1.0f, bias;
-    int x, y, ya, yb, bx0, bx1;
+    int x, y, ya, yb, bx0, bx1, mode = gm, bank = gbank;
     G_POLL();
     a0 = sat(a0 * gdim); a1 = sat(a1 * gdim);
     if (l2 < 0.25f || (a0 < 0.004f && a1 < 0.004f))
@@ -820,6 +871,8 @@ void g_beam(f32 x0, f32 y0, f32 x1, f32 y1, f32 w0, f32 w1, f32 a0, f32 a1, f32 
     for (y = ya; y <= yb; y++) {
         int xa = bx0, xb = bx1;
         f32 ry = (f32)y - y0, al, pe;
+        const uint8_t *br = BAYER + (y & 3) * 4;
+        uint8_t *row = &g_fb[y * FB_W];
         if (uy > 0.05f || uy < -0.05f) {         /* the row's stretch of the beam: where the axis crosses, and its width along x */
             f32 xc = x0 + ry * ux / uy, hx = hm / absf(uy);
             xa = imax(xa, ifloor(xc - hx));
@@ -841,7 +894,7 @@ void g_beam(f32 x0, f32 y0, f32 x1, f32 y1, f32 w0, f32 w1, f32 a0, f32 a1, f32 
             if (c > 1.0f) c = 1.0f;
             if (al < 0.5f) c *= al + 0.5f;
             else if (al > len - 0.5f) c *= len + 0.5f - al;
-            put_soft(x, y, (int)(c * (a0 + (a1 - a0) * t) * 65535.0f));
+            soft_at(row + x, (int)(c * (a0 + (a1 - a0) * t) * 65535.0f), br[x & 3] << 7, mode, bank);
         }
     }
 }
