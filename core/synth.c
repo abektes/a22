@@ -365,6 +365,7 @@ static void voice_on_ex(int note, int part, int trk, int seq, int vel)
     v->last_l = was_l;
     v->last_r = was_r;
     v->declick = legato ? 0u : (uint8_t)(was_l != 0.0f || was_r != 0.0f);
+    v->shed = 0;
     v->part = (uint8_t)part;
     v->trk  = (uint8_t)(trk & 3);
     v->seq  = (uint8_t)seq;
@@ -1639,7 +1640,10 @@ static void voice_block(int i)
         v->env += (vj.sus - v->env) * vj.kd;
         break;
     default:
-        v->env -= v->env * vj.kr + 0.00002f;
+        if (v->shed)                             /* (eng_late: gone in 14 blocks, 10 ms, a ramp: no click) */
+            v->env -= v->env * 0.35f + 0.001f;
+        else
+            v->env -= v->env * vj.kr + 0.00002f;
         if (v->env <= 0.0003f) v->env = 0.0f;
         break;
     }
@@ -1651,6 +1655,43 @@ static void voice_block(int i)
     vj.def->render(v, vj.b, vt_l[i], vt_r[i], CTRL);
     v->age += vj.dt;
 }
+
+/* Whether the port's last audio half went out late (rendered after the DMA had moved on), told once a render from where
+ * h1_render is called, so in the engine's own context. Late half after half, the main loop starves too (the screen, the
+ * keys and MASTER stop). Two late halves in a row, not a near miss and not one passing late half: one voice lets go
+ * fast. It is the quietest of those already let go; else the oldest of what the player is not holding (the tape's
+ * notes, another track's); else the oldest of all. One at a time: the next only once that one has died away. */
+static uint32_t late_run, ovl_shed;
+void eng_late(int late)
+{
+    Voice *v = 0;
+    int i;
+    late_run = late ? late_run + 1u : 0u;
+    if (late_run < 2u)
+        return;
+    for (i = 0; i < NVOICE; i++)
+        if (voices[i].stage && voices[i].shed)
+            return;                              /* (one still dying away) */
+    for (i = 0; i < NVOICE; i++)                 /* the quietest of those let go */
+        if (voices[i].stage == 4 && (!v || voices[i].env < v->env))
+            v = &voices[i];
+    if (!v)
+        for (i = 0; i < NVOICE; i++)             /* else the oldest not under the player's hands */
+            if (voices[i].stage && (voices[i].seq || voices[i].trk != cur_trk) && (!v || voices[i].stamp < v->stamp))
+                v = &voices[i];
+    if (!v)
+        for (i = 0; i < NVOICE; i++)             /* else the oldest */
+            if (voices[i].stage && (!v || voices[i].stamp < v->stamp))
+                v = &voices[i];
+    if (!v)
+        return;
+    v->gate = 0;
+    v->stage = 4;
+    v->shed = 1;
+    ovl_shed++;
+}
+
+uint32_t eng_shed_count(void) { return ovl_shed; }
 
 static void voices_job(uint32_t mask)
 {

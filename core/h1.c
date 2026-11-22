@@ -163,6 +163,8 @@ SMALL void h1_init(uint32_t sample_rate)
 
 void h1_frame(uint32_t now_ms) { ui_frame(now_ms); }
 void h1_render(int32_t *lr, uint32_t n) { eng_render(lr, n); }
+void h1_late(int late) { eng_late(late); }
+uint32_t h1_voices_shed(void) { return eng_shed_count(); }
 
 const void *h1_state(uint32_t *size)
 {

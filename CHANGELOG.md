@@ -12,6 +12,18 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   along the bank and is detuned by up to about 15 cents (about 6 before). `tests/basics.c` checks that
   every bank is centred at 0 and grows wider at every quarter of the turn.
 
+**Audio running late**
+- A late audio half no longer plays at full level. With HAZE and two tracks on the tape, the FM-1 ran
+  out of audio time from five held keys. Each half was written straight into the buffer the speaker reads
+  and only then turned down by MASTER, so a late half went out at full level, whatever MASTER was set to
+  (a tester's "full-volume static"). Each half is now rendered into a buffer of its own and copied in only
+  while there is still time (fm1-base's `audio_aside`); a late one leaves the half before playing whole.
+- Running late half after half also starved the screen, the keys and the MASTER knob. Now two late
+  halves in a row let one voice go in about 10 ms: one already let go if there is one, then the tape's
+  or another track's, and only then a key that is held. One at a time, and none for a single late half.
+  CC 119's PERF line says LATE and SHED. `tests/overload.c`.
+- HAZE works out its airy low-pass once a block instead of once a voice (the sound is the same to the bit).
+
 **Tape and sequencers**
 - Holding REC past three seconds no longer clears the whole tape at once, which was easy to do by accident
   (jakehandy/h1#49). It asks CLEAR ALL?, and a tap of REC within three seconds clears it; any other button,
