@@ -78,6 +78,13 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
       track's lane.
 - [ ] RIFF and SHAKE (EDIT + ALGORITHM): a riff records and plays from any key; SHAKE's balls play
       their notes and, once they bounce out, nothing keeps sounding.
+- [ ] 0.4.0's sound changes, by ear: WAVE's eight presets (SPREAD 24 to 46, now narrower: raise it if they
+      lost their width); DELAY at 120 BPM 1/4 (the right echo at 750 ms, not a comb); PLATE brought back
+      after a bypass starts silent, with no click or gap in the sound (it clears 48 KB in one block).
+- [ ] Saving waits for silence: no stall heard in a reverb tail or under the metronome; SAVE says SAVE
+      WHEN QUIET while something plays, and the setting is there after a restart.
+- [ ] PR #2 under load: HAZE with two tape tracks and eight keys. CC 119's PERF says LATE and SHED, no
+      full-level static at a low MASTER, and the screen, keys and MASTER keep answering.
 - [ ] The SEQ page (abektes/a22#1): KNOB 1 turns through every mode, into SHAKE and out again. In SHAKE,
       MODE GRAV SPIN BOUNCE, then SELECT for MODE CAGE; SHAKE turned on again opens on the first. PLAY KEYS
       TO DROP sits inside the smallest cage (CAGE 0). In the simulator, the ALGORITHM slider there is SEQ MODE.

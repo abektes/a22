@@ -11,6 +11,18 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   up, the right side blends in from a second oscillator that starts further into its wave, reads further
   along the bank and is detuned by up to about 15 cents (about 6 before). `tests/basics.c` checks that
   every bank is centred at 0 and grows wider at every quarter of the turn.
+- DELAY's right echo stayed in its line only up to a point: from a base time of 0.495 s to 0.689 s (120
+  BPM at 1/4 or 1/2, 60 BPM at 1/8) its 1.5x tap wrapped round to a 7 to 160 ms echo, a metallic comb with
+  feedback. The right side is 1.5x the left where that fits, else 0.75x. `tests/echo.c` checks every TIME
+  at 40 to 240 BPM.
+- An effect brought back (another chosen, FX bypassed, or MIX turned to 0 and up again) started with its
+  old tail: its buffers were kept frozen. It starts from silence now.
+- An engine on two tracks ran its own clocks (ELECTRIC's tremolo and wow, STACK's and HAZE's drift,
+  ANALOG's and MONO's PWM) twice as fast, three times on three tracks. Once a block now.
+- STUTTER's 1/8 was cut short below 108 BPM (1/16 below 54) and went out of time: a length too long for
+  its memory is halved instead.
+- The README says which effects are sends (PLATE, DELAY, SHIFT, CHORUS, TANK) and which work on the
+  whole mix (FILTER, LOFI, THUMP).
 
 **Audio running late**
 - A late audio half no longer plays at full level. With HAZE and two tracks on the tape, the FM-1 ran
@@ -39,6 +51,35 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 - The simulator's ALGORITHM slider on the SEQ page sets the sequencer mode, as the FM-1's encoder does. It
   used to say PRESET and change the engine's algorithm.
 - SHAKE's PLAY KEYS TO DROP sits inside the cage, on two lines; it ran across the cage's walls.
+- Recorded notes no longer hang or burst (`tests/tape.c`):
+  - With SNAP (on by default), a short note played just before a grid line got its end before its start,
+    and sounded until the tape came round. Its end now moves with its start.
+  - Muting a track while its note sounded left the note playing silently, and back when unmuted.
+  - Turning BARS down, or moving IN or OUT, while the tape played past the new end fired every note at
+    once. The tape starts again at the loop's beginning.
+  - A take recorded in REV played back as held notes. REC in REV now says NO REC IN REV.
+  - A key held into a take and let go during it recorded a lone end, which could cut a later note.
+  - CUT left the notes it cut sounding and cut the end off a note begun before IN; past what its clip
+    holds, it lost events. PASTE could paste a start without its end when the tape filled; now it
+    pastes all or nothing (TAPE FULL).
+  - Clearing one track let go of every track's notes; now that track's alone.
+  - A take's first note was silent on the pass right after the take.
+- MIDI's all notes off (CC 123), which DAWs send on stop and A22 sends when a USB keyboard is unplugged,
+  stopped the tape and the pattern. Now it ends the notes played over MIDI, and the rest plays on.
+- The TAPE EDIT page counts IN BAR from 1, as its toast does, and shows END for an OUT BAR that plays to
+  the end (at or before IN BAR).
+
+**Saving**
+- After a start that failed (a crash or hang in its first 30 seconds), the saved tape was erased as soon
+  as nothing sounded. It is kept until a new tape is saved over it.
+- Step patterns, riffs, snapshots and knobs set over MIDI were not saved unless some other setting changed
+  afterwards. They are saved as any setting is.
+- A save erases flash, which stalls the sound for a moment, and it came while a reverb or delay tail, a
+  rest of a playing tape, or the metronome was still heard. It waits for real silence now. SAVE says SAVE
+  WHEN QUIET while it waits (it said SAVED).
+- Holding SAVE to reset an engine left the track's step pattern on the old algorithm.
+- A snapshot's LFO settings are checked on load, as a track's are.
+- The engine's event queue keeps room for note-offs: full, it dropped one, and that note hung.
 
 ## 0.1.0
 
