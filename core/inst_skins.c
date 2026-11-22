@@ -1,7 +1,8 @@
 /* A22 - SKINS: two recorded drum kits, STUDIO and ORCH, each in four treatments.
  *
  * A drum on every note of the octave, in KIT's layout: C kick, C# rim, D snare, D# clap (ORCH: a second
- * snare), E F G toms, F# hat, A# open hat (choked by F#), B ride or cymbal, G# and A two extras. The octaves
+ * snare), E F G toms (rising about 4 semitones a step: one recorded tom plays two), F# hat, A# open hat
+ * (choked by F#; ORCH: the short clash closes the long one), B ride or cymbal, G# and A two extras. The octaves
  * above and below shift the pitch. Every hit is one recording from VCSL (CC0), cut by tools/samples/drums.py
  * into plunk_data.c with KIT's, and read here as KIT reads its own: 4-bit ADPCM at the rate it was stored,
  * its own dying away put back by DECAY. Nothing is synthesized but the treatment around it:
@@ -32,12 +33,12 @@ typedef struct Pad {
 static const Pad KITS[2][NDRUM] = {
     /* STUDIO: an acoustic drum set */
     {{VZ_KICK, 0, 0}, {VZ_XSTICK, 0, 6}, {VZ_SNARE2, 0, 4}, {VZ_CLAP, 0, -8},
-     {VZ_TOMLO, -2, 34}, {VZ_TOMHI, -3, 12}, {VZ_HAT, 0, -30}, {VZ_TOMHI, 1, -14},
+     {VZ_TOMLO, -2, 34}, {VZ_TOMHI, 0, 12}, {VZ_HAT, 0, -30}, {VZ_TOMHI, 4, -14},
      {VZ_TAMB, 0, -42}, {VZ_COWBELL, 0, 22}, {VZ_OHAT, 0, -30}, {VZ_RIDE, 0, 36}},
     /* ORCH: a marching and orchestral kit */
     {{VZ_BASSDRUM, 0, -8}, {VZ_MRIM, 0, 0}, {VZ_MSNARE, 0, 0}, {VZ_SNARE, 0, 14},
-     {VZ_TIMP, 0, 38}, {VZ_TENOR, 0, -18}, {VZ_CLASHS, 0, 24}, {VZ_TENORH, 0, -32},
-     {VZ_TRIANGLE, 0, 44}, {VZ_WOODBLOCK, 0, -40}, {VZ_CLASH, 0, 24}, {VZ_CYMBAL, 0, -26}},
+     {VZ_TENOR, 0, 30}, {VZ_TENORH, 0, 6}, {VZ_CLASHS, 0, 24}, {VZ_TENORH, 4, -18},
+     {VZ_TRIANGLE, 0, 44}, {VZ_TIMP, 0, -36}, {VZ_CLASH, 0, 24}, {VZ_CYMBAL, 0, -26}},
 };
 
 typedef struct Treat {

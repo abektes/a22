@@ -214,7 +214,7 @@ DRUMS = [
     ("MBIRA", "a kalimba tine", dict(rate=16000, ms=60, loop_ms=16, ring=1.0, f0=498.0), perc("Idiophones/Plucked Idiophones/Kalimba, Kenya", "Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2")),
     ("CHIME", "a hand chime", dict(rate=16000, ms=50, loop_ms=18, ring=2.0, f0=880.2), perc(_ID + "Hand Chimes", "sus_A4_r01_main")),
     # SKINS' two kits (core/inst_skins.c) add these; they also play CLAP, HAT, TAMB, COWBELL, BASSDRUM,
-    # SNARE, TIMP, TRIANGLE, WOODBLOCK and CYMBAL from above. (New ones go at the end: KIT names its hits by
+    # SNARE, TIMP, TRIANGLE and CYMBAL from above. (New ones go at the end: KIT names its hits by
     # number.) STUDIO, an acoustic drum set:
     ("KICK", "a bass drum, short, as a kick", dict(rate=11025, ms=200), perc(_ME + "Bass Drum 1", "BDrumNew_hit_v5_rr1_Sum")),
     ("XSTICK", "a snare's cross-stick", dict(rate=22050, ms=60), perc(_ME + "Snare Drum, Modern 2", "Snare3M_Xstick_v2_rr1_Mid")),

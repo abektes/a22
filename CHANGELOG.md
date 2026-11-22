@@ -20,14 +20,15 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   snare, E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set (a short bass
   drum as the kick, a modern snare and its cross-stick, two stick toms played as three, open and closed
   hats, a stick-struck ride, clap, tambourine, cowbell); ORCH a marching and orchestral kit (concert bass
-  drum, marching snare and rimshot, a rope snare, timpani and two tenor drums, clash cymbals held short and
-  let ring, triangle, woodblock, suspended cymbal). Each kit four ways: dry (STUDIO, ORCH), in a room (LIVE,
+  drum, marching snare and rimshot, a rope snare, two tenor drums as three toms, clash cymbals held short and
+  let ring, triangle, timpani, suspended cymbal). Each kit four ways: dry (STUDIO, ORCH), in a room (LIVE,
   HALL: a longer ring and two early reflections, read from the hit itself a little later, so no delay line),
   tight (TIGHT, MARCH: gated, with a harder start) and vintage (VINTAGE, SHELLAC: fewer samples and steps,
   darker, driven). The closed hat cuts the open one short, the short clash the long one. Knobs TUNE, DECAY,
   TONE, ROOM. Thirteen new hits from the Versilian Community Sample Library (CC0), cut by
   `tools/samples/drums.py` into the pool KIT already uses (the rest are KIT's): 17,879 bytes of flash.
-  KIT sounds the same to the bit: its 33 hits are cut again unchanged. As loud as KIT on a bar of beats.
+  KIT sounds the same to the bit: its 33 hits are cut again unchanged. Level matched to KIT on a bar of beats
+  below the limiter; at full track volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher).
   `tests/skins.c` checks every drum on every algorithm sounds and ends, the chokes, ROOM and the
   treatments; `tests/state.c` that a state from before SKINS brings it up as new. The names and the picks
   are placeholders until judged by ear; the picture is KIT's.

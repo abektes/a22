@@ -31,7 +31,7 @@ static const f32 algo_gain[][NALGO] = {
     /* 10 WAVE     */ {0.47f, 0.50f, 0.52f, 1.08f, 0.49f, 0.54f, 0.52f, 0.48f},
     /* 11 CHIP     */ {0.50f, 0.53f, 0.39f, 0.55f, 0.50f, 0.52f, 1.10f, 0.58f},
     /* 12 CYCLE    */ {0.484f, 0.467f, 0.465f, 0.480f, 0.477f, 0.461f, 0.460f, 0.473f},
-    /* 13 SKINS    */ {1.294f, 1.051f, 1.912f, 1.113f, 1.016f, 0.835f, 1.468f, 0.864f},
+    /* 13 SKINS    */ {1.140f, 0.970f, 1.354f, 1.015f, 0.927f, 0.788f, 1.166f, 0.797f},
 };
 typedef char a22_gain_rows[sizeof algo_gain / sizeof algo_gain[0] == NINST ? 1 : -1];
 

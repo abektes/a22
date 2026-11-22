@@ -78,10 +78,12 @@ Decided 2026-11-22: both kits from VCSL (CC0), in a new engine slot (engine 14),
 
 Done as SKINS (engine 14), on branch `kits`: STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC, knobs
 TUNE, DECAY, TONE, ROOM. Thirteen new hits (17,879 bytes) appended to `sources.DRUMS`, so KIT's 33 are cut
-again unchanged and KIT renders the same to the bit; the kits reuse ten of KIT's hits too. LIVE and HALL's
+again unchanged and KIT renders the same to the bit; the kits reuse nine of KIT's hits too. LIVE and HALL's
 room is two more readers of the same hit started 9.7 and 17.3 ms late (no buffer). The names, the picks and
 the kick are placeholders until judged by ear (`build/samples-preview/`); the picture is KIT's. Still to do:
-CI's flash number, and timing on the FM-1 with eight-note chords.
+CI's flash number, and timing on the FM-1 with eight-note chords (LIVE and HALL run three readers a voice).
+At release, as for CYCLE: the site's banks, `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s inks, the release
+checklist's engine count, `app/fm1.toml`'s description, and a picture of its own.
 : GRAIN, a granular send effect — no new RAM
 
 - A ninth effect (slot 8, made room for by sprint 2). DELAY, SHIFT, CHORUS and TANK share `echo_buf`
@@ -113,4 +115,4 @@ Planned after sprints 1–6, against the flash and audio time they leave.
 | 5 GRAIN | ~3 KB |
 | 6 PERC | ~1 KB |
 | Later: progression generator, multi-model engine | ~1 KB + 5–8 KB |
-| Total | ~108–115 KB of 170, leaving ~55–62 KB (keep at least 45 KB) |
+| Total | ~98–105 KB of 170 (sprint 4 at ~20 KB with its code), leaving ~65–72 KB (keep at least 45 KB) |
