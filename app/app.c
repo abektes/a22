@@ -630,18 +630,15 @@ static void speak(void)
     static int inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
-    int ask = h1_clear_all_asked();
+    int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
     if (ann_on()) {
         int where = ann_where();
         if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
             ann_say(lay ? "LAYERS ON" : "LAYERS OFF", 0, ANN_NOW);
         if (ask && !ask_was)                                /* REC held: the whole tape, asked first */
             ann_say("CLEAR ALL? TAP REC", 0, ANN_NOW);
-        else if (!ask && ask_was) {                         /* and its answer */
-            const char *ans = h1_toast_now();
-            if (!strcmp(ans, "TAPE CLEARED") || !strcmp(ans, "TAPE KEPT"))
-                ann_say(ans, 0, ANN_NOW);
-        }
+        if (answer)                                         /* and its answer (no strcmp: the device has no libc) */
+            ann_say(answer == 2 ? "TAPE CLEARED" : "TAPE KEPT", 0, ANN_NOW);
         if (where || inst != inst_was || algo != algo_was) {
             d = say_cat(t, end, where ? APP_NAME ". " : "");
             d = say_cat(d, end, h1_instrument_name(inst));

@@ -299,12 +299,15 @@ static char *put_i(char *d, int v)
 #define CLEAR_ALL_WAIT 3000u
 static int clear_all_asked;              /* 1: asked, REC still held; 2: REC let go, waiting for its tap */
 static uint32_t clear_all_ms;            /* when REC was let go */
+static int clear_all_answer;             /* its answer, once: 1 kept, 2 cleared (for a screen reader) */
 int h1_clear_all_asked(void) { return clear_all_asked != 0; }
+int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
 
 static void toast(const char *a, int num, int has_num, const char *b, int pips)
 {
     char *d = toast_s;
-    clear_all_asked = 0;                         /* (the question is no longer on screen: the tape is kept) */
+    if (clear_all_asked) clear_all_answer = 1;   /* (the question is no longer on screen: the tape is kept) */
+    clear_all_asked = 0;
     if (a) d = put_s(d, a);
     if (has_num) d = put_i(d, num);
     if (b) put_s(d, b);
@@ -613,6 +616,7 @@ SMALL void h1_button(int btn, int down)
             btn_fired[btn] = 1;                  /* (its release and holds do nothing more) */
             eng_post(EV_CLEAR, 0);
             toast("TAPE CLEARED", 0, 0, 0, -1);
+            clear_all_answer = 2;
             return;
         }
         clear_all_keep();
@@ -734,6 +738,7 @@ void h1_toast(const char *text)
     }
     while (i > 0 && toast_s[i - 1] == ' ') i--;
     toast_s[i] = 0;
+    if (clear_all_asked) clear_all_answer = 1;
     clear_all_asked = 0;
     toast_t = 0.0f;
     toast_pips = -1;
@@ -1875,7 +1880,7 @@ SMALL void ui_init(void)
     pal_bright_seen = 0;
     dirty = 0;
     btn_held = 0;
-    clear_all_asked = 0;
+    clear_all_asked = clear_all_answer = 0;
     ring_kind = 0;
     glob_held = master_raw = -1;
     ring_t = 9.0f;
