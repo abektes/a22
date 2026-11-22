@@ -3,6 +3,18 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**Playing**
+- DICE. **EDIT + LFO** rolls the four knobs of the algorithm in hand. Each knob moves only so far from that
+  algorithm's own setting, by a span chosen per engine knob: pitch-like and stepped knobs (KIT TUNE, FM-4
+  RATIO, STACK CHORD) barely move, a feature an algorithm has off (CHIP's SWEEP and ARP) stays off, filters
+  cannot close the sound and feedback, resonance, fold and grit stay below where they run away. For another
+  algorithm, turn ALGORITHM and roll again. **EDIT + ENV** goes back to the knobs from before the last roll,
+  and again to the roll, to compare them. A roll is a hand on the knobs: recorded while the tape records,
+  sent as CC 20-23. `tests/dice.c` rolls every algorithm and checks the spans, the panel, and that a roll
+  stays within 6 dB of how loud the algorithm is at its own setting (it measures -4.5 to +4.5 dB).
+
 ## 0.4.0
 
 Identity `FM-1_4122000400`. Released 2026-11-22. Installed and run on one FM-1 (a development build of the

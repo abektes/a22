@@ -8,6 +8,8 @@
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
+#   dice       EDIT + LFO rolls the knobs near the algorithm's home, EDIT + ENV swaps back; every algorithm
+#              rolled stays within 6 dB of how loud it is at home
 #   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
@@ -33,6 +35,8 @@ out=app/build/host
 "$out/a22_host" tests/usbhost.txt "$out"
 # the tape kept through a power-off while it plays, and one cut off in the middle of its save
 "$out/a22_host" tests/looppower.txt "$out"
+# DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
+"$out/a22_host" tests/dice.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host
@@ -50,6 +54,8 @@ $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
 build/a22looper
 $CC -std=c99 $SAN core/*.c tests/chords.c -o build/a22chords -lm
 build/a22chords
+$CC -std=c99 $SAN core/*.c tests/dice.c -o build/a22dice -lm
+build/a22dice
 $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm

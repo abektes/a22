@@ -145,6 +145,8 @@ MONO is monophonic and plays the chord's root alone. A chord takes a voice a not
 | EDIT + SEL | Mute the track in hand |
 | EDIT + ARP | Hold (latch) on and off |
 | EDIT + GLO | With keys held: store them as the chord. With none: chords off, or on again |
+| EDIT + LFO | DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits |
+| EDIT + ENV | Back to the knobs from before the last roll, and again to the roll (compare them) |
 | SAVE + white key 1–8 | Load that snapshot, or save to it if it is empty. **SAVE + EDIT + key** saves over it. The keys are the eight white keys from the lowest F |
 | hold SAVE | Reset the algorithm's knobs. Longer (about two seconds): reset the engine. Four seconds: reset every engine and the GLOBAL and KEYS pages |
 | hold SEQ | Swap TAPE and STEP |

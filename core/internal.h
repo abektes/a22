@@ -154,6 +154,8 @@ typedef struct H1State {
 #define KNOBS(inst, algo) (st.knob[(uint32_t)(inst) < NSLOT ? (uint32_t)(inst) : 0u][(uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u])
 #define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
 void knobs_default(int inst, int algo);
+void knobs_home(int inst, int algo, uint8_t out[4]);   /* an algorithm's own K1..K4 (h1.c) */
+void dice_roll(int inst, int algo, uint32_t *rng, uint8_t out[4]);   /* DICE: K1..K4 near home (dice.c) */
 #define INST_VOL(inst) (100 - (st.ip[inst].mix[IP_CUT] <= 100 ? st.ip[inst].mix[IP_CUT] : 0))
 
 #define PART(inst, algo) ((uint8_t)(1u + (uint32_t)(inst) * NALGO + ((uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u)))

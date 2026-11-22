@@ -66,6 +66,15 @@ void knobs_default(int inst, int algo)
                 KNOBS(inst, a)[k] = ALGO_K0[inst][a][k];
 }
 
+void knobs_home(int inst, int algo, uint8_t out[4])
+{
+    int k;
+    if (inst < 0 || inst >= NINST) inst = 0;
+    if (algo < 0 || algo >= NALGO) algo = 0;
+    for (k = 0; k < 4; k++)
+        out[k] = ALGO_K0[inst][algo][k];
+}
+
 static void inst_default(int i)
 {
     st.ip[i] = insts[i]->def;

@@ -571,6 +571,48 @@ static void octave(int d)
     mark_dirty();
 }
 
+/* ---- DICE: EDIT + LFO rolls the knobs of the algorithm in hand (dice.c), EDIT + ENV swaps back ---- */
+static void set_knob(int i, int v);
+static uint32_t dice_rng = 0x2545F491u;
+static int dice_inst = -1, dice_algo, dice_back;
+static uint8_t dice_other[4];                   /* what EDIT + ENV swaps the knobs to */
+
+static void dice_apply(const uint8_t k[4])
+{
+    int i;
+    for (i = 0; i < 4; i++) set_knob(i, k[i]);  /* (as a hand would: automation while recording, CC 20-23) */
+}
+
+static void dice(void)
+{
+    int a = st.ip[st.inst].algo & 7, i, n;
+    uint8_t r[4], *k = KNOBS_NOW(st.inst);
+    dice_rng += now * 0x9E3779B9u + 1u;         /* (the press's time in it: no two power-ons roll alike) */
+    for (n = 0; n < 4; n++) {                   /* (a roll that lands where the knobs are is rolled again) */
+        dice_roll(st.inst, a, &dice_rng, r);
+        if (r[0] != k[0] || r[1] != k[1] || r[2] != k[2] || r[3] != k[3]) break;
+    }
+    for (i = 0; i < 4; i++) dice_other[i] = k[i];
+    dice_inst = st.inst; dice_algo = a; dice_back = 0;
+    dice_apply(r);
+    toast("DICE ", 0, 0, insts[st.inst]->algo[a], -1);
+}
+
+static void dice_swap(void)
+{
+    uint8_t was[4], *k = KNOBS_NOW(st.inst);
+    int i;
+    if (dice_inst != st.inst || dice_algo != (st.ip[st.inst].algo & 7)) {
+        toast("NO DICE TO UNDO", 0, 0, 0, -1);
+        return;
+    }
+    for (i = 0; i < 4; i++) was[i] = k[i];
+    dice_apply(dice_other);
+    for (i = 0; i < 4; i++) dice_other[i] = was[i];
+    dice_back ^= 1;
+    toast(dice_back ? "BEFORE DICE" : "AFTER DICE", 0, 0, 0, -1);
+}
+
 SMALL void h1_button(int btn, int down)
 {
     if (btn < 0 || btn >= H1_NBTN) return;
@@ -685,6 +727,8 @@ SMALL void h1_button(int btn, int down)
             mark_dirty();
             return;
         }
+        if (btn == H1_BTN_LFO) { dice(); return; }
+        if (btn == H1_BTN_ENV) { dice_swap(); return; }
         if (btn == H1_BTN_ARP) {
             st.keys[3] ^= 1u;
             if (!st.keys[3]) eng_post(EV_UNLATCH, 0);
@@ -1900,6 +1944,7 @@ SMALL void ui_init(void)
     ring_kind = 0;
     glob_held = master_raw = -1;
     ring_t = 9.0f;
+    dice_inst = -1;
 }
 
 /* ---- dirty-tile presentation (60 MHz SPI DMA) ----------------------------------------- */
