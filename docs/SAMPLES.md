@@ -201,8 +201,10 @@ to the recording's decay. A held bank keeps a note's start and a short stretch t
 ## PLUNK's hits
 
 PLUNK's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian
-Community Sample Library (CC0 1.0, credited above). `tools/samples/drums.py` cuts them from
-`sources.DRUMS` into `core/plunk_data.c`: 33 hits, about 25,692 bytes, 4-bit ADPCM at the rate
+Community Sample Library (CC0 1.0, credited above). In A22, KIT's 909, CRISP, LOFI and WORLD layer
+them under its synthesized drums, and SKINS' two kits, STUDIO and ORCH, are made of nothing else
+(the hits from `VZ_KICK` on were added for them). `tools/samples/drums.py` cuts them from
+`sources.DRUMS` into `core/plunk_data.c`: 46 hits, about 43,571 bytes, 4-bit ADPCM at the rate
 each one's top allows. A ringing hit keeps its start and a short stretch that repeats.
 
 | Hit | What it is | Kept | Recording |
@@ -240,3 +242,16 @@ each one's top allows. A ringing hit keeps its start and a short stretch that re
 | `VZ_GLOCK` | a glockenspiel bar | 22.05 kHz, 55 ms | [glock_loud_C5_01.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Glockenspiel/glock_loud_C5_01.wav) |
 | `VZ_MBIRA` | a kalimba tine | 16 kHz, 76 ms | [Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Plucked%20Idiophones/Kalimba%2C%20Kenya/Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2.wav) |
 | `VZ_CHIME` | a hand chime | 16 kHz, 68 ms | [sus_A4_r01_main.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Hand%20Chimes/sus_A4_r01_main.wav) |
+| `VZ_KICK` | a bass drum, short, as a kick | 11.025 kHz, 200 ms | [BDrumNew_hit_v5_rr1_Sum.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Bass%20Drum%201/BDrumNew_hit_v5_rr1_Sum.wav) |
+| `VZ_XSTICK` | a snare's cross-stick | 22.05 kHz, 60 ms | [Snare3M_Xstick_v2_rr1_Mid.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Snare%20Drum%2C%20Modern%202/Snare3M_Xstick_v2_rr1_Mid.wav) |
+| `VZ_SNARE2` | a modern snare drum | 22.05 kHz, 150 ms | [Snare3M_HitSN_v4_rr1_Mid.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Snare%20Drum%2C%20Modern%202/Snare3M_HitSN_v4_rr1_Mid.wav) |
+| `VZ_TOMLO` | a floor tom, with a stick | 11.025 kHz, 220 ms | [TomL_HitS_v3_rr1_Mid.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Tom%202/Stick/TomL_HitS_v3_rr1_Mid.wav) |
+| `VZ_TOMHI` | a rack tom, with a stick | 11.025 kHz, 200 ms | [TomH_HitS_v3_rr1_Mid.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Tom%201/Stick/TomH_HitS_v3_rr1_Mid.wav) |
+| `VZ_OHAT` | a hi-hat, open | 22.05 kHz, 140 ms | [HiHat_HitO_rr1_Mid.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Hi-Hat%20Cymbal/HiHat_HitO_rr1_Mid.wav) |
+| `VZ_RIDE` | a suspended cymbal, with a stick | 22.05 kHz, 190 ms | [susCymb1_hit_stick_f1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Suspended%20Cymbal%201/susCymb1_hit_stick_f1.wav) |
+| `VZ_MSNARE` | a marching snare drum | 22.05 kHz, 130 ms | [snare3_f_rr1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Legacy%20Snares/drum3_marching/snare3_f_rr1.wav) |
+| `VZ_MRIM` | the same drum, a rimshot | 22.05 kHz, 60 ms | [snare3_rimshot_f_rr1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Legacy%20Snares/drum3_marching/snare3_rimshot_f_rr1.wav) |
+| `VZ_TENOR` | a tenor drum, the lower | 16 kHz, 160 ms | [tenor_f_rr1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Legacy%20Toms/tenor_lower/tenor_f_rr1.wav) |
+| `VZ_TENORH` | a tenor drum, the higher | 16 kHz, 160 ms | [tenorH_f_rr1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Membranophones/Struck%20Membranophones/Legacy%20Toms/tenor_higher/tenorH_f_rr1.wav) |
+| `VZ_CLASHS` | clash cymbals, held short | 22.05 kHz, 160 ms | [cymbal_crash1_short1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Clash%20Cymbals%201/cymbal_crash1_short1.wav) |
+| `VZ_CLASH` | clash cymbals, let ring | 22.05 kHz, 190 ms | [cymbal_crash2_f1.wav](https://raw.githubusercontent.com/sgossner/VCSL/master/Idiophones/Struck%20Idiophones/Clash%20Cymbals%202/cymbal_crash2_f1.wav) |

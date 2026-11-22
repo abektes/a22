@@ -36,6 +36,19 @@ enum {
     VZ_GLOCK,      /* a glockenspiel bar */
     VZ_MBIRA,      /* a kalimba tine */
     VZ_CHIME,      /* a hand chime */
+    VZ_KICK,       /* a bass drum, short, as a kick */
+    VZ_XSTICK,     /* a snare's cross-stick */
+    VZ_SNARE2,     /* a modern snare drum */
+    VZ_TOMLO,      /* a floor tom, with a stick */
+    VZ_TOMHI,      /* a rack tom, with a stick */
+    VZ_OHAT,       /* a hi-hat, open */
+    VZ_RIDE,       /* a suspended cymbal, with a stick */
+    VZ_MSNARE,     /* a marching snare drum */
+    VZ_MRIM,       /* the same drum, a rimshot */
+    VZ_TENOR,      /* a tenor drum, the lower */
+    VZ_TENORH,     /* a tenor drum, the higher */
+    VZ_CLASHS,     /* clash cymbals, held short */
+    VZ_CLASH,      /* clash cymbals, let ring */
     VZ_N
 };
 

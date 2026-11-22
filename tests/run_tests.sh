@@ -2,7 +2,7 @@
 # a22's tests. First the device app in fm1-base's host simulator (the platform simulated, the same app.c
 # and core as the firmware), with the second core and without. Then the core alone, most of it under the
 # compiler's address and undefined-behaviour checkers:
-#   a22_test   two cores bit-exact on all 104 presets, MONO mono, the tape saved and loaded from odd
+#   a22_test   two cores bit-exact on all 112 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
 #   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
@@ -12,6 +12,8 @@
 #              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
 #   dice       EDIT + LFO rolls the knobs near the algorithm's home, EDIT + ENV swaps back; every algorithm
 #              rolled stays within 6 dB of how loud it is at home
+#   skins      SKINS' two kits: every drum on every algorithm sounds and ends, the hat chokes, ROOM spreads,
+#              the treatments are shorter, longer and darker than the dry kits
 #   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
@@ -60,6 +62,8 @@ $CC -std=c99 $SAN core/*.c tests/state.c -o build/a22state -lm
 build/a22state
 $CC -std=c99 $SAN core/*.c tests/dice.c -o build/a22dice -lm
 build/a22dice
+$CC -std=c99 $SAN core/*.c tests/skins.c -o build/a22skins -lm
+build/a22skins
 $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm

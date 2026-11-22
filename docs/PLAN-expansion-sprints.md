@@ -56,19 +56,33 @@ are placeholders until judged by ear (`tools/akwf.py` holds the list; the pictur
 the site (`tools/build_site.py`: banks A to M), `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s bank inks and the
 release checklist's engine count need CYCLE too.
 
-## Sprint 4: more sampled drums — about 30–40 KB of flash
+## Sprint 4: two sampled kits, STUDIO and ORCH — about 25–30 KB of flash (done: SKINS, 17.9 KB of hits)
 
-- KIT is synthesized; only CRISP, LOFI and WORLD mix in recorded transients (`plunk_data.c`: 33 VCSL hits,
-  IMA ADPCM, about 0.8 KB a hit). Add 40 to 50 hits from VCSL and FreePats (both CC0) through
-  `tools/samples/drums.py`, as now.
-- Where they go is decided by ear: either more of KIT's algorithms get recorded transients, or two sampled
-  kits (one electric/808-adjacent from FreePats, one world percussion) take the place of two KIT algorithms.
-- **Saved sounds change:** a tape, a snapshot or a track names an algorithm by number, so a replaced KIT
-  algorithm plays the new kit in everything saved before. Adding transients to an algorithm also changes
-  how it sounds in saved tapes. Say so in the CHANGELOG, or add the kits in a new engine slot (sprint 2)
-  instead.
+Decided 2026-11-22: both kits from VCSL (CC0), in a new engine slot (engine 14), so nothing saved changes.
 
-## Sprint 5: GRAIN, a granular send effect — no new RAM
+- **STUDIO, an acoustic drum set,** the gap KIT has (it synthesizes everything, and its 33 recorded hits
+  are world and orchestral percussion). From VCSL: "Snare Drum, Modern 1-3", "Tom 1" and "Tom 2" (stick),
+  the hi-hat, clash and suspended cymbals, and a bass drum cut short and tightened into a kick (the one
+  part that has to be judged by ear: VCSL's bass drums are concert drums).
+- **ORCH, a marching and orchestral kit:** the marching snare and tenor toms ("Legacy Snares", "Legacy
+  Toms"), clash cymbals, a concert bass drum, with the timpani, suspended cymbal and rope snare already
+  among the 33.
+- Each kit in KIT's layout (C kick, C# rim, D snare, D# clap, E/F/G toms, F# hat, A# open hat, B crash or
+  ride, and two extras), 12 to 14 hits, cut by `tools/samples/drums.py` as now (IMA ADPCM, cymbals with a
+  loop). The engine's eight algorithms: each kit in four treatments made in the player (dry, room, tight,
+  vintage), as h1's PLUNK made eight kits from one pool.
+- Skipped: FreePats world percussion (8 of its 10 instruments are already among the 33 hits) and FreePats
+  synthesizer percussion (KIT synthesizes those sounds live). Rhoda's found sounds were the alternative to
+  ORCH; its licence is unverified.
+- Device: a sampled kit is cheap to play; time it anyway with eight-note chords.
+
+Done as SKINS (engine 14), on branch `kits`: STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC, knobs
+TUNE, DECAY, TONE, ROOM. Thirteen new hits (17,879 bytes) appended to `sources.DRUMS`, so KIT's 33 are cut
+again unchanged and KIT renders the same to the bit; the kits reuse ten of KIT's hits too. LIVE and HALL's
+room is two more readers of the same hit started 9.7 and 17.3 ms late (no buffer). The names, the picks and
+the kick are placeholders until judged by ear (`build/samples-preview/`); the picture is KIT's. Still to do:
+CI's flash number, and timing on the FM-1 with eight-note chords.
+: GRAIN, a granular send effect — no new RAM
 
 - A ninth effect (slot 8, made room for by sprint 2). DELAY, SHIFT, CHORUS and TANK share `echo_buf`
   (64 KB) and only one effect runs at a time, so GRAIN uses the same buffer: about 0.74 s mono at 44.1 kHz.
@@ -84,7 +98,8 @@ release checklist's engine count need CYCLE too.
 
 ## Later: a multi-model engine
 
-A Plaits-style engine (chord-in-one-voice, wave terrain, vowel, phase distortion variants) in slot 14.
+A Plaits-style engine (chord-in-one-voice, wave terrain, vowel, phase distortion variants) in slot 15 (the
+kits take 14).
 Planned after sprints 1–6, against the flash and audio time they leave.
 
 ## Flash at the end
@@ -93,8 +108,9 @@ Planned after sprints 1–6, against the flash and audio time they leave.
 |---|---|
 | 1 DICE | < 1 KB |
 | 2 State v5 | ~0.5 KB |
-| 3 AKWF banks | ~66 KB |
-| 4 Drums | ~35 KB |
+| 3 AKWF banks (CYCLE) | 69 KB, measured by CI (image 479,660 B) |
+| 4 STUDIO + ORCH kits (SKINS) | 17.9 KB of hits + code, CI to measure |
 | 5 GRAIN | ~3 KB |
 | 6 PERC | ~1 KB |
-| Total | ~107 KB of 170, leaving ~63 KB |
+| Later: progression generator, multi-model engine | ~1 KB + 5–8 KB |
+| Total | ~108–115 KB of 170, leaving ~55–62 KB (keep at least 45 KB) |

@@ -2,12 +2,14 @@
  * repository's top, for tests/state_v4.bin).
  *
  *   version 4   tests/state_v4.bin (written by 0.4.0's own core: tests/state_v4_gen.c) loads, from any
- *               address, with every table as it was saved; CYCLE (engine 13, after 0.4.0) at its defaults,
+ *               address, with every table as it was saved; CYCLE and SKINS (engines 13 and 14, after 0.4.0) at
+ *               their defaults,
  *               the slots no engine has yet empty, effects as 8
  *   version 5   saved and loaded again, to the byte, from an odd address
  *   refused     a wrong size for its version, another version, another magic, a few bytes: nothing changes
  *   new slots   an engine or effect past what a state was saved with (ninst, nfx) comes up as new, the
- *               ones before it as saved: so adding an engine or effect needs no new version */
+ *               ones before it as saved: so adding an engine or effect needs no new version. Also a version 5
+ *               state from before SKINS (13 engines, its slot empty) brings SKINS up as new, CYCLE as saved */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -78,7 +80,7 @@ static void version4(void)
         CHECK(zero(st.fx_p[8], sizeof st.fx_p - sizeof st.fx_p[0] * 8), "the new effect slots are empty");
         CHECK(zero(&st.ip[NINST], sizeof st.ip[0] * (NSLOT - NINST)) &&
               zero(st.knob[NINST], sizeof st.knob[0] * (NSLOT - NINST)), "the slots no engine has yet are empty");
-        CHECK(engines_new_from(12), "an engine version 4 did not have (CYCLE) comes up as new");
+        CHECK(engines_new_from(12), "the engines version 4 did not have (CYCLE, SKINS) come up as new");
         CHECK(st.nfx == NFX && st.version == H1_VERSION, "it is version 5 now, with its effects counted");
     }
     CHECK(h1_instrument() == 10 && h1_algorithm() == 10 % 8, "the engine and algorithm in hand, as saved");
@@ -139,6 +141,18 @@ static void new_slots(void)
         CHECK(st.fx_p[6][k] == FX_DEFAULTS[6][k] && st.fx_p[7][k] == FX_DEFAULTS[7][k], "the effects past them come up as new");
     }
     CHECK(st.ninst == NINST && st.nfx == NFX, "and it counts them all now");
+
+    /* version 5 as a 13-engine build saved it: SKINS' slot empty (all zeros), CYCLE's moved off its defaults */
+    memcpy(buf, v5, sizeof(H1State));
+    buf[offsetof(H1State, ninst)] = 13;
+    memset(buf + offsetof(H1State, ip) + 13 * sizeof(InstParams), 0, sizeof(InstParams));
+    memset(buf + offsetof(H1State, knob) + 13 * NALGO * 4, 0, NALGO * 4);
+    buf[offsetof(H1State, ip) + 12 * sizeof(InstParams)] ^= 0x11;
+    h1_init(44100);
+    CHECK(h1_state_load(buf, sizeof(H1State)) == 0, "a version 5 state from before SKINS loads");
+    CHECK(engines_new_from(13), "SKINS comes up as new, not with the empty slot's zeros");
+    CHECK(!memcmp(&st.ip[12], buf + offsetof(H1State, ip) + 12 * sizeof(InstParams), sizeof(InstParams)),
+          "CYCLE keeps what was saved");
 }
 
 int main(void)

@@ -23,6 +23,7 @@ STEP-STR	step string
 STEP-RD	step reed
 STEP-KEY	step keys
 STEP-VOX	step voice
+ORCH	orchestra
 HARMON	harmonic
 DIGI	digital
 TRI	triangle

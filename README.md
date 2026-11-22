@@ -1,11 +1,11 @@
 # A22
 
-Custom firmware for the M-VAVE FM-1: an FM workstation. Thirteen synth and drum engines, each with eight
+Custom firmware for the M-VAVE FM-1: an FM workstation. Fourteen synth and drum engines, each with eight
 algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
 four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
 sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
-layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)), and
-CYCLE plays single cycles of recorded instruments from Adventure Kid Waveforms (CC0; see
+layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)), SKINS'
+two kits are made of them, and CYCLE plays single cycles of recorded instruments from Adventure Kid Waveforms (CC0; see
 [docs/WAVETABLES.md](docs/WAVETABLES.md)).
 
 A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
@@ -43,6 +43,7 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 | **WAVE** | wavetables: eight banks of fifteen waves, morphing, band-limited per octave | HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL | WAVE, SCAN, SPREAD, FILTER |
 | **CHIP** | 8-bit console voices: pulses, stepped triangle, noise, arpeggios | PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET | DUTY, SWEEP, ARP, CRUSH |
 | **CYCLE** | WAVE's player on single cycles of recorded instruments ([AKWF](docs/WAVETABLES.md), CC0): four banks, each smooth and stepped | STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX | WAVE, SCAN, SPREAD, FILTER |
+| **SKINS** | two recorded drum kits ([VCSL](docs/SAMPLES.md), CC0), a drum on every note of the octave: an acoustic set and a marching and orchestral kit, each dry, in a room, tight and vintage | STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC | TUNE, DECAY, TONE, ROOM |
 
 ## Effects
 

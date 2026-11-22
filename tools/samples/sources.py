@@ -213,4 +213,21 @@ DRUMS = [
     ("GLOCK", "a glockenspiel bar", dict(rate=22050, ms=40, loop_ms=15, ring=1.5, f0=1052.4), perc(_ID + "Glockenspiel", "glock_loud_C5_01")),
     ("MBIRA", "a kalimba tine", dict(rate=16000, ms=60, loop_ms=16, ring=1.0, f0=498.0), perc("Idiophones/Plucked Idiophones/Kalimba, Kenya", "Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2")),
     ("CHIME", "a hand chime", dict(rate=16000, ms=50, loop_ms=18, ring=2.0, f0=880.2), perc(_ID + "Hand Chimes", "sus_A4_r01_main")),
+    # SKINS' two kits (core/inst_skins.c) add these; they also play CLAP, HAT, TAMB, COWBELL, BASSDRUM,
+    # SNARE, TIMP, TRIANGLE, WOODBLOCK and CYMBAL from above. (New ones go at the end: KIT names its hits by
+    # number.) STUDIO, an acoustic drum set:
+    ("KICK", "a bass drum, short, as a kick", dict(rate=11025, ms=200), perc(_ME + "Bass Drum 1", "BDrumNew_hit_v5_rr1_Sum")),
+    ("XSTICK", "a snare's cross-stick", dict(rate=22050, ms=60), perc(_ME + "Snare Drum, Modern 2", "Snare3M_Xstick_v2_rr1_Mid")),
+    ("SNARE2", "a modern snare drum", dict(rate=22050, ms=150), perc(_ME + "Snare Drum, Modern 2", "Snare3M_HitSN_v4_rr1_Mid")),
+    ("TOMLO", "a floor tom, with a stick", dict(rate=11025, ms=220), perc(_ME + "Tom 2/Stick", "TomL_HitS_v3_rr1_Mid")),
+    ("TOMHI", "a rack tom, with a stick", dict(rate=11025, ms=200), perc(_ME + "Tom 1/Stick", "TomH_HitS_v3_rr1_Mid")),
+    ("OHAT", "a hi-hat, open", dict(rate=22050, ms=60, loop_ms=80, ring=1.4), perc(_ID + "Hi-Hat Cymbal", "HiHat_HitO_rr1_Mid")),
+    ("RIDE", "a suspended cymbal, with a stick", dict(rate=22050, ms=100, loop_ms=90, ring=2.2), perc(_ID + "Suspended Cymbal 1", "susCymb1_hit_stick_f1")),
+    # ORCH, a marching and orchestral kit:
+    ("MSNARE", "a marching snare drum", dict(rate=22050, ms=130), perc(_ME + "Legacy Snares/drum3_marching", "snare3_f_rr1")),
+    ("MRIM", "the same drum, a rimshot", dict(rate=22050, ms=60), perc(_ME + "Legacy Snares/drum3_marching", "snare3_rimshot_f_rr1")),
+    ("TENOR", "a tenor drum, the lower", dict(rate=16000, ms=160), perc(_ME + "Legacy Toms/tenor_lower", "tenor_f_rr1")),
+    ("TENORH", "a tenor drum, the higher", dict(rate=16000, ms=160), perc(_ME + "Legacy Toms/tenor_higher", "tenorH_f_rr1")),
+    ("CLASHS", "clash cymbals, held short", dict(rate=22050, ms=160), perc(_ID + "Clash Cymbals 1", "cymbal_crash1_short1")),
+    ("CLASH", "clash cymbals, let ring", dict(rate=22050, ms=100, loop_ms=90, ring=2.6), perc(_ID + "Clash Cymbals 2", "cymbal_crash2_f1")),
 ]
