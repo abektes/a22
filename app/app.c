@@ -647,6 +647,7 @@ static void speak(void)
             for (k = H1_ENC_K1; k <= H1_ENC_K4; k++) {
                 const char *name = 0;
                 h1_control(k, 0, 0, &name, 0);
+                if (!name || !name[0]) continue;            /* an empty column */
                 d = say_cat(d, end, ". ");
                 d = say_cat(d, end, name);
             }
@@ -656,7 +657,7 @@ static void speak(void)
         for (k = 0; k < H1_NENC; k++) {
             const char *name = 0, *text = 0;
             int v = h1_control(k, 0, 0, &name, &text);
-            if (v != val_was[k] && !quiet && k != H1_ENC_PRESET && k != H1_ENC_ALGO) {
+            if (v != val_was[k] && !quiet && k != H1_ENC_PRESET && k != H1_ENC_ALGO && name && name[0]) {
                 d = say_cat(t, end, name);
                 d = say_cat(d, end, " ");
                 say_cat(d, end, text);

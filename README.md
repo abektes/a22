@@ -73,7 +73,7 @@ Each page's four columns are the four knobs. SELECT steps through a page's subpa
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
-| SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: GRAV, SPIN, BOUNCE, CAGE |
+| SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE |
 | TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH |
 
 ## The tape
@@ -106,7 +106,8 @@ Both are modes of the SEQ page (ARP button, then ALGORITHM, or hold EDIT and tur
   a rest, and REC again to finish. Then hold any key and the sequence plays from it, transposed. Hold
   REC on the page to clear it.
 - **SHAKE:** every key drops a ball into a spinning cage, and the ball plays its note each time it
-  bounces. GRAV, SPIN, BOUNCE and CAGE shape the cage.
+  bounces. GRAV, SPIN, BOUNCE and CAGE shape the cage: the first three on the page, CAGE on its second
+  subpage (SELECT). KNOB 1 stays MODE in SHAKE, as in every mode.
 
 ## Chord memory
 

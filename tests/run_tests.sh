@@ -8,6 +8,8 @@
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
+#   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
+#              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
 #              changes, varispeed reaches the track in hand, the white keys show 64 steps and the tape
 #   echo       DELAY the same after 25 minutes on as at start
@@ -45,6 +47,8 @@ $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
 build/a22looper
 $CC -std=c99 $SAN core/*.c tests/chords.c -o build/a22chords -lm
 build/a22chords
+$CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
+build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm
 build/a22tracks
 # (25 minutes of DELAY: without the checkers, or it takes most of an hour)

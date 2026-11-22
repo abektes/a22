@@ -77,11 +77,18 @@ static int page = PG_HOME;
 static int subpage[NPAGE];
 
 int ui_page(void)    { return page; }
-int ui_subpage(void) { return subpage[page]; }
+
+/* SEQ / ARP: K1 is MODE in every mode. SHAKE's four settings take a second subpage: 1/2 MODE GRAV SPIN
+ * BOUNCE, 2/2 MODE CAGE. (Once SHAKE's settings took all four columns, MODE's among them, so the knob that
+ * had just turned SHAKE on became GRAV and nothing on the page could turn it off: issue #1.) */
+static int arp_shake(void) { return st.ip[st.inst].arp[0] == ARP_SHAKE; }
+static int arp_sub(void)   { return arp_shake() && subpage[PG_ARP] == 1; }
+int ui_subpage(void) { return page == PG_ARP ? arp_sub() : subpage[page]; }
 
 static int page_nsub(int pg)
 {
     switch (pg) {
+    case PG_ARP: return arp_shake() ? 2 : 1;   /* SHAKE: 0 MODE GRAV SPIN BOUNCE, 1 MODE CAGE */
     case PG_MIX: return 4;   /* 0 VOL, 1 PAN, 2 FX SEND, 3 MASTER EQ/DRIVE */
     case PG_ENV: return 2;   /* 0 AMP ADSR, 1 MOD ENV */
     case PG_GLO: return 3;   /* 0 GLOBAL, 1 KEYS, 2 CHORD */
@@ -94,7 +101,7 @@ const ParamDef *page_param(int pg, int i)
 {
     static const char *const MENV_N[4] = {"DEPTH", "DECAY", "VEL", "PUNCH"};
     static const char *const MAST_N[4] = {"LOW", "MID", "HIGH", "DRIVE"};
-    static const char *const SHAKE_N[4] = {"GRAV", "SPIN", "BOUNCE", "CAGE"};
+    static const char *const SHAKE_N[2][4] = {{"MODE", "GRAV", "SPIN", "BOUNCE"}, {"MODE", "CAGE", "", ""}};
     static const char *const KEYS_N[4] = {"ROOT", "SCALE", "GLIDE", "HOLD"};
     static const char *const TEDIT_N[4]= {"IN BAR", "OUT BAR", "SNAP", "PITCH"};
     int sub = subpage[pg];
@@ -150,9 +157,11 @@ const ParamDef *page_param(int pg, int i)
         else { dyn_p.kind = PK_PCT; dyn_p.max = 100; }
         return &dyn_p;
     }
-    if (pg == PG_ARP && st.ip[st.inst].arp[0] == ARP_SHAKE) {
-        dyn_p.name = SHAKE_N[i]; dyn_p.kind = PK_PCT; dyn_p.min = 0; dyn_p.max = 100;
-        dyn_p.show_off = (i == 1) ? -50 : 0; dyn_p.opts = 0;
+    if (pg == PG_ARP && arp_shake() && i > 0) {  /* (K1 is MODE: the page's own) */
+        int s = arp_sub();
+        dyn_p.name = SHAKE_N[s][i]; dyn_p.kind = PK_PCT; dyn_p.min = 0; dyn_p.opts = 0;
+        dyn_p.max = (s && i > 1) ? 0 : 100;     /* 2/2's last two columns are empty */
+        dyn_p.show_off = (!s && i == 2) ? -50 : 0;
         return &dyn_p;
     }
     if (pg == PG_SEQ) {
@@ -196,7 +205,11 @@ uint8_t *page_value(int pg, int i)
             return &st.chord[i];
         }
         return sub == 1 ? &st.keys[i] : &st.glo[i];
-    case PG_ARP: return ip->arp[0] == ARP_SHAKE ? &st.shake[i] : &ip->arp[i];
+    case PG_ARP:
+        if (i == 0 || !arp_shake()) return &ip->arp[i];
+        if (!arp_sub()) return &st.shake[i - 1];             /* GRAV SPIN BOUNCE */
+        if (i == 1) return &st.shake[3];                     /* CAGE */
+        { static uint8_t empty; empty = 0; return &empty; }
     case PG_SEQ:
         if (st.seq[0] == SEQ_STEP) {
             if (i == 0) return &st.seq[0];
@@ -338,6 +351,7 @@ static APART void sync_cols(int pg)
 {
     int i;
     if (pg == PG_HOME) return;
+    if (pg == PG_ARP && !arp_shake()) subpage[PG_ARP] = 0;
     for (i = 0; i < 4; i++) {
         const ParamDef *p = page_param(pg, i);
         col_v[i] = p->max > p->min ? (f32)(*page_value(pg, i) - p->min) / (f32)(p->max - p->min) : 0.0f;
@@ -833,6 +847,14 @@ static void set_knob(int i, int v)
     }
 }
 
+static void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / ARP page, or EDIT + ALGORITHM */
+{
+    st.ip[st.inst].arp[0] = (uint8_t)m;
+    if (page == PG_ARP) sync_cols(PG_ARP);
+    toast("SEQ: ", 0, 0, O_ARPMODE[m], -1);
+    mark_dirty();
+}
+
 static APART void set_param(int i, int v)
 {
     const ParamDef *p = page_param(page, i);
@@ -875,11 +897,7 @@ SMALL void h1_encoder(int enc, int d)
         if (page == PG_FX) set_fx_type(st.fx_type + d);
         else if (page == PG_ARP || (btn_held & (1u << H1_BTN_EDIT))) {
             if (btn_held & (1u << H1_BTN_EDIT)) btn_fired[H1_BTN_EDIT] = 1;
-            int m = ((st.ip[st.inst].arp[0] + d) % NARPMODE + NARPMODE) % NARPMODE;
-            st.ip[st.inst].arp[0] = (uint8_t)m;
-            if (page == PG_ARP) sync_cols(PG_ARP);
-            toast("SEQ: ", 0, 0, O_ARPMODE[m], -1);
-            mark_dirty();
+            set_arp_mode(((st.ip[st.inst].arp[0] + d) % NARPMODE + NARPMODE) % NARPMODE);
         } else {
             set_algo(st.ip[st.inst].algo + d);
         }
@@ -940,7 +958,9 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
         break;
     case H1_ENC_ALGO:
         if (page == PG_FX) { v = st.fx_type; b = NFX - 1; nm = "FX"; tx = FX_NAMES[st.fx_type]; }
-        else { v = st.ip[st.inst].algo; b = NALGO - 1; nm = "PRESET"; tx = insts[st.inst]->algo[v]; }
+        else if (page == PG_ARP) {               /* (the encoder turns the SEQ mode here, so the slider does) */
+            v = st.ip[st.inst].arp[0]; b = NARPMODE - 1; nm = "SEQ MODE"; tx = O_ARPMODE[v < NARPMODE ? v : 0];
+        } else { v = st.ip[st.inst].algo; b = NALGO - 1; nm = "PRESET"; tx = insts[st.inst]->algo[v]; }
         break;
     case H1_ENC_SELECT:
         if ((btn_held & (1u << H1_BTN_EDIT)) && btn_fired[H1_BTN_EDIT]) {
@@ -948,7 +968,7 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
         } else if (page == PG_HOME) {
             v = st.glo[0]; a = 40; b = 240; nm = "TEMPO"; put_s(put_i(d, v), " BPM");
         } else {
-            v = subpage[page]; a = 0; b = page_nsub(page) - 1; nm = "SUBPAGE"; put_i(d, v + 1);
+            v = ui_subpage(); a = 0; b = page_nsub(page) - 1; nm = "SUBPAGE"; put_i(d, v + 1);
         }
         break;
     default: {
@@ -977,6 +997,7 @@ SMALL void h1_control_set(int enc, int v)
     case H1_ENC_PRESET: set_instrument(iclamp(v, 0, NINST - 1)); break;
     case H1_ENC_ALGO:
         if (page == PG_FX) set_fx_type(iclamp(v, 0, NFX - 1));
+        else if (page == PG_ARP) { if (v != st.ip[st.inst].arp[0]) set_arp_mode(iclamp(v, 0, NARPMODE - 1)); }
         else set_algo(iclamp(v, 0, NALGO - 1));
         break;
     case H1_ENC_SELECT:
@@ -1101,7 +1122,9 @@ static void draw_bottom_cols(int pg, f32 top_y)
         const ParamDef *p = page_param(pg, i);
         f32 cx = 30.0f + (f32)i * 60.0f;
         int v = *page_value(pg, i);
-        f32 tgt = p->max > p->min ? (f32)(v - p->min) / (f32)(p->max - p->min) : 0.0f;
+        f32 tgt;
+        if (!p->name[0]) continue;               /* an empty column (SHAKE 2/2) */
+        tgt = p->max > p->min ? (f32)(v - p->min) / (f32)(p->max - p->min) : 0.0f;
         spring(&col_v[i], &col_vv[i], tgt, 26.0f, vis.dt);
 
         g_color(GC_SLATE);
@@ -1482,7 +1505,8 @@ static void draw_tape_page(void)
 static void draw_arp_page(void)
 {
     int mode = st.ip[st.inst].arp[0], i;
-    draw_topbar(O_TRK[st.track], "SEQ / ARP", O_ARPMODE[mode < NARPMODE ? mode : 0]);
+    draw_topbar(O_TRK[st.track], "SEQ / ARP",
+                mode == ARP_SHAKE ? (arp_sub() ? "SHAKE 2/2" : "SHAKE 1/2") : O_ARPMODE[mode < NARPMODE ? mode : 0]);
 
     if (mode == ARP_SHAKE) {
         /* ICONIC SHAKE ROTATING HEXAGONAL GRAVITY CAGE! */
@@ -1507,7 +1531,9 @@ static void draw_arp_page(void)
         }
         if (!vis.balls[0].on && !vis.balls[1].on) {
             g_color(GC_SLATE);
-            fit_text(cx, cy - 5.0f, "PLAY KEYS TO DROP", 9.0f, 150.0f, 0.7f);
+            /* (two lines, inside the cage at its smallest: on one it ran across the walls) */
+            fit_text(cx, cy - 11.0f, "PLAY KEYS", 9.0f, 2.0f * (cr - 8.0f), 0.7f);
+            fit_text(cx, cy + 2.0f, "TO DROP", 9.0f, 2.0f * (cr - 8.0f), 0.7f);
         }
     } else if (mode == ARP_RIFF) {
         /* ICONIC RIFF STEP RIBBON! */
