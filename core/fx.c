@@ -80,7 +80,8 @@ static int tfx_prev;
 static f32 tfx_rpos, tfx_spd = 1.0f, tfx_stut_len = 5512.0f, tfx_stut_pos, tfx_stut_anchor;
 
 static f32 SRf = 44100.0f, ISRf = 1.0f / 44100.0f;
-static int fx_last = -1;
+static uint32_t fx_n;                            /* fx_send_block's calls, one a block */
+static uint32_t fx_ran_at[NFX];                  /* the call an effect last ran in (fx_resume) */
 
 /* helpers for int16 delay lines */
 static inline int16_t f_to_i16(f32 x)
@@ -123,7 +124,11 @@ void fx_init(f32 sr)
 {
     SRf = sr > 1000.0f ? sr : 44100.0f;
     ISRf = 1.0f / SRf;
-    fx_last = -1;
+    {
+        int i;
+        fx_n = 0;
+        for (i = 0; i < NFX; i++) fx_ran_at[i] = 0;
+    }
     fx_reset();
 }
 
@@ -608,18 +613,48 @@ static void fx_thump(f32 *dl, f32 *dr, const uint8_t p[4])
     }
 }
 
+/* An effect that did not run in the block before (another was chosen, FX was bypassed, or its MIX was at 0) starts
+ * from silence. Its state was frozen while it did not run, so it came back with whatever was in its buffers: PLATE
+ * after six silent seconds on FILTER still gave -26 dBFS of the old tail. */
+static void fx_resume(int t)
+{
+    uint32_t i;
+    switch (t) {
+    case FX_PLATE:
+        for (i = 0; i < REV_N; i++) rev_buf[i] = 0;
+        d_inlp = d_dampa = d_dampb = 0.0f;
+        pl_quiet = D_DL1A + CTRL;                /* (all 0: it starts asleep) */
+        break;
+    case FX_DELAY: case FX_SHIFT: case FX_CHORUS: case FX_TANK:
+        for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
+        echo_lpl = echo_lpr = echo_ol = echo_or = spr_lp = shf_fb_l = shf_fb_r = 0.0f;
+        for (i = 0; i < 4; i++) shf_i1[i] = shf_q1[i] = spr_ap[i] = 0.0f;
+        break;
+    case FX_FILTER:
+        for (i = 0; i < 4; i++) filt_l[i] = filt_r[i] = 0.0f;
+        filt_env = 0.0f;
+        break;
+    case FX_LOFI:
+        phone_s[0][0] = phone_s[0][1] = phone_s[1][0] = phone_s[1][1] = 0.0f;
+        phone_hl = phone_hr = phone_cnt = 0.0f;
+        break;
+    default:
+        punch_fast = punch_slow = punch_lp_l = punch_lp_r = punch_hi_l = punch_hi_r = 0.0f;
+        break;
+    }
+}
+
 void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, const uint8_t p[4], f32 bpm, int fx_on)
 {
+    fx_n++;
     if (!fx_on)
         return;
     fx_type = iclamp(fx_type, 0, NFX - 1);
-    if (fx_type != fx_last) {
-        /* gently clear shared buffer when switching between FX sharing echo_buf */
-        uint32_t i;
-        if (fx_type == FX_DELAY || fx_type == FX_SHIFT || fx_type == FX_CHORUS || fx_type == FX_TANK)
-            for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
-        fx_last = fx_type;
-    }
+    if (fx_type != FX_FILTER && fx_type != FX_LOFI && fx_type != FX_THUMP && p[fx_type == FX_SHIFT ? 3 : 0] == 0)
+        return;                                  /* (MIX at 0: it does not run) */
+    if (fx_ran_at[fx_type] != fx_n - 1u)
+        fx_resume(fx_type);
+    fx_ran_at[fx_type] = fx_n;
     switch (fx_type) {
     case FX_PLATE: fx_plate(sl, sr, dl, dr, p); break;
     case FX_DELAY:  fx_delay(sl, sr, dl, dr, p, bpm); break;

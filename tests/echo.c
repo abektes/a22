@@ -62,6 +62,53 @@ static int taps(void)                            /* every TIME, 40..240 BPM: the
     return bad;
 }
 
+/* PLATE, DELAY and TANK come back from silence: after another effect, a bypass, or MIX at 0, nothing of the old
+ * tail is left (their state was frozen, and came back: -26 dBFS from PLATE after six seconds on FILTER) */
+static f32 run_fx(int type, const uint8_t *p, int on, int blocks, int noise)
+{
+    static uint32_t r = 12345u;
+    f32 in[CTRL], l[CTRL], rr[CTRL], peak = 0.0f;
+    int b, n;
+    for (b = 0; b < blocks; b++) {
+        for (n = 0; n < CTRL; n++) {
+            r = r * 1664525u + 1013904223u;
+            in[n] = noise ? ((f32)(r >> 9) / 4194304.0f - 1.0f) * 0.5f : 0.0f;
+        }
+        memset(l, 0, sizeof l); memset(rr, 0, sizeof rr);
+        fx_send_block(in, in, l, rr, type, p, 120.0f, on);
+        for (n = 0; n < CTRL; n++) {
+            if (fabsf(l[n]) > peak) peak = fabsf(l[n]);
+            if (fabsf(rr[n]) > peak) peak = fabsf(rr[n]);
+        }
+    }
+    return peak;
+}
+
+static int tails(void)
+{
+    static const int T[3] = {FX_PLATE, FX_DELAY, FX_TANK};
+    static const char *const NAME[3] = {"PLATE", "DELAY", "TANK"};
+    static const char *const HOW[3] = {"after FILTER", "after a bypass", "after MIX at 0"};
+    uint8_t p[4] = {70, 3, 70, 30}, p0[4] = {0, 3, 70, 30}, pf[4] = {50, 50, 50, 50};
+    int t, how, bad = 0;
+    for (t = 0; t < 3; t++)
+        for (how = 0; how < 3; how++) {
+            f32 pk;
+            fx_reset();
+            run_fx(T[t], p, 1, HEAR, 1);                       /* a second of noise into it */
+            if (how == 0) run_fx(FX_FILTER, pf, 1, 6 * HEAR, 0);
+            else if (how == 1) run_fx(T[t], p, 0, 6 * HEAR, 0);
+            else run_fx(T[t], p0, 1, 6 * HEAR, 0);
+            pk = run_fx(T[t], p, 1, HEAR / 4, 0);              /* back, with nothing coming in */
+            if (pk > 1e-4f) {
+                bad++;
+                printf("FAIL echo: %s %s gives %.1f dBFS of its old tail\n", NAME[t], HOW[how], 20.0 * log10(pk));
+            }
+        }
+    if (!bad) printf("echo: PLATE, DELAY and TANK come back silent after another effect, a bypass and MIX at 0\n");
+    return bad;
+}
+
 static void block(const f32 *in, f32 *out)
 {
     f32 r[CTRL];
@@ -97,7 +144,7 @@ int main(void)
     double diff = 0.0, loud = 0.0;
     int i;
     fx_init(44100.0f);
-    if (taps())
+    if (taps() | tails())
         return 1;
     fx_reset();
     silence(4 * HEAR);                           /* the delay settles on its time */
