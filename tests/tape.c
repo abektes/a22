@@ -7,7 +7,9 @@
  *   lone off  a key held into a take and let go during it records nothing
  *   cut       CUT keeps a note begun before IN whole on the tape, and lets go of what it cut
  *   clear     clearing one track lets go of that track's notes alone
- *   first     a take's first note plays on the pass right after the take (it was skipped once) */
+ *   first     a take's first note plays on the pass right after the take (it was skipped once)
+ *   cc 123    MIDI's all notes off ends the notes MIDI plays, and the tape plays on (it stopped the tape)
+ *   clocks    an engine on two tracks (T1's tape, T2 live) moves its own clocks once a block, not twice */
 #include <stdio.h>
 #include <string.h>
 #include "../core/internal.h"
@@ -226,6 +228,48 @@ int main(void)
         eng_post(EV_CLEAR, 2);                   /* T2 cleared */
         until(now() + 40);
         CHECK(trk_gated(0) == 1 && trk_gated(1) == 0, "clear: clearing T2 lets go of T2's note alone");
+    }
+
+    /* ---- clocks ---- */
+    {
+        double t0;
+        uint32_t s0, ds, blocks = (uint32_t)(1000.0 * 44100.0 / 1000.0 / CTRL);
+        fresh(0);
+        h1_control_set(H1_ENC_PRESET, 1);        /* ELECTRIC on T1 */
+        tap(H1_BTN_REC);
+        t0 = now() + 50;
+        key(0, t0, 1900);
+        until(t0 + 2000 + 20);
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* to T2 */
+        h1_control_set(H1_ENC_PRESET, 1);        /* ELECTRIC on T2 too */
+        until(t0 + 4000 + 50);
+        h1_key(7, 1);                            /* live on T2 while T1's tape plays */
+        until(t0 + 4000 + 300);
+        CHECK(trk_gated(0) == 1, "clocks: T1's tape plays ELECTRIC");
+        s0 = eng_clock_steps(1);
+        until(now() + 1000);
+        ds = eng_clock_steps(1) - s0;
+        h1_key(7, 0);
+        CHECK(ds + 12 >= blocks && ds <= blocks + 12, "clocks: ELECTRIC's clocks move once a block on two tracks");
+        if (!(ds + 12 >= blocks && ds <= blocks + 12)) printf("     (%u steps in %u blocks)\n", (unsigned)ds, (unsigned)blocks);
+    }
+
+    /* ---- cc 123 ---- */
+    {
+        double t0;
+        int v, live;
+        fresh(0);
+        tap(H1_BTN_REC);
+        t0 = now() + 50;
+        key(0, t0, 1500);
+        until(t0 + 2000 + 100);
+        h1_midi(0x90, 72, 100);                  /* a note over MIDI in, held */
+        until(now() + 100);
+        h1_midi(0xB0, 123, 0);                   /* all notes off */
+        until(now() + 100);
+        for (v = live = 0; v < NVOICE; v++) live += voices[v].stage && voices[v].gate && !voices[v].seq;
+        CHECK(live == 0, "cc 123: the note MIDI held ends");
+        CHECK(loop_state() == LOOP_PLAY && tape_gated() == 1, "cc 123: and the tape plays on");
     }
 
     printf("tape: %d checks, %d failed\n", checks, fails);

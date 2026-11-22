@@ -56,12 +56,16 @@ typedef struct TRun {
     f32 vol_s, send_s, pan_s;
     f32 peak_out;                  /* live VU meter 0..1 */
     f32 last_pitch;
-    uint32_t at, adv;
+    uint32_t at;
     uint8_t owner;
 } TRun;
 
 static TRun trun[NTRACK];
 static uint32_t blkno = 16;
+/* The block an engine's own clocks (ELECTRIC's tremolo and wow, STACK's and HAZE's drift, ANALOG's and MONO's PWM:
+ * b->step in their block) last moved in. Per engine, not per track: an engine on two tracks ran them twice as fast. */
+static uint32_t inst_adv[NINST], inst_steps[NINST];
+uint32_t eng_clock_steps(int inst) { return inst >= 0 && inst < NINST ? inst_steps[inst] : 0u; }
 static uint32_t lfo_rng = 0x1F0C1F0Cu;
 static f32 run_time, blk_time;
 static uint32_t stamp_ctr;
@@ -313,8 +317,9 @@ static const Blk *track_set(int t, int part, int is_seq)
     r->b.menv_amt = r->m.menv_amt;
     r->b.vel_sens = r->m.vel_sens;
     r->b.punch = r->m.punch;
-    r->b.step = r->adv == blkno ? 0.0f : (f32)CTRL * ISR;
-    r->adv = blkno;
+    r->b.step = inst_adv[inst] == blkno ? 0.0f : (f32)CTRL * ISR;
+    if (inst_adv[inst] != blkno) inst_steps[inst]++;
+    inst_adv[inst] = blkno;
     r->owner = (uint8_t)part;
     insts[inst]->block(&r->b);
     return &r->b;
@@ -1309,6 +1314,7 @@ static void free_tick(f32 dticks)
 
 /* ---- live note handling + hold latch -------------------------------------------------- */
 static uint32_t latched[4], latched_midi[4];
+static uint32_t midi_down[4];                    /* notes held down over MIDI in now (EV_MIDI_OFF) */
 static int phys_down;
 
 static void eff_note(int note, int on, int vel, int from_midi)
@@ -1529,6 +1535,7 @@ static void handle(uint32_t e)
 
     switch (type) {
     case EV_NOTE_ON:
+        if (from_midi) midi_down[a >> 5] |= 1u << (a & 31);
         if (st.keys[3]) {
             if (phys_down == 0) unlatch();
             latched[a >> 5] |= 1u << (a & 31);
@@ -1539,13 +1546,35 @@ static void handle(uint32_t e)
         chord_key(a, 1, vel, from_midi);
         break;
     case EV_NOTE_OFF:
+        if (from_midi) midi_down[a >> 5] &= ~(1u << (a & 31));
         if (phys_down > 0) phys_down--;
         if (!st.keys[3]) chord_key(a, 0, 0, from_midi);
         break;
+    case EV_MIDI_OFF: {
+        /* MIDI's all notes off, which a DAW sends on stop and a USB keyboard unplugged sends here: the notes MIDI
+         * holds, or HOLD keeps for it, end. The tape, the pattern and the panel's own keys go on; it was a full hush
+         * (EV_PANIC), which stopped the tape. */
+        int n;
+        for (n = 0; n < 128; n++) {
+            uint32_t bit = 1u << (n & 31);
+            if (midi_down[n >> 5] & bit) {
+                midi_down[n >> 5] &= ~bit;
+                if (phys_down > 0) phys_down--;
+                if (!st.keys[3]) chord_key(n, 0, 0, 1);
+            }
+            if ((latched[n >> 5] & bit) && (latched_midi[n >> 5] & bit)) {
+                latched[n >> 5] &= ~bit;
+                latched_midi[n >> 5] &= ~bit;
+                chord_key(n, 0, 0, 1);
+            }
+        }
+        break;
+    }
     case EV_UNLATCH:
         unlatch();
         break;
     case EV_PANIC:
+        midi_down[0] = midi_down[1] = midi_down[2] = midi_down[3] = 0;
         unlatch();
         arp_release();
         shake_clear();
@@ -2105,7 +2134,7 @@ SMALL void eng_init(uint32_t sample_rate)
     rec_forget();
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());
-    for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = 0;
+    for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = midi_down[i] = 0;
     chord_clear();
     phys_down = nheld = arp_ncur = 0;
     arp_acc = 1e9f;

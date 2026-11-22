@@ -277,7 +277,8 @@ enum {
     EV_RIFF_CLEAR,            /* clear riff sequence */
     EV_RIFF_REST,             /* add rest to riff sequence */
     EV_SNAP_SAVE,                /* save patch to snapshot 0..7 */
-    EV_SNAP_LOAD                 /* load patch from snapshot 0..7 */
+    EV_SNAP_LOAD,                /* load patch from snapshot 0..7 */
+    EV_MIDI_OFF                  /* MIDI's all notes off (CC 123): the notes MIDI plays end, the tape plays on */
 };
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 
@@ -317,6 +318,7 @@ uint32_t eng_loop_full(void);
 void eng_render(int32_t *lr, uint32_t n);
 void eng_late(int late);
 uint32_t eng_saved_n(void);
+uint32_t eng_clock_steps(int inst);       /* blocks an engine's own clocks have moved (tests) */
 uint32_t eng_shed_count(void);
 void eng_snapshot(Vis *vis);
 uint32_t eng_sounding_lo(void);
