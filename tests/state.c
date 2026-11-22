@@ -2,7 +2,8 @@
  * repository's top, for tests/state_v4.bin).
  *
  *   version 4   tests/state_v4.bin (written by 0.4.0's own core: tests/state_v4_gen.c) loads, from any
- *               address, with every table as it was saved; the new slots come up empty, effects as 8
+ *               address, with every table as it was saved; CYCLE (engine 13, after 0.4.0) at its defaults,
+ *               the slots no engine has yet empty, effects as 8
  *   version 5   saved and loaded again, to the byte, from an odd address
  *   refused     a wrong size for its version, another version, another magic, a few bytes: nothing changes
  *   new slots   an engine or effect past what a state was saved with (ninst, nfx) comes up as new, the
@@ -42,6 +43,20 @@ static int zero(const void *p, size_t n)
 }
 #define SAME(field, off, n) (!memcmp((const uint8_t *)&st + offsetof(H1State, field), v4 + (off), (n)))
 
+static int engines_new_from(int first)            /* every engine from first on at its own defaults */
+{
+    int i, a, ok = 1;
+    for (i = first; i < NINST; i++) {
+        uint8_t home[4];
+        ok &= !memcmp(&st.ip[i], &insts[i]->def, sizeof(InstParams));
+        for (a = 0; a < NALGO; a++) {
+            knobs_home(i, a, home);
+            ok &= !memcmp(st.knob[i][a], home, 4);
+        }
+    }
+    return ok;
+}
+
 static void version4(void)
 {
     int odd;
@@ -53,15 +68,17 @@ static void version4(void)
               SAME(inst, offsetof(V4, inst), offsetof(V4, fx_p) - offsetof(V4, inst)),
               "everything before the effects but the version, as saved");
         CHECK(SAME(fx_p, offsetof(V4, fx_p), sizeof ((V4 *)0)->fx_p), "the eight effects' knobs, as saved");
-        CHECK(SAME(master, offsetof(V4, master), offsetof(V4, ninst) + 1 - offsetof(V4, master)),
-              "master, shake, riff, chord memory and the engine count, as saved");
+        CHECK(SAME(master, offsetof(V4, master), offsetof(V4, ninst) - offsetof(V4, master)),
+              "master, shake, riff and chord memory, as saved");
+        CHECK(v4[offsetof(V4, ninst)] == 12 && st.ninst == NINST, "saved with twelve engines, counted as all of them now");
         CHECK(SAME(ip, offsetof(V4, ip), sizeof ((V4 *)0)->ip), "the twelve engines' settings, as saved");
         CHECK(SAME(knob, offsetof(V4, knob), sizeof ((V4 *)0)->knob), "every algorithm's knobs, as saved");
         CHECK(SAME(trk, offsetof(V4, trk), sizeof(V4) - offsetof(V4, trk)),
               "the tracks, snapshots and steps, as saved");
         CHECK(zero(st.fx_p[8], sizeof st.fx_p - sizeof st.fx_p[0] * 8), "the new effect slots are empty");
-        CHECK(zero(&st.ip[12], sizeof st.ip[0] * 4) && zero(st.knob[12], sizeof st.knob[0] * 4),
-              "the new engine slots are empty");
+        CHECK(zero(&st.ip[NINST], sizeof st.ip[0] * (NSLOT - NINST)) &&
+              zero(st.knob[NINST], sizeof st.knob[0] * (NSLOT - NINST)), "the slots no engine has yet are empty");
+        CHECK(engines_new_from(12), "an engine version 4 did not have (CYCLE) comes up as new");
         CHECK(st.nfx == NFX && st.version == H1_VERSION, "it is version 5 now, with its effects counted");
     }
     CHECK(h1_instrument() == 10 && h1_algorithm() == 10 % 8, "the engine and algorithm in hand, as saved");
@@ -106,7 +123,7 @@ static void refused(void)
 
 static void new_slots(void)
 {
-    int i, k, a, kept = 1, fresh = 1;
+    int i, k, kept = 1, fresh;
     memcpy(buf, v5, sizeof(H1State));
     buf[offsetof(H1State, ninst)] = 10;          /* saved before engines 10 and 11 were there */
     buf[offsetof(H1State, nfx)] = 6;             /* and before effects 6 and 7 */
@@ -115,14 +132,7 @@ static void new_slots(void)
     for (i = 0; i < 10; i++)
         kept &= !memcmp(&st.ip[i], v5 + offsetof(H1State, ip) + i * sizeof(InstParams), sizeof(InstParams));
     CHECK(kept, "the engines it was saved with keep their settings");
-    for (i = 10; i < 12; i++) {
-        uint8_t home[4];
-        fresh &= !memcmp(&st.ip[i], &insts[i]->def, sizeof(InstParams));
-        for (a = 0; a < NALGO; a++) {
-            knobs_home(i, a, home);
-            fresh &= !memcmp(st.knob[i][a], home, 4);
-        }
-    }
+    fresh = engines_new_from(10);
     CHECK(fresh, "the engines past them come up as new");
     for (k = 0; k < 4; k++) {
         CHECK(st.fx_p[5][k] == v5[offsetof(H1State, fx_p) + 5 * 4 + k], "an effect it was saved with keeps its knobs");

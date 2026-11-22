@@ -19,6 +19,10 @@ DX-EP	D X electric piano
 SH-LEAD	S H lead
 SUB-808	sub eight oh eight
 ZAP-BASS	zap bass
+STEP-STR	step string
+STEP-RD	step reed
+STEP-KEY	step keys
+STEP-VOX	step voice
 HARMON	harmonic
 DIGI	digital
 TRI	triangle

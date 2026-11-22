@@ -4,7 +4,7 @@
  *   rolls     every algorithm of every engine, rolled 400 times: each knob within its span of the
  *             algorithm's home, a home of 0 stays 0, nothing past 0..100, and the rolls differ
  *   panel     EDIT + LFO moves the knobs and opens no page; EDIT + ENV puts them back exactly and again
- *             to the roll; another algorithm has nothing to swap; the knobs go out as CC 20-23 and are
+ *             to the roll; another algorithm, or a reset, has nothing to swap; the knobs go out as CC 20-23 and are
  *             recorded on the tape like a hand's; LFO and ENV alone still open their pages
  *   sound     every algorithm rolled DICE_SOUND times stays within 6 dB of how loud it is at home
  *             (run with an argument "print" for the numbers per algorithm) */
@@ -135,6 +135,14 @@ static void panel(void)
     edit_with(H1_BTN_ENV);
     CHECK(same4(KNOBS_NOW(st.inst), home), "another algorithm has nothing to swap");
     CHECK(!strcmp(h1_toast_now(), "NO DICE TO UNDO"), "and says so");
+
+    /* a reset (SAVE held) ends it: EDIT + ENV has nothing to swap back over the reset knobs */
+    edit_with(H1_BTN_LFO);
+    h1_button(H1_BTN_SAVE, 1); go(1200); h1_button(H1_BTN_SAVE, 0); go(60);
+    memcpy(home, KNOBS_NOW(st.inst), 4);
+    edit_with(H1_BTN_ENV);
+    CHECK(same4(KNOBS_NOW(st.inst), home) && !strcmp(h1_toast_now(), "NO DICE TO UNDO"),
+          "after the algorithm's reset, EDIT + ENV has nothing to swap");
 
     /* the roll is a hand on the knobs: recorded while the tape records (a take with it holds more) */
     plain = take_with_roll(0);

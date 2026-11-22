@@ -13,7 +13,7 @@
 
 typedef struct DiceKnob { uint8_t span, lo, hi; } DiceKnob;
 
-static const DiceKnob DICE[NINST][4] = {
+static const DiceKnob DICE[][4] = {
     /* FM-4      RATIO, DEPTH, FEEDBK, FILTER */
     {{10, 0, 100}, {18, 15, 90}, {16, 0, 70}, {16, 45, 100}},
     /* ELECTRIC  BARK, TINE, TREM, WARMTH */
@@ -38,7 +38,10 @@ static const DiceKnob DICE[NINST][4] = {
     {{30, 0, 100}, {20, 0, 100}, {16, 0, 100}, {14, 40, 100}},
     /* CHIP      DUTY, SWEEP, ARP, CRUSH */
     {{25, 0, 100}, {12, 0, 100}, {12, 0, 100}, {6, 0, 30}},
+    /* CYCLE     WAVE, SCAN, SPREAD, FILTER (as WAVE) */
+    {{30, 0, 100}, {20, 0, 100}, {16, 0, 100}, {14, 40, 100}},
 };
+typedef char dice_rows[sizeof DICE / sizeof DICE[0] == NINST ? 1 : -1];
 
 static uint32_t dice_next(uint32_t *rng)        /* xorshift32 */
 {

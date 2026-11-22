@@ -1,6 +1,6 @@
 # Plan: what the spare flash goes to
 
-Written 2026-11-22, after 0.4.0. Each sprint is a branch, tested on the host (`tests/run_tests.sh`), and,
+Written 2026-11-22, after 0.4.0. Each sprint is a branch (1 and 2 share `dice`; 3 is `akwf`, cut from it), tested on the host (`tests/run_tests.sh`), and,
 where it touches the audio, built by CI and timed on the FM-1 (CC 119, `HANDOFF-perf-audio.md`'s profiler)
 before it is merged.
 
@@ -40,7 +40,7 @@ for everything after it.
 - No new sound. Test: version 4 states from odd addresses load unchanged, old tapes play the same engines.
 - Cost: 240 bytes of SRAM (the state grows from 2,648 to 2,888 bytes), nothing else.
 
-## Sprint 3: AKWF wavetables — about 66 KB of flash
+## Sprint 3: AKWF wavetables — about 66 KB of flash (done: CYCLE, 64 KB)
 
 - Four new banks of fifteen waves from Adventure Kid Waveforms (CC0, the author's repository), cut by
   `tools/gen_wavetables.py` into WAVE's format (six band-limited levels, 16.5 KB a bank).
@@ -50,6 +50,11 @@ for everything after it.
   sprint 2.)
 - The engine's name, banks and which AKWF waves are picked are decided by ear before the bank is cut.
 - Device: time the new engine at eight voices (it should land at WAVE's cost).
+
+Done as CYCLE (engine 13): STRING, REED, KEYS, VOICE and their STEP- versions. The names and the 60 waves
+are placeholders until judged by ear (`tools/akwf.py` holds the list; the picture is WAVE's). At release
+the site (`tools/build_site.py`: banks A to M), `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s bank inks and the
+release checklist's engine count need CYCLE too.
 
 ## Sprint 4: more sampled drums — about 30–40 KB of flash
 

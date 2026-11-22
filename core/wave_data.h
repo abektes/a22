@@ -1,10 +1,11 @@
-/* A22 - WAVE's wavetables (core/wave_data.c, written by tools/gen_wavetables.py) */
+/* A22 - WAVE's wavetables (core/wave_data.c) and CYCLE's (core/wave_akwf.c), written by tools/gen_wavetables.py */
 #pragma once
 #include "mathx.h"
 
 #define WT_N 256                 /* samples a cycle at level 0 */
 #define WT_H 48                  /* harmonics at level 0; level k keeps WT_H >> k */
 #define WT_BANKS 8
+#define AK_BANKS 4               /* CYCLE's: STRING, REED, KEYS, VOICE (AKWF cycles) */
 #define WT_WAVES 15              /* a bank: eight main waves (the even places) and seven between */
 #define WT_LEVELS 6
 #define WT_STRIDE 550            /* samples a wave over all its levels */
@@ -15,3 +16,5 @@ extern const f32 wave_unit;
 extern const uint16_t wave_len[WT_LEVELS];
 extern const uint16_t wave_off[WT_LEVELS];
 extern const int16_t wave_pcm[WT_BANKS * WT_WAVES * WT_STRIDE];
+extern const f32 akwf_unit;               /* CYCLE's banks, laid out as WAVE's (wave_len, wave_off) */
+extern const int16_t akwf_pcm[AK_BANKS * WT_WAVES * WT_STRIDE];

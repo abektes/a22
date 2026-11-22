@@ -11,7 +11,8 @@ uint32_t eng_rng = 0x2F6E2B1u;
 
 const InstDef *const insts[] = {
     &inst_fm4, &inst_electric, &inst_stack, &inst_analog, &inst_shaper,
-    &inst_wire, &inst_haze, &inst_mono, &inst_kit, &inst_perc, &inst_wave, &inst_chip
+    &inst_wire, &inst_haze, &inst_mono, &inst_kit, &inst_perc, &inst_wave, &inst_chip,
+    &inst_cycle
 };
 typedef char a22_insts_all[sizeof insts / sizeof insts[0] == NINST ? 1 : -1];
 
@@ -29,6 +30,7 @@ static const f32 algo_gain[][NALGO] = {
     /* 9 PERC      */ {1.12f, 1.32f, 1.14f, 1.38f, 2.10f, 1.10f, 1.14f, 1.92f},
     /* 10 WAVE     */ {0.47f, 0.50f, 0.52f, 1.08f, 0.49f, 0.54f, 0.52f, 0.48f},
     /* 11 CHIP     */ {0.50f, 0.53f, 0.39f, 0.55f, 0.50f, 0.52f, 1.10f, 0.58f},
+    /* 12 CYCLE    */ {0.484f, 0.467f, 0.465f, 0.480f, 0.477f, 0.461f, 0.460f, 0.473f},
 };
 typedef char a22_gain_rows[sizeof algo_gain / sizeof algo_gain[0] == NINST ? 1 : -1];
 

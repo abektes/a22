@@ -52,6 +52,10 @@ static const uint8_t ALGO_K0[][NALGO][4] = {
      *   PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET */
     {{50, 0, 40, 10}, {50, 12, 0, 6}, {20, 0, 0, 8}, {36, 0, 60, 10},
      {50, 0, 0, 12}, {36, 6, 56, 8}, {50, 46, 52, 6}, {50, 0, 30, 10}},
+    /* 12 CYCLE    (K1 WAVE, K2 SCAN, K3 SPREAD, K4 FILTER):
+     *   STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX (the STEP- ones scan further) */
+    {{50, 20, 30, 72}, {44, 16, 24, 74}, {36, 28, 30, 78}, {50, 30, 36, 70},
+     {14, 64, 30, 72}, {14, 60, 24, 74}, {14, 64, 30, 78}, {14, 70, 36, 70}},
 };
 typedef char a22_k0_rows[sizeof ALGO_K0 / sizeof ALGO_K0[0] == NINST ? 1 : -1];
 

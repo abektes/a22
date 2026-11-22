@@ -303,6 +303,11 @@ static int clear_all_answer;             /* its answer, once: 1 kept, 2 cleared 
 int h1_clear_all_asked(void) { return clear_all_asked != 0; }
 int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
 
+/* DICE (EDIT + LFO / EDIT + ENV, below): the engine and algorithm rolled, -1 for none, and its other knobs */
+static uint32_t dice_rng = 0x2545F491u;
+static int dice_inst = -1, dice_algo, dice_back;
+static uint8_t dice_other[4];                   /* what EDIT + ENV swaps the knobs to */
+
 static void toast(const char *a, int num, int has_num, const char *b, int pips)
 {
     char *d = toast_s;
@@ -459,6 +464,7 @@ void h1_key(int key, int down)
                     toast("SNAP ", i + 1, 1, " SAVED", -1);
                 } else {
                     eng_post(EV_SNAP_LOAD, i);
+                    dice_inst = -1;              /* (EDIT + ENV has nothing to swap back over a snapshot) */
                     toast("SNAP ", i + 1, 1, " LOADED", -1);
                 }
                 mark_dirty();
@@ -573,9 +579,6 @@ static void octave(int d)
 
 /* ---- DICE: EDIT + LFO rolls the knobs of the algorithm in hand (dice.c), EDIT + ENV swaps back ---- */
 static void set_knob(int i, int v);
-static uint32_t dice_rng = 0x2545F491u;
-static int dice_inst = -1, dice_algo, dice_back;
-static uint8_t dice_other[4];                   /* what EDIT + ENV swaps the knobs to */
 
 static void dice_apply(const uint8_t k[4])
 {
@@ -837,6 +840,7 @@ static void holds(void)
         btn_fired[H1_BTN_SAVE] = 1;
         knobs_default(st.inst, st.ip[st.inst].algo);
         for (i = 0; i < 4; i++) knob_touch[i] = 0.0f;
+        dice_inst = -1;
         toast(insts[st.inst]->algo[st.ip[st.inst].algo], 0, 0, " RESET", -1);
         mark_dirty();
     }
@@ -848,6 +852,7 @@ static void holds(void)
         knobs_default(st.inst, -1);
         vis.algo_prev = alg; vis.algo = st.ip[st.inst].algo; vis.algo_t = 0.0f;
         for (i = 0; i < 4; i++) knob_touch[i] = 0.0f;
+        dice_inst = -1;
         toast(insts[st.inst]->name, 0, 0, " RESET", -1);
         mark_dirty();
     }
@@ -855,6 +860,7 @@ static void holds(void)
         int i;
         btn_fired[H1_BTN_SAVE] = 3;
         for (i = 0; i < NINST; i++) { st.ip[i] = insts[i]->def; knobs_default(i, -1); }
+        dice_inst = -1;
         st.trk[st.track].algo = st.ip[st.inst].algo & 7;
         st.keys[0] = st.keys[1] = st.keys[2] = st.keys[3] = 0;
         st.glo[0] = 118; st.glo[1] = 0; st.glo[2] = 50; st.glo[3] = 100;

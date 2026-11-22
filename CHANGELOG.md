@@ -5,6 +5,18 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## Unreleased
 
+**Sound**
+- A thirteenth engine, CYCLE: WAVE's player on four banks of fifteen single cycles of recorded instruments,
+  from Adventure Kid Waveforms (AKWF, CC0 1.0, by Kristoffer Ekstrand; `docs/WAVETABLES.md`). STRING (cello,
+  violin), REED (clarinet, flute, alto sax, oboe), KEYS (piano, electric piano) and VOICE, each from dark to
+  bright, and the same four stepped (STEP-STR, STEP-RD, STEP-KEY, STEP-VOX): the place moves from whole wave
+  to whole wave, with a glide of a few milliseconds between so nothing clicks, and SCAN set further so a note
+  steps through the bank. The knobs are WAVE's. Each wave keeps its first 48 harmonics and its bank's
+  shared phases, so a morph is within about 1 dB of the waves either side (`tools/akwf.py` says how they
+  were picked). About 64 KB of flash. WAVE sounds the same to the bit: its tables are rewritten unchanged
+  and its renders were compared before and after. `tests/basics.c` checks SPREAD on every CYCLE bank and
+  that the STEP- algorithms step; the two-core and DICE tests cover CYCLE with the rest.
+
 **Playing**
 - DICE. **EDIT + LFO** rolls the four knobs of the algorithm in hand. Each knob moves only so far from that
   algorithm's own setting, by a span chosen per engine knob: pitch-like and stepped knobs (KIT TUNE, FM-4
@@ -22,7 +34,8 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   0.1.0 to 0.4.0 (version 4) load with everything kept: `tests/state.c` loads a state written by 0.4.0's
   own core (`tests/state_v4.bin`, made by `tests/state_v4_gen.c`) and compares every table. Before, the
   loader took only its own version, so any change to the state would have reset everyone's settings.
-  The state grows from 2,648 to 2,888 bytes of RAM.
+  The state grows from 2,648 to 2,888 bytes of RAM. Going back to 0.4.0 or older afterwards starts with
+  settings as new (they refuse a version 5 state); the tape is kept, as it is saved apart.
 
 ## 0.4.0
 

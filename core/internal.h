@@ -8,8 +8,8 @@
 #define NVOICE 8
 #define NSTEP 64                 /* step sequencer max steps */
 #define NSNOTE 8                 /* polyphony per step */
-#define NINST 12                 /* 12 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC,
-                                  * WAVE, CHIP (new ones go at the end: a saved tape names engines by number) */
+#define NINST 13                 /* 13 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC,
+                                  * WAVE, CHIP, CYCLE (new ones go at the end: a saved tape names engines by number) */
 #define NSLOT 16                 /* state slots for engines: room for four more than NINST (state version 5) */
 #define NALGO 8                  /* 8 curated algorithms/presets per engine */
 #define NTRACK 4                 /* 4-Track Virtual Tape (T1..T4) */
@@ -244,7 +244,7 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_fm4, inst_electric, inst_stack, inst_analog, inst_shaper;
-extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip;
+extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip, inst_cycle;
 extern const InstDef *const insts[];
 
 /* ---- pages ---------------------------------------------------------------------------- */

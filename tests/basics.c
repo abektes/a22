@@ -9,7 +9,8 @@
  *   the tape saved  h1_loop / h1_loop_load bring a recording back after a power cycle, from any address;
  *                   it asks to be saved when it changed and not once it is
  *   WAVE's SPREAD   at 0 a note is centred (both sides the same), and it grows wider over the knob's
- *                   whole turn, on every bank
+ *                   whole turn, on every bank of WAVE and of CYCLE
+ *   CYCLE's STEP-   its STEP- algorithms read whole waves (nearby K1 sounds the same), the others morph
  *   MIDI out        keys, the arpeggiator and the tape go out, CC 20-23 with the knobs, nothing that came in
  *                   is sent back, and HUSH tells the computer (CC 123)
  *
@@ -128,15 +129,16 @@ static Heard one_note(int vel, int unused)
     return heard;
 }
 
-/* ---- WAVE's SPREAD: a held C4 on bank a, SPREAD at sp, no FX; .energy is the side's over the middle's ---- */
+/* ---- WAVE's SPREAD: a held C4 on algorithm a (0-7 WAVE, 8-15 CYCLE: the same player), SPREAD at sp, no FX;
+ * .energy is the side's over the middle's ---- */
 static Heard wave_width(int a, int sp)
 {
     static int32_t out[512];
     double mid = 0.0, side = 0.0;
     int i, j;
     h1_init(44100);
-    h1_control_set(H1_ENC_PRESET, 10);           /* (WAVE) */
-    h1_control_set(H1_ENC_ALGO, a);
+    h1_control_set(H1_ENC_PRESET, a < 8 ? 10 : 12);   /* (WAVE, CYCLE) */
+    h1_control_set(H1_ENC_ALGO, a & 7);
     h1_control_set(H1_ENC_K3, sp);
     st.fx_on = 0;
     go(300);
@@ -154,6 +156,24 @@ static Heard wave_width(int a, int sp)
     }
     memset(&heard, 0, sizeof heard);
     heard.energy = mid > 0.0 ? side / mid : -1.0;
+    return heard;
+}
+
+/* ---- CYCLE's STEP- algorithms: a held note on algorithm a with K1 at k1 (SCAN at 0), heard as a hash ---- */
+static Heard cycle_tone(int a, int k1)
+{
+    h1_init(44100);
+    h1_control_set(H1_ENC_PRESET, 12);           /* (CYCLE) */
+    h1_control_set(H1_ENC_ALGO, a);
+    h1_control_set(H1_ENC_K1, k1);
+    h1_control_set(H1_ENC_K2, 0);
+    st.fx_on = 0;
+    go(400);
+    listen();
+    h1_key(7, 1);
+    go(600);
+    h1_key(7, 0);
+    go(200);
     return heard;
 }
 
@@ -241,7 +261,8 @@ int main(void)
     /* ---- WAVE's SPREAD: centred at 0, then wider at every quarter of the turn ---- */
     {
         static const int SP[5] = {0, 25, 50, 75, 100};
-        for (a = 0; a < 8; a++) {
+        for (a = 0; a < 16; a++) {
+            const InstDef *wd = a < 8 ? &inst_wave : &inst_cycle;
             double w[5];
             int k, wider = 1;
             for (k = 0; k < 5; k++)
@@ -249,12 +270,20 @@ int main(void)
             for (k = 1; k < 5; k++)
                 wider &= w[k] > w[k - 1] * 1.5;
             if (w[0] >= 0.02 || !wider || w[4] < 0.3)
-                printf("  WAVE %s: side/middle %.4f %.4f %.4f %.4f %.4f at SPREAD 0, 25, 50, 75, 100\n",
-                       inst_wave.algo[a], w[0], w[1], w[2], w[3], w[4]);
-            CHECK(w[0] >= 0.0 && w[0] < 0.02, "WAVE at SPREAD 0 is centred");
-            CHECK(wider, "WAVE grows wider at every quarter of SPREAD's turn");
-            CHECK(w[4] >= 0.3, "WAVE at full SPREAD is wide");
+                printf("  %s %s: side/middle %.4f %.4f %.4f %.4f %.4f at SPREAD 0, 25, 50, 75, 100\n",
+                       wd->name, wd->algo[a & 7], w[0], w[1], w[2], w[3], w[4]);
+            CHECK(w[0] >= 0.0 && w[0] < 0.02, "WAVE and CYCLE at SPREAD 0 are centred");
+            CHECK(wider, "WAVE and CYCLE grow wider at every quarter of SPREAD's turn");
+            CHECK(w[4] >= 0.3, "WAVE and CYCLE at full SPREAD are wide");
         }
+    }
+
+    /* ---- CYCLE: the STEP- algorithms read whole waves (K1 at 29 and 31 are both place 4), the others morph ---- */
+    for (a = 0; a < 4; a++) {
+        Heard s29 = taken(cycle_tone, a + 4, 29), s31 = taken(cycle_tone, a + 4, 31);
+        Heard m29 = taken(cycle_tone, a, 29), m31 = taken(cycle_tone, a, 31);
+        CHECK(s29.hash == s31.hash && s29.energy > 0.0, "a STEP- algorithm plays the same whole wave for nearby K1");
+        CHECK(m29.hash != m31.hash, "a smooth algorithm morphs between them");
     }
 
     /* ---- the tape: a take, its notes and a knob out over MIDI, saved, a power cycle, loaded, played ---- */

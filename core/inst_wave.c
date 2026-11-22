@@ -12,42 +12,59 @@
  *   K3 (WHITE)  SPREAD  stereo: at 0 both sides the same (centred). Turned up, the right side is blended
  *                       in from a second oscillator that starts further into its wave, is detuned (up to
  *                       ~15 cents) and reads further along the bank, so the width grows over the whole turn
- *   K4 (ORANGE) FILTER  low-pass cutoff (Mod-Env and velocity open it) */
+ *   K4 (ORANGE) FILTER  low-pass cutoff (Mod-Env and velocity open it)
+ *
+ * CYCLE (engine 13) is the same player on four other banks (core/wave_akwf.c: single cycles of recorded
+ * strings, reeds, keys and voice from Adventure Kid Waveforms, CC0), each twice: smooth, and stepped (STEP-),
+ * where the place moves from whole wave to whole wave (a quick glide between, so nothing clicks). Each engine
+ * keeps its own state (WaveEng), so both can sound at once on the tape. */
 #include "internal.h"
 #include "dsp.h"
 #include "wave_data.h"
 
-static struct {
-    int algo;
+typedef struct WaveEng {
+    const int16_t *pcm;                          /* its banks */
+    const f32 *unit;                             /* their 16-bit samples times this: the generator's units */
+    const uint8_t *bank_of, *stepped;            /* each algorithm's bank, and whether it steps */
+    int bank, step;
     f32 pos, scan, spread, det, cut, q;
-} W;
+    f32 lev, place;                              /* (the picture's) */
+} WaveEng;
 
-static void wave_block(const Blk *b)
+static const uint8_t WAVE_BANK[NALGO] = {0, 1, 2, 3, 4, 5, 6, 7}, WAVE_STEP[NALGO] = {0};
+static const uint8_t CYC_BANK[NALGO] = {0, 1, 2, 3, 0, 1, 2, 3}, CYC_STEP[NALGO] = {0, 0, 0, 0, 1, 1, 1, 1};
+static WaveEng WV = {wave_pcm, &wave_unit, WAVE_BANK, WAVE_STEP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static WaveEng CY = {akwf_pcm, &akwf_unit, CYC_BANK, CYC_STEP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+static void wt_block(WaveEng *e, const Blk *b)
 {
-    W.algo   = b->algo & 7;
-    W.pos    = b->k[0] * (f32)(WT_WAVES - 1);
-    W.scan   = b->k[1];
-    W.spread = b->k[2];
-    W.det    = 0.009f * W.spread * W.spread;                  /* the right side's detune: up to ~15 cents */
-    W.cut    = 140.0f * exp2fx(b->k[3] * 7.1f);              /* 140 Hz .. 19 kHz */
-    W.q      = 0.62f + 0.9f * (1.0f - b->k[3]) * (1.0f - b->k[3]);
+    e->bank   = e->bank_of[b->algo & 7];
+    e->step   = e->stepped[b->algo & 7];
+    e->pos    = b->k[0] * (f32)(WT_WAVES - 1);
+    e->scan   = b->k[1];
+    e->spread = b->k[2];
+    e->det    = 0.009f * e->spread * e->spread;              /* the right side's detune: up to ~15 cents */
+    e->cut    = 140.0f * exp2fx(b->k[3] * 7.1f);             /* 140 Hz .. 19 kHz */
+    e->q      = 0.62f + 0.9f * (1.0f - b->k[3]) * (1.0f - b->k[3]);
 }
 
-/* the place in the bank this voice reads now: the knob, moved up by SCAN as the mod envelope falls */
-static f32 wave_place(const Voice *v, const Blk *b)
+/* the place in the bank this voice reads now: the knob, moved up by SCAN as the mod envelope falls (a
+ * stepped algorithm: the nearest whole wave) */
+static f32 wave_place(const WaveEng *e, const Voice *v, const Blk *b)
 {
-    f32 sweep = W.scan * (1.0f - v->menv) * (f32)(WT_WAVES - 1) * (0.35f + 0.65f * b->menv_amt);
-    return clampf(W.pos + sweep, 0.0f, (f32)(WT_WAVES - 1));
+    f32 sweep = e->scan * (1.0f - v->menv) * (f32)(WT_WAVES - 1) * (0.35f + 0.65f * b->menv_amt);
+    f32 p = clampf(e->pos + sweep, 0.0f, (f32)(WT_WAVES - 1));
+    return e->step ? (f32)(int)(p + 0.5f) : p;
 }
 
-static void wave_note(Voice *v, const Blk *b)
+static void wt_note(const WaveEng *e, Voice *v, const Blk *b)
 {
     int i;
     if (v->env < 0.001f) {
         for (i = 0; i < 4; i++) v->ph[i] = 0.0f;
         for (i = 0; i < 16; i++) v->s[i] = 0.0f;         /* (both sides start together: SPREAD sets them apart) */
     }
-    v->s[4] = wave_place(v, b);
+    v->s[4] = wave_place(e, v, b);
 }
 
 /* a wave at x (0 <= x < its length), between samples */
@@ -58,38 +75,39 @@ static inline f32 wt_at(const int16_t *t, f32 x)
     return a + ((f32)t[i + 1] - a) * (x - (f32)i);
 }
 
-static void wave_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+static void wt_render(const WaveEng *e, Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
-    f32 pitch = v->pitch + b->bend, f, incl, incr, pl, pr, ml, mr, fc, len;
-    f32 xl = v->ph[0], xr = v->ph[1], off = 0.5f * W.spread * v->r1;   /* (the right side read further in) */
+    f32 pitch = v->pitch + b->bend, f, incl, incr, pl, pr, ml, mr, fc, len, unit = *e->unit, spread = e->spread;
+    f32 xl = v->ph[0], xr = v->ph[1], off = 0.5f * spread * v->r1;   /* (the right side read further in) */
     const int16_t *tal, *tbl, *tar, *tbr;
     int ial, iar, lev = 0, i;
     Svf fl;
 
     if (b->punch > 0.01f) pitch += b->punch * v->menv * 3.0f;
     f = clampf(mtof(pitch), 8.0f, 16000.0f);
-    incl = minf(f * (1.0f - W.det) * b->isr, 0.45f);         /* (turns a sample) */
-    incr = minf(f * (1.0f + W.det) * b->isr, 0.45f);
+    incl = minf(f * (1.0f - e->det) * b->isr, 0.45f);         /* (turns a sample) */
+    incr = minf(f * (1.0f + e->det) * b->isr, 0.45f);
 
     /* the level: the most harmonics whose highest is under ~18 kHz (the wider side decides) */
-    while (lev < WT_LEVELS - 1 && (f32)(WT_H >> lev) * f * (1.0f + W.det) > 18000.0f)
+    while (lev < WT_LEVELS - 1 && (f32)(WT_H >> lev) * f * (1.0f + e->det) > 18000.0f)
         lev++;
     len = (f32)wave_len[lev];
 
     /* the place, smoothed a block at a time; the right side further along with SPREAD */
-    v->s[4] += (wave_place(v, b) - v->s[4]) * 0.3f;
+    v->s[4] += (wave_place(e, v, b) - v->s[4]) * 0.3f;
     pl = v->s[4];
-    pr = minf((f32)(WT_WAVES - 1), pl + 2.2f * W.spread);
+    pr = minf((f32)(WT_WAVES - 1), pl + 2.2f * spread);
+    if (e->step) pr = (f32)(int)(pr + 0.5f);               /* (STEP-: the right side on a whole wave too) */
     ial = imin((int)pl, WT_WAVES - 2);
     iar = imin((int)pr, WT_WAVES - 2);
     ml = pl - (f32)ial;
     mr = pr - (f32)iar;
-    tal = wave_pcm + (W.algo * WT_WAVES + ial) * WT_STRIDE + wave_off[lev]; tbl = tal + WT_STRIDE;
-    tar = wave_pcm + (W.algo * WT_WAVES + iar) * WT_STRIDE + wave_off[lev]; tbr = tar + WT_STRIDE;
+    tal = e->pcm + (e->bank * WT_WAVES + ial) * WT_STRIDE + wave_off[lev]; tbl = tal + WT_STRIDE;
+    tar = e->pcm + (e->bank * WT_WAVES + iar) * WT_STRIDE + wave_off[lev]; tbr = tar + WT_STRIDE;
 
-    fc = clampf(W.cut * exp2fx(v->menv * b->menv_amt * 3.4f + (v->vel_f - 0.5f) * b->vel_sens * 1.6f),
+    fc = clampf(e->cut * exp2fx(v->menv * b->menv_amt * 3.4f + (v->vel_f - 0.5f) * b->vel_sens * 1.6f),
                 60.0f, 18500.0f);
-    svf_set(&fl, fc, W.q, b->isr);
+    svf_set(&fl, fc, e->q, b->isr);
 
     for (i = 0; i < n; i++) {
         f32 a, yl, yr, lp, bp, x;
@@ -97,12 +115,12 @@ static void wave_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         xr += incr; if (xr >= 1.0f) xr -= 1.0f;
         x = xl * len;
         a = wt_at(tal, x);
-        yl = (a + (wt_at(tbl, x) - a) * ml) * wave_unit;
+        yl = (a + (wt_at(tbl, x) - a) * ml) * unit;
         x = xr + off; if (x >= 1.0f) x -= 1.0f;
         x *= len;
         a = wt_at(tar, x);
-        yr = (a + (wt_at(tbr, x) - a) * mr) * wave_unit;
-        yr = yl + (yr - yl) * W.spread;                      /* (blended in with SPREAD: width over the whole turn) */
+        yr = (a + (wt_at(tbr, x) - a) * mr) * unit;
+        yr = yl + (yr - yl) * spread;                      /* (blended in with SPREAD: width over the whole turn) */
         SVF_TICK(fl, &v->s[8], yl, lp, bp); (void)bp; out_l[i] = lp;
         SVF_TICK(fl, &v->s[10], yr, lp, bp); (void)bp; out_r[i] = lp;
     }
@@ -110,7 +128,6 @@ static void wave_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 }
 
 /* ---- picture: the wave now, with the bank's next waves stacked behind it --------------------------- */
-static f32 wv_lev, wv_place;
 
 /* wave w at sample j of its fullest level, morphed m of the way to the next */
 static f32 wave_shape(const int16_t *bank, int w, f32 m, int j)
@@ -120,15 +137,18 @@ static f32 wave_shape(const int16_t *bank, int w, f32 m, int j)
     return ya + (yb - ya) * m;
 }
 
-static void wave_draw(const Vis *vis)
+static void wt_draw(WaveEng *e, const Vis *vis)
 {
-    const int16_t *bank = wave_pcm + (vis->algo & 7) * WT_WAVES * WT_STRIDE;
-    f32 dt = vis->dt, place, cut = vis->k[3], xy[2 * 64];
+    const int16_t *bank = e->pcm + e->bank_of[vis->algo & 7] * WT_WAVES * WT_STRIDE;
+    f32 dt = vis->dt, place, cut = vis->k[3], xy[2 * 64], wv_lev, wv_place;
     int layer, i;
 
-    wv_lev += (minf(1.0f, vis->level * 3.4f) - wv_lev) * minf(1.0f, dt * 14.0f);
+    e->lev += (minf(1.0f, vis->level * 3.4f) - e->lev) * minf(1.0f, dt * 14.0f);
     place = vis->k[0] * (f32)(WT_WAVES - 1);
-    wv_place += (place - wv_place) * minf(1.0f, dt * 10.0f);
+    if (e->stepped[vis->algo & 7]) place = (f32)(int)(place + 0.5f);
+    e->place += (place - e->place) * minf(1.0f, dt * 10.0f);
+    wv_lev = e->lev;
+    wv_place = e->place;
 
     /* the stack: three waves behind, further up the bank, smaller and dimmer */
     for (layer = 3; layer >= 0; layer--) {
@@ -162,6 +182,15 @@ static void wave_draw(const Vis *vis)
     g_color(GC_WHITE);
 }
 
+static void wave_block(const Blk *b) { wt_block(&WV, b); }
+static void wave_note(Voice *v, const Blk *b) { wt_note(&WV, v, b); }
+static void wave_render(Voice *v, const Blk *b, f32 *l, f32 *r, int n) { wt_render(&WV, v, b, l, r, n); }
+static void wave_draw(const Vis *vis) { wt_draw(&WV, vis); }
+static void cycle_block(const Blk *b) { wt_block(&CY, b); }
+static void cycle_note(Voice *v, const Blk *b) { wt_note(&CY, v, b); }
+static void cycle_render(Voice *v, const Blk *b, f32 *l, f32 *r, int n) { wt_render(&CY, v, b, l, r, n); }
+static void cycle_draw(const Vis *vis) { wt_draw(&CY, vis); }
+
 const InstDef inst_wave = {
     "WAVE",
     {59, 158, 255},
@@ -178,4 +207,22 @@ const InstDef inst_wave = {
     },
     0.80f,
     wave_block, wave_note, wave_render, 0, wave_draw, 0
+};
+
+const InstDef inst_cycle = {
+    "CYCLE",
+    {255, 170, 64},
+    {"WAVE", "SCAN", "SPREAD", "FILTER"},
+    {"STRING", "REED", "KEYS", "VOICE", "STEP-STR", "STEP-RD", "STEP-KEY", "STEP-VOX"},
+    {
+        {50, 20, 30, 72},            /* K1..K4 defaults */
+        0,                           /* algo: STRING */
+        {6, 40, 72, 40},             /* Amp ADSR */
+        {60, 46, 60, 0},             /* Mod/Filter Env */
+        {0, 40, 0, 1},               /* LFO */
+        {0, 3, 1, 65},               /* Arp */
+        {0, 50, 34}                  /* Mix */
+    },
+    0.80f,
+    cycle_block, cycle_note, cycle_render, 0, cycle_draw, 0
 };

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Writes core/wave_data.c: WAVE's eight banks of fifteen single-cycle waves (inst_wave.c).
+"""Writes core/wave_data.c: WAVE's eight banks of fifteen single-cycle waves (inst_wave.c), and
+core/wave_akwf.c: CYCLE's four, from the AKWF cycles in tools/akwf_banks.json (tools/akwf.py).
 
     python3 tools/gen_wavetables.py
 
@@ -11,8 +12,10 @@ so K1 sweeps through real shapes. Presets keep their sound: K1 at k/7 is still m
 Each wave is kept at six levels, an octave apart: level k has WT_H >> k harmonics in WT_N >> k samples (not
 fewer than 32). inst_wave.c reads the level whose highest harmonic stays under ~18 kHz at the note it plays,
 so a high note has nothing above the Nyquist frequency to fold back (mipmapped wavetables). The samples are
-16-bit; wave_unit turns them back into the units the generator made them in. About 141 KB of flash.
+16-bit; wave_unit turns them back into the units the generator made them in. About 141 KB of flash, and
+CYCLE's four banks (core/wave_akwf.c, with their own akwf_unit, so WAVE's stay as they were) about 64 KB.
 """
+import json
 import math
 import os
 
@@ -197,10 +200,11 @@ def levels_of(spec):
     return out
 
 
-def main():
+def write_tables(banks, path, header, prefix, nbanks_macro, nbanks, with_shape=True):
+    """banks [(name, [spectrum] * 15)] -> path: the waves at every level, 16-bit, with their own unit"""
+    assert len(banks) == nbanks, f"{path}: {len(banks)} banks, the firmware's {nbanks_macro} is {nbanks}"
     waves = []
-    for name, fn in BANKS:
-        spec = fn()
+    for name, spec in banks:
         assert len(spec) == WT_WAVES, name
         waves.append((name, [levels_of(s) for s in spec]))
     peak = max(abs(x) for _, ws in waves for lv in ws for w in lv for x in w)
@@ -208,14 +212,13 @@ def main():
     lens = [level_shape(k)[1] + 1 for k in range(WT_LEVELS)]
     offs = [sum(lens[:k]) for k in range(WT_LEVELS)]
     stride = sum(lens)
-    lines = ["/* A22 - WAVE's wavetables: 8 banks x 15 waves, each at 6 levels an octave apart (fewer harmonics in",
-             " * fewer samples), 16-bit. Written by tools/gen_wavetables.py: do not edit. */",
-             '#include "wave_data.h"', "",
-             f"const f32 wave_unit = {unit!r}f;" if "e" in repr(unit) or "." in repr(unit) else f"const f32 wave_unit = {unit}.0f;",
-             "const uint16_t wave_len[WT_LEVELS] = {" + ", ".join(str(n - 1) for n in lens) + "};",
-             "const uint16_t wave_off[WT_LEVELS] = {" + ", ".join(str(o) for o in offs) + "};",
-             f"typedef char wave_stride_ok[WT_STRIDE == {stride} ? 1 : -1];", "",
-             "const int16_t wave_pcm[WT_BANKS * WT_WAVES * WT_STRIDE] = {"]
+    lines = header + ['#include "wave_data.h"', "",
+             f"const f32 {prefix}_unit = {unit!r}f;" if "e" in repr(unit) or "." in repr(unit) else f"const f32 {prefix}_unit = {unit}.0f;"]
+    if with_shape:
+        lines += ["const uint16_t wave_len[WT_LEVELS] = {" + ", ".join(str(n - 1) for n in lens) + "};",
+                  "const uint16_t wave_off[WT_LEVELS] = {" + ", ".join(str(o) for o in offs) + "};"]
+    lines += [f"typedef char {prefix}_stride_ok[WT_STRIDE == {stride} ? 1 : -1];", "",
+              f"const int16_t {prefix}_pcm[{nbanks_macro} * WT_WAVES * WT_STRIDE] = {{"]
     for name, ws in waves:
         lines.append(f"    /* {name} */")
         for lv in ws:
@@ -223,11 +226,27 @@ def main():
             for i in range(0, len(vals), 22):
                 lines.append("    " + ", ".join(str(v) for v in vals[i:i + 22]) + ",")
     lines.append("};")
-    path = os.path.join(ROOT, "core", "wave_data.c")
-    with open(path, "w") as f:
+    with open(os.path.join(ROOT, path), "w") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"wrote core/wave_data.c: {len(BANKS) * WT_WAVES} waves x {stride} samples "
-          f"({len(BANKS) * WT_WAVES * stride * 2 // 1024} KB), peak {peak:.3f}")
+    print(f"wrote {path}: {len(banks) * WT_WAVES} waves x {stride} samples "
+          f"({len(banks) * WT_WAVES * stride * 2 // 1024} KB), peak {peak:.3f}")
+
+
+def akwf_banks():
+    """CYCLE's banks: AKWF cycles' harmonics, as tools/akwf.py left them in tools/akwf_banks.json"""
+    with open(os.path.join(ROOT, "tools", "akwf_banks.json")) as f:
+        data = json.load(f)
+    return [(b["name"], [[tuple(sc) for sc in w] for w in b["waves"]]) for b in data["banks"]]
+
+
+def main():
+    write_tables([(name, fn()) for name, fn in BANKS], os.path.join("core", "wave_data.c"),
+                 ["/* A22 - WAVE's wavetables: 8 banks x 15 waves, each at 6 levels an octave apart (fewer harmonics in",
+                  " * fewer samples), 16-bit. Written by tools/gen_wavetables.py: do not edit. */"], "wave", "WT_BANKS", 8)
+    write_tables(akwf_banks(), os.path.join("core", "wave_akwf.c"),
+                 ["/* A22 - CYCLE's wavetables: 4 banks x 15 single cycles from Adventure Kid Waveforms (AKWF, CC0 1.0,",
+                  " * docs/WAVETABLES.md), each at 6 levels an octave apart, 16-bit. Written by tools/gen_wavetables.py",
+                  " * from tools/akwf_banks.json: do not edit. */"], "akwf", "AK_BANKS", 4, with_shape=False)
 
 
 if __name__ == "__main__":
