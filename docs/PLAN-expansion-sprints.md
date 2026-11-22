@@ -20,11 +20,10 @@ The saved state (version 4) has exactly `NSLOT` = 12 engine slots and `fx_p[NFX]
 both are full. A new engine or effect therefore needs a state version first. Sprint 2 makes that room once,
 for everything after it.
 
-## Sprint 1: DICE (randomizer) — no flash or RAM to speak of, no audio cost
+## Sprint 1: DICE (randomizer) — no flash or RAM to speak of, no audio cost (done)
 
-- **EDIT + LFO** rolls the four knobs of the algorithm in hand, inside a range per engine knob that keeps
-  the algorithm recognisable. Each new value lies between the algorithm's own default and a draw from that
-  range, so a roll moves the sound but does not leave it.
+- **EDIT + LFO** rolls the four knobs of the algorithm in hand: each moves up to a span per engine knob from
+  the algorithm's own setting, inside a floor and a ceiling, so a roll moves the sound but does not leave it.
 - **EDIT + ENV** swaps back to the knobs from before the last roll, and again to the roll: an A/B compare.
   Only for the engine and algorithm that were rolled.
 - The roll goes through the same path as a hand on the knobs: it is recorded as automation while the tape
@@ -34,12 +33,12 @@ for everything after it.
   the 96 algorithms, rolled 24 times, still sounds (not silent, no NaN, no stuck output).
 - Cost: about 100 bytes of table and a few hundred of code.
 
-## Sprint 2: room for more engines and effects — state version 5
+## Sprint 2: room for more engines and effects — state version 5 (done)
 
 - `NSLOT` 12 → 16 and the effect parameters 8 → 12 slots. Version 4 states load (by offsets, as the older
   versions do); the new slots come up as new.
 - No new sound. Test: version 4 states from odd addresses load unchanged, old tapes play the same engines.
-- Cost: about 1 KB of SRAM (the state grows), nothing else.
+- Cost: 240 bytes of SRAM (the state grows from 2,648 to 2,888 bytes), nothing else.
 
 ## Sprint 3: AKWF wavetables — about 66 KB of flash
 
@@ -88,7 +87,7 @@ Planned after sprints 1–6, against the flash and audio time they leave.
 | Sprint | Flash |
 |---|---|
 | 1 DICE | < 1 KB |
-| 2 State v5 | ~1 KB |
+| 2 State v5 | ~0.5 KB |
 | 3 AKWF banks | ~66 KB |
 | 4 Drums | ~35 KB |
 | 5 GRAIN | ~3 KB |

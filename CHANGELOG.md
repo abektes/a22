@@ -15,6 +15,15 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   sent as CC 20-23. `tests/dice.c` rolls every algorithm and checks the spans, the panel, and that a roll
   stays within 6 dB of how loud the algorithm is at its own setting (it measures -4.5 to +4.5 dB).
 
+**Inside**
+- The saved state is version 5: it has room for sixteen engines and twelve effects (there are twelve and
+  eight), and records how many effects it was saved with, as it already did engines. An engine or effect
+  added later comes up as new in a state saved before it, without another version. Settings saved by
+  0.1.0 to 0.4.0 (version 4) load with everything kept: `tests/state.c` loads a state written by 0.4.0's
+  own core (`tests/state_v4.bin`, made by `tests/state_v4_gen.c`) and compares every table. Before, the
+  loader took only its own version, so any change to the state would have reset everyone's settings.
+  The state grows from 2,648 to 2,888 bytes of RAM.
+
 ## 0.4.0
 
 Identity `FM-1_4122000400`. Released 2026-11-22. Installed and run on one FM-1 (a development build of the
