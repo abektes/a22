@@ -62,7 +62,7 @@ static f32 d_inlp, d_dampa, d_dampb, d_lfo1, d_lfo2;
 
 /* ---- DELAY / SHIFT / CHORUS / TANK state ---------------------------------------------- */
 static uint32_t echo_w;
-static f32 echo_t = 4000.0f, echo_lpl, echo_lpr, echo_ol, echo_or, wow_ph, ch_ph;
+static f32 echo_t = 4000.0f, echo_tr = 6000.0f, echo_lpl, echo_lpr, echo_ol, echo_or, wow_ph, ch_ph;
 static f32 shf_ph, shf_i1[4], shf_q1[4], shf_fb_l, shf_fb_r;
 static f32 spr_ap[4], spr_lp;
 
@@ -101,6 +101,7 @@ void fx_reset(void)
     pl_quiet = 0;
     echo_w = 0;
     echo_t = 4000.0f;
+    echo_tr = 6000.0f;
     echo_lpl = echo_lpr = echo_ol = echo_or = wow_ph = ch_ph = shf_ph = spr_lp = 0.0f;
     shf_fb_l = shf_fb_r = 0.0f;
     for (i = 0; i < 4; i++) {
@@ -341,8 +342,12 @@ static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     f32 lp_k = 0.85f - 0.62f * tape;
     int n;
 
+    f32 tgt_r;
     while (tgt > 15200.0f) tgt *= 0.5f;
     if (tgt < 24.0f) tgt = 24.0f;
+    /* the right side half as long again, or, where that would run past its 16,384 samples, three quarters
+     * (it wrapped to a few ms: 120 BPM 1/4 gave a 7 ms echo on the right) */
+    tgt_r = tgt * 1.5f + 40.0f < 16383.0f ? tgt * 1.5f : tgt * 0.75f;
     if (mix <= 0.001f)
         return;
 
@@ -352,9 +357,10 @@ static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
         f32 wow, tl, tr;
         wow_ph += 0.62f * 2.0f * ISRf; if (wow_ph >= 1.0f) wow_ph -= 1.0f;
         echo_t += (tgt - echo_t) * 0.0018f;
+        echo_tr += (tgt_r - echo_tr) * 0.0018f;
         wow = tape * tape * 18.0f * tsin(wow_ph);
         tl = echo_read_frac(16383u, 0u, echo_w, maxf(8.0f, echo_t + wow));
-        tr = echo_read_frac(16383u, 16384u, echo_w, maxf(8.0f, echo_t * 1.5f - wow));
+        tr = echo_read_frac(16383u, 16384u, echo_w, clampf(echo_tr - wow, 8.0f, 16360.0f));
 
         /* ping-pong cross-feedback with warm tape damping & saturation */
         echo_lpl += (tr * fb - echo_lpl) * lp_k;
