@@ -95,6 +95,7 @@ void h1_state_saved(void);
 const void *h1_loop(uint32_t *size);
 int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else leaves the loop empty */
 int h1_loop_dirty(void);
+int h1_quiet(void);                              /* 1: silent enough for a flash erase (nothing playing, tails gone) */
 int h1_loop_quiet(void);                         /* 1: the loop is stopped (or empty), no take going */
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */

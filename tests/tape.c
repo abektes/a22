@@ -9,6 +9,7 @@
  *   clear     clearing one track lets go of that track's notes alone
  *   first     a take's first note plays on the pass right after the take (it was skipped once)
  *   cc 123    MIDI's all notes off ends the notes MIDI plays, and the tape plays on (it stopped the tape)
+ *   quiet     a flash erase waits for silence: not in a reverb's tail, not in a rest of a playing tape
  *   clocks    an engine on two tracks (T1's tape, T2 live) moves its own clocks once a block, not twice */
 #include <stdio.h>
 #include <string.h>
@@ -270,6 +271,30 @@ int main(void)
         for (v = live = 0; v < NVOICE; v++) live += voices[v].stage && voices[v].gate && !voices[v].seq;
         CHECK(live == 0, "cc 123: the note MIDI held ends");
         CHECK(loop_state() == LOOP_PLAY && tape_gated() == 1, "cc 123: and the tape plays on");
+    }
+
+    /* ---- quiet ---- */
+    {
+        double t0;
+        int was_quiet_in_tail = 0, no_voice = 0;
+        fresh(0);
+        st.fx_on = 1; st.fx_type = FX_PLATE; st.fx_p[FX_PLATE][0] = 80; st.fx_p[FX_PLATE][1] = 90;
+        key(0, now() + 50, 200);
+        t0 = now();
+        while (now() < t0 + 1500) {              /* the voice dies away; the plate's tail goes on */
+            until(now() + 20);
+            if (h1_voices_active() == 0) no_voice++;
+            if (h1_voices_active() == 0 && h1_quiet()) was_quiet_in_tail = 1;
+        }
+        CHECK(no_voice > 10 && !was_quiet_in_tail, "quiet: not while PLATE's tail sounds, though no voice plays");
+        until(now() + 15000);
+        CHECK(h1_quiet(), "quiet: once the tail has gone");
+        st.fx_on = 0;
+        tap(H1_BTN_REC);
+        t0 = now() + 50;
+        key(0, t0, 100);
+        until(t0 + 2000 + 1000);                 /* playing, in the rest after the note */
+        CHECK(h1_voices_active() == 0 && !h1_quiet(), "quiet: not in a rest of a playing tape");
     }
 
     printf("tape: %d checks, %d failed\n", checks, fails);

@@ -72,6 +72,7 @@ static uint32_t stamp_ctr;
 static f32 last_pitch = 60.0f;
 static volatile uint32_t note_count, hand_count;
 static volatile f32 hand_pitch, level_out, lfo_out, beat_out;
+static volatile uint32_t silent_blocks;          /* blocks the output has been silent (eng_quiet) */
 
 static f32 scope[SCOPE_N];
 static volatile uint32_t scope_w;
@@ -2002,6 +2003,8 @@ static void block(f32 *L, f32 *R)
         }
         scope_w = w;
         level_out += (peak - level_out) * (peak > level_out ? 0.5f : 0.03f);
+        if (peak < 1e-4f && click_env <= 0.001f) { if (silent_blocks < 100000u) silent_blocks++; }
+        else silent_blocks = 0;
     }
 
     /* Woodblock metronome click (post-FX) */
@@ -2377,6 +2380,14 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
 uint32_t eng_loop_gen(void)   { return loop_gen; }
 int eng_loop_taking(void)     { return loop_state == LOOP_REC || loop_state == LOOP_DUB; }
 int eng_loop_quiet(void)      { return loop_state == LOOP_EMPTY || loop_state == LOOP_IDLE; }
+/* Silent, for a flash erase (it stalls the sound about 50 ms): no voice, the tape and the pattern stopped, no key held
+ * for the arpeggiator, and the output (reverb and delay tails, the metronome) at rest for 300 ms. "No voice" alone
+ * was true in a tail, in a rest of the tape or pattern, between arpeggiator notes and under the metronome. */
+int eng_quiet(void)
+{
+    return eng_voices() == 0 && eng_loop_quiet() && !step_playing && nheld == 0 &&
+           silent_blocks >= (uint32_t)(0.3f * 44100.0f / (f32)CTRL);
+}
 int eng_layer_count(void)
 {
     int t, c = 0;

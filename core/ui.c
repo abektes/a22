@@ -593,7 +593,7 @@ SMALL void h1_button(int btn, int down)
         }
         if (btn == H1_BTN_SAVE) {
             dirty = 1; dirty_ms = now - 5000u;
-            toast("SAVED", 0, 0, 0, -1);
+            toast(eng_quiet() ? "SAVED" : "SAVE WHEN QUIET", 0, 0, 0, -1);   /* (the save waits for silence) */
         }
         if (btn == H1_BTN_EDIT) {
             if (seq.riff_rec) {

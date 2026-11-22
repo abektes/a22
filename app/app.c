@@ -398,7 +398,7 @@ static void ring_step(void)
 {
     int i;
     if (ring_held) {
-        if (!h1_loop_dirty() || !h1_loop_quiet() || h1_voices_active())
+        if (!h1_loop_dirty() || !h1_quiet())
             return;                              /* nothing new to save (or not silent): the old tape stays */
         for (i = 0; i < (int)RING_SLOTS; i++)
             if (ring.fill[i] != 0) {
@@ -471,7 +471,7 @@ static void ring_step(void)
             }
         }
     }
-    if (h1_loop_quiet() && !h1_voices_active())  /* stopped and silent: one slot back to erased (the sound stalls) */
+    if (h1_quiet())                              /* stopped and silent: one slot back to erased (the sound stalls) */
         for (i = 0; i < (int)RING_SLOTS; i++)
             if (ring.fill[i] != 0 && i != ring.cur && i != ring.to) {
                 ring_erase(i);
@@ -579,9 +579,9 @@ void app_frame(void)
     plat_glow(1);
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
-    /* the state's save erases flash, which stalls the sound for a moment: only when nothing is sounding. The
-     * loop goes into its ring a page a frame, playing or not (ring_step). */
-    if (h1_state_dirty() && !h1_voices_active()) {
+    /* the state's save erases flash, which stalls the sound for a moment: only when it is silent (h1_quiet: nothing
+     * playing, the tails gone). The loop goes into its ring a page a frame, playing or not (ring_step). */
+    if (h1_state_dirty() && h1_quiet()) {
         uint32_t size;
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)
