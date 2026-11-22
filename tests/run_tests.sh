@@ -13,7 +13,8 @@
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
 #   lines      g_line, g_poly and g_arc against a distance worked out in floats
-# The release workflow runs this after the build; a failure stops it. tests/run_fuzz.sh is the crash hunt.
+# The release workflow runs this after the build; a failure stops it. tests/run_fuzz.sh is the crash hunt;
+# tests/corestat.c (not run here) counts how the voices are shared between the two cores, scenario by scenario.
 set -eu
 cd "$(dirname "$0")/.."
 CC="${CC:-cc}"
