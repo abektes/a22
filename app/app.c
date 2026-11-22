@@ -176,6 +176,7 @@ static void input(void)
 #include <string.h>
 static void ring_dump(void);
 static int host_bad_start;                                  /* the tests' "badstart": the next start is one */
+static void ring_boot_state(void);
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
     (void)c; (void)d;
@@ -202,6 +203,8 @@ static int last_start_failed(void)
 {
     int f = host_bad_start;
     host_bad_start = 0;
+    if (f)
+        ring_boot_state();                       /* (as the device has it after a restart: the host keeps statics) */
     return f;
 }
 #else
@@ -270,6 +273,19 @@ static struct {
     uint32_t gen;                        /* h1_loop_gen when it began: h1_loop is the engine's own memory, so a
                                           * take recorded meanwhile moves its events, and that save is dropped */
 } ring = {-1, 0, 0, {RING_FULL, RING_FULL, RING_FULL, RING_FULL}, -1, 0, 0, 0, 0, 0, 0};
+/* After a failed start the ring is not read (its record might be what crashed it), so nothing is known of its
+ * slots. The saved tape is then left alone until a new tape is saved over it: every slot erased first, since an
+ * old record's higher number would otherwise win at the next start. (Once ring_step erased all four at once.) */
+static int ring_held;
+#ifdef PLAT_HOST
+static void ring_boot_state(void)
+{
+    int i;
+    ring.cur = ring.to = -1;
+    ring.seq = ring.wait = 0;
+    for (i = 0; i < (int)RING_SLOTS; i++) ring.fill[i] = RING_FULL;
+}
+#endif
 #define RING_WAIT 20u                    /* (a third of a second: the save keeps clear of the take's own close) */
 static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
                                           * records again (then the loop is dirty again, and saved anew) */
@@ -381,6 +397,18 @@ static void ring_drop(void)
 static void ring_step(void)
 {
     int i;
+    if (ring_held) {
+        if (!h1_loop_dirty() || !h1_loop_quiet() || h1_voices_active())
+            return;                              /* nothing new to save (or not silent): the old tape stays */
+        for (i = 0; i < (int)RING_SLOTS; i++)
+            if (ring.fill[i] != 0) {
+                ring_erase(i);                   /* a new tape to save over it: the slots erased first */
+                return;
+            }
+        ring_held = 0;
+        ring.cur = -1;
+        ring.seq = 0;
+    }
     if (ring.to >= 0) {
         uint32_t off = ring_off(ring.to) + ring.to_at, n = ring.len - ring.at;
         if (n) {
@@ -473,8 +501,11 @@ void app_init(void)
     if (plat_cpu2_set(1) == 0)                              /* (app_init is the one moment it can start) */
         h1_two_cores(core2_run, core2_wait);
 #endif
-    if (last_start_failed())
+    if (last_start_failed()) {
+        ring_held = 1;                           /* (the saved tape left alone: ring_step) */
         return;
+    }
+    ring_held = 0;
     h1_state(&size);
     n = size <= sizeof blob ? plat_store_load(OBJ_STATE, blob, sizeof blob) : -1;
     if (n > 0)

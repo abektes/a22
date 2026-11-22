@@ -118,6 +118,15 @@ peakreset
 wait 4500
 expect peak_db_min -50
 tap PLAY
+# a start that failed leaves the saved tape alone, silent as it is, and the start after has it again
+# (once the ring, not read on that start, was erased slot by slot as soon as nothing sounded)
+badstart
+reboot
+wait 3000
+expect loop_size 12
+reboot
+wait 600
+expect loop_size 28
 # CLEAR ALL? is spoken, stays until answered, and its answer is spoken: waiting keeps the tape, a tap clears it
 wait 200
 listen
