@@ -51,9 +51,10 @@ static void mono_note(Voice *v, const Blk *b)
     }
 }
 
-static void mono_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+static inline __attribute__((always_inline)) void mono_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
+                                                                int n, const int algo)
 {
-    int algo = V.algo, i;
+    int i;
     f32 vel = lerpf(1.0f, 0.35f + 0.85f * v->vel_f, b->vel_sens);
     f32 menv = lerpf(1.0f, 0.20f + 1.30f * v->menv, b->menv_amt);
     f32 gk = V.glide > 0.01f ? onepole_k(0.005f * exp2fx(V.glide * 6.5f), b->sr / (f32)n) : 1.0f;
@@ -215,6 +216,22 @@ after_step:
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = p2; v->ph[3] = pm; v->ph[4] = psub;
     v->s[13] *= 1.0f - onepole_k(algo == 3 ? 0.022f : (algo == 7 ? 0.11f : 0.038f), b->sr / (f32)n);
     v->s[14] = fb0; v->s[15] = fb1;
+}
+
+/* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
+ * fold away); the same code, bit-exact */
+static void mono_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+{
+    switch (V.algo & 7) {
+    case 0: mono_render_a(v, b, out_l, out_r, n, 0); break;
+    case 1: mono_render_a(v, b, out_l, out_r, n, 1); break;
+    case 2: mono_render_a(v, b, out_l, out_r, n, 2); break;
+    case 3: mono_render_a(v, b, out_l, out_r, n, 3); break;
+    case 4: mono_render_a(v, b, out_l, out_r, n, 4); break;
+    case 5: mono_render_a(v, b, out_l, out_r, n, 5); break;
+    case 6: mono_render_a(v, b, out_l, out_r, n, 6); break;
+    default: mono_render_a(v, b, out_l, out_r, n, 7); break;
+    }
 }
 
 /* ---- 4-Color Vector Picture: Analog Voltmeter + Slew Curve + High-Voltage Arc ---- */

@@ -75,7 +75,8 @@ static void elec_note(Voice *v, const Blk *b)
     v->s[2] = 0.0f;   /* feedback reed */
 }
 
-static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+static inline __attribute__((always_inline)) void elec_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
+                                                                int n, const int algo)
 {
     const EAlgo *a = &EA[E.algo];
     f32 pitch = v->pitch + b->bend + E.wow;
@@ -92,7 +93,7 @@ static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     f32 cut = 14000.0f * exp2fx(-E.warmth * 3.8f);
     f32 lpk = onepole_k(1.0f / (H1_TAU * cut), b->sr);
     f32 lpl = v->s[4], lpr = v->s[5];
-    int algo = E.algo, i;
+    int i;
 
     switch (algo) {
     case 0: /* RHODES: fundamental + 1x bark + 7x/14x metallic tine */
@@ -221,6 +222,22 @@ static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     }
     v->s[2] = fb;
     v->s[4] = lpl; v->s[5] = lpr;
+}
+
+/* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
+ * fold away); the same code, bit-exact */
+static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+{
+    switch (E.algo & 7) {
+    case 0: elec_render_a(v, b, out_l, out_r, n, 0); break;
+    case 1: elec_render_a(v, b, out_l, out_r, n, 1); break;
+    case 2: elec_render_a(v, b, out_l, out_r, n, 2); break;
+    case 3: elec_render_a(v, b, out_l, out_r, n, 3); break;
+    case 4: elec_render_a(v, b, out_l, out_r, n, 4); break;
+    case 5: elec_render_a(v, b, out_l, out_r, n, 5); break;
+    case 6: elec_render_a(v, b, out_l, out_r, n, 6); break;
+    default: elec_render_a(v, b, out_l, out_r, n, 7); break;
+    }
 }
 
 /* ---- 4-Color Graphic: Mechanical Tines, B3 Drawbars, Vibes Fans & Stereo Tremolo -- */
