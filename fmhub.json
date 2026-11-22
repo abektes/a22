@@ -1,10 +1,11 @@
 {
-  "what": "A22: an FM workstation for the FM-1. Twelve synthesised engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC, WAVE, CHIP), each with eight algorithms and four live knobs, drawn in colour vector graphics. Eight effects, a four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step sequencer and eight patch snapshots. Derived from h1 by Jake Handy.",
+  "what": "An FM workstation: twelve engines (FM, electric piano, analog, wavetable, drums, 8-bit chip and more) with eight algorithms each, eight effects, a four-track tape with knob automation, a mixer, sequencers and colour vector graphics. Derived from h1 by Jake Handy.",
   "author": "A22",
   "kinds": [
     "synth"
   ],
   "image": "docs/img/a22/hub-card.webp",
   "color": "#EE6518",
-  "play": "https://abektes.github.io/a22/sim/"
+  "play": "https://abektes.github.io/a22/sim/",
+  "sounds": "CC0: Versilian Community Sample Library (VCSL)"
 }
