@@ -489,6 +489,7 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
         KNOBS_NOW(st.inst)[k] = val;
         knob_touch[k] = 0.0f;
         eng_post_auto(k, val);
+        mark_dirty();                            /* (a knob set over MIDI is saved as a turned one is) */
     }
 }
 
@@ -1808,6 +1809,11 @@ void ui_frame(uint32_t now_ms)
     vis.algo_t = sat(vis.algo_t + dt / 0.35f);
     name_t += dt; page_t += dt; toast_t += dt; vol_t += dt; ring_t += dt; ring_up += dt;
     if (clear_all_asked) toast_t = 0.0f;         /* CLEAR ALL? stays up until it is answered */
+    {   /* the engine wrote what the state saves (a step, a riff, a snapshot): saved as a setting is */
+        static uint32_t saved_seen;
+        uint32_t sn = eng_saved_n();
+        if (sn != saved_seen) { saved_seen = sn; mark_dirty(); }
+    }
 
     build_palette();
     g_clear();

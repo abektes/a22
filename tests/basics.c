@@ -354,6 +354,34 @@ int main(void)
     CHECK(mo_count(0xB0, 123) == 1, "HUSH sends CC 123");
     h1_midi_out(0);
 
+    /* What the engine writes is saved as a setting is: a riff, a step, a knob set over MIDI. (Only the panel marked
+     * the state, so these reached flash only if some later setting changed.) */
+    {
+        int i, j, stepped = 0;
+        h1_init(44100);
+        go(2500); h1_state_saved(); go(2000);
+        CHECK(!h1_state_dirty(), "saving: nothing changed, nothing to save");
+        tap(H1_BTN_ARP); h1_encoder(H1_ENC_ALGO, 1);             /* RIFF */
+        go(2000); h1_state_saved(); go(100);
+        tap(H1_BTN_REC); note(7, 100); note(9, 100); tap(H1_BTN_REC);
+        go(2000);
+        CHECK(st.riff_len == 2 && h1_state_dirty(), "saving: a riff recorded is saved");
+        h1_encoder(H1_ENC_ALGO, -1);                                /* OFF */
+        tap(H1_BTN_HOME);
+        h1_button(H1_BTN_SEQ, 1); go(700); h1_button(H1_BTN_SEQ, 0); /* the step sequencer */
+        go(2000); h1_state_saved(); go(100);
+        tap(H1_BTN_REC); note(7, 100); tap(H1_BTN_REC);
+        go(2000);
+        for (i = 0; i < (int)(sizeof st.steps / sizeof st.steps[0]); i++)
+            for (j = 0; j < (int)sizeof st.steps[0]; j++)
+                stepped += st.steps[i][j] != 0;
+        CHECK(stepped == 1 && h1_state_dirty(), "saving: a step written is saved");
+        h1_state_saved(); go(100);
+        h1_midi(0xB0, 20, 99);
+        go(2000);
+        CHECK(h1_state_dirty(), "saving: a knob set over MIDI CC 20 is saved");
+    }
+
     printf("basics: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

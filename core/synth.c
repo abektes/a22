@@ -135,11 +135,21 @@ int scale_snap(int note)
     return note;
 }
 
+/* Bumped wherever the engine writes what the state saves (steps, riffs, snapshots, a track's settings): the panel
+ * marks the state dirty when it moves (ui_frame). Before, only the panel marked it, so a pattern or a riff reached
+ * flash only if some later setting changed. */
+static uint32_t saved_n;
+uint32_t eng_saved_n(void) { return saved_n; }
+
 /* ---- track snapshot helpers ----------------------------------------------------------- */
 static void track_snap_live(int t)
 {
     int k, inst = cur_i, algo = st.ip[inst].algo & 7;   /* (the engine's own: st.inst is the panel's) */
     Track *tr = &st.trk[t & 3];
+    uint8_t was[sizeof(Track)];
+    const uint8_t *now_b = (const uint8_t *)tr;
+    size_t b;
+    for (b = 0; b < sizeof was; b++) was[b] = now_b[b];   /* (bytes: the core links no libc) */
     tr->inst = (uint8_t)inst;
     tr->algo = (uint8_t)algo;
     tr->has_snap = 1;
@@ -149,6 +159,8 @@ static void track_snap_live(int t)
         tr->menv[k] = st.ip[inst].menv[k];
         tr->lfo[k]  = st.ip[inst].lfo[k];
     }
+    for (b = 0; b < sizeof was; b++)             /* (called on every recorded note: marked only when it changed) */
+        if (was[b] != now_b[b]) { saved_n++; break; }
 }
 
 static void track_sync_to_live(int t)
@@ -723,6 +735,7 @@ static void route(int note, int on, int vel, int from_midi)
         if (on) {
             if (st.riff_len == 0) st.riff_root = (uint8_t)note;
             if (st.riff_len < NRIFF) st.riff[st.riff_len++] = (uint8_t)(note + 1);
+            saved_n++;
             voice_on(note, vel);
         } else {
             voice_off(note);
@@ -1170,6 +1183,7 @@ static void step_put(int i, int note, int vel)
 {
     int j;
     track_snap_live(cur_trk);
+    saved_n++;
     for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j] == note + 1 && st.step_trk[i][j] == cur_trk) {
             st.step_vel[i][j] = (uint8_t)iclamp(vel, 1, 127);
@@ -1184,6 +1198,7 @@ static void step_put(int i, int note, int vel)
 static void step_clear_trk(int i, int trk)
 {
     int j, k = 0;
+    saved_n++;
     for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j] && (trk >= 0 && st.step_trk[i][j] != trk)) {
             st.steps[i][k] = st.steps[i][j];
@@ -1409,6 +1424,7 @@ static void snap_save(int idx)
 {
     Snap *sn = &st.snap[idx & 7];
     int k, inst = cur_i, algo = st.ip[inst].algo & 7;
+    saved_n++;
     sn->used = 1;
     sn->inst = (uint8_t)inst;
     sn->algo = (uint8_t)algo;
@@ -1501,15 +1517,18 @@ static void handle(uint32_t e)
         break;
     case EV_RIFF_REC:
         riff_rec = !riff_rec;
-        if (riff_rec) { st.riff_len = 0; riff_at = 0; }
+        if (riff_rec) { st.riff_len = 0; riff_at = 0; saved_n++; }
         break;
     case EV_RIFF_CLEAR:
         st.riff_len = 0;
         riff_at = 0;
+        saved_n++;
         break;
     case EV_RIFF_REST:
-        if (riff_rec && st.riff_len < NRIFF)
+        if (riff_rec && st.riff_len < NRIFF) {
             st.riff[st.riff_len++] = 0;
+            saved_n++;
+        }
         break;
     case EV_SNAP_SAVE:
         snap_save(a & 7);
