@@ -4,7 +4,7 @@
 # compiler's address and undefined-behaviour checkers:
 #   a22_test   two cores bit-exact on all 96 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
-#   basics     the limiter on every algorithm, velocity, the tape through a power cycle, MIDI out
+#   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page

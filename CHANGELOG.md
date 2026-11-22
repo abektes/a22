@@ -5,6 +5,13 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## Unreleased
 
+**Sound**
+- WAVE's SPREAD is heard over its whole turn. At 0 a note is now centred; before, each note's right side
+  started at a random point in its wave, so most banks were already about as wide at 0 as at 100. Turned
+  up, the right side blends in from a second oscillator that starts further into its wave, reads further
+  along the bank and is detuned by up to about 15 cents (about 6 before). `tests/basics.c` checks that
+  every bank is centred at 0 and grows wider at every quarter of the turn.
+
 **Tape and sequencers**
 - Holding REC past three seconds no longer clears the whole tape at once, which was easy to do by accident
   (jakehandy/h1#49). It asks CLEAR ALL?, and a tap of REC within three seconds clears it; any other button,

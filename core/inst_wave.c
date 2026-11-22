@@ -9,7 +9,9 @@
  *
  *   K1 (BLUE)   WAVE    place in the bank, morphing smoothly from wave to wave
  *   K2 (GREEN)  SCAN    how far the place moves up the bank as the mod envelope dies away (evolving notes)
- *   K3 (WHITE)  SPREAD  stereo: the right side detuned and further along the bank
+ *   K3 (WHITE)  SPREAD  stereo: at 0 both sides the same (centred). Turned up, the right side is blended
+ *                       in from a second oscillator that starts further into its wave, is detuned (up to
+ *                       ~15 cents) and reads further along the bank, so the width grows over the whole turn
  *   K4 (ORANGE) FILTER  low-pass cutoff (Mod-Env and velocity open it) */
 #include "internal.h"
 #include "dsp.h"
@@ -17,7 +19,7 @@
 
 static struct {
     int algo;
-    f32 pos, scan, spread, cut, q;
+    f32 pos, scan, spread, det, cut, q;
 } W;
 
 static void wave_block(const Blk *b)
@@ -26,6 +28,7 @@ static void wave_block(const Blk *b)
     W.pos    = b->k[0] * (f32)(WT_WAVES - 1);
     W.scan   = b->k[1];
     W.spread = b->k[2];
+    W.det    = 0.009f * W.spread * W.spread;                  /* the right side's detune: up to ~15 cents */
     W.cut    = 140.0f * exp2fx(b->k[3] * 7.1f);              /* 140 Hz .. 19 kHz */
     W.q      = 0.62f + 0.9f * (1.0f - b->k[3]) * (1.0f - b->k[3]);
 }
@@ -42,8 +45,7 @@ static void wave_note(Voice *v, const Blk *b)
     int i;
     if (v->env < 0.001f) {
         for (i = 0; i < 4; i++) v->ph[i] = 0.0f;
-        for (i = 0; i < 16; i++) v->s[i] = 0.0f;
-        v->ph[1] = v->r1;                                    /* (the right side starts apart: no comb) */
+        for (i = 0; i < 16; i++) v->s[i] = 0.0f;         /* (both sides start together: SPREAD sets them apart) */
     }
     v->s[4] = wave_place(v, b);
 }
@@ -59,18 +61,18 @@ static inline f32 wt_at(const int16_t *t, f32 x)
 static void wave_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     f32 pitch = v->pitch + b->bend, f, incl, incr, pl, pr, ml, mr, fc, len;
-    f32 xl = v->ph[0], xr = v->ph[1];
+    f32 xl = v->ph[0], xr = v->ph[1], off = 0.5f * W.spread * v->r1;   /* (the right side read further in) */
     const int16_t *tal, *tbl, *tar, *tbr;
     int ial, iar, lev = 0, i;
     Svf fl;
 
     if (b->punch > 0.01f) pitch += b->punch * v->menv * 3.0f;
     f = clampf(mtof(pitch), 8.0f, 16000.0f);
-    incl = minf(f * (1.0f - 0.0035f * W.spread) * b->isr, 0.45f);  /* (turns a sample) */
-    incr = minf(f * (1.0f + 0.0035f * W.spread) * b->isr, 0.45f);
+    incl = minf(f * (1.0f - W.det) * b->isr, 0.45f);         /* (turns a sample) */
+    incr = minf(f * (1.0f + W.det) * b->isr, 0.45f);
 
     /* the level: the most harmonics whose highest is under ~18 kHz (the wider side decides) */
-    while (lev < WT_LEVELS - 1 && (f32)(WT_H >> lev) * f * (1.0f + 0.0035f * W.spread) > 18000.0f)
+    while (lev < WT_LEVELS - 1 && (f32)(WT_H >> lev) * f * (1.0f + W.det) > 18000.0f)
         lev++;
     len = (f32)wave_len[lev];
 
@@ -96,9 +98,11 @@ static void wave_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         x = xl * len;
         a = wt_at(tal, x);
         yl = (a + (wt_at(tbl, x) - a) * ml) * wave_unit;
-        x = xr * len;
+        x = xr + off; if (x >= 1.0f) x -= 1.0f;
+        x *= len;
         a = wt_at(tar, x);
         yr = (a + (wt_at(tbr, x) - a) * mr) * wave_unit;
+        yr = yl + (yr - yl) * W.spread;                      /* (blended in with SPREAD: width over the whole turn) */
         SVF_TICK(fl, &v->s[8], yl, lp, bp); (void)bp; out_l[i] = lp;
         SVF_TICK(fl, &v->s[10], yr, lp, bp); (void)bp; out_r[i] = lp;
     }
