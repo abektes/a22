@@ -112,7 +112,8 @@ const ParamDef *page_param(int pg, int i)
         dyn_p.min = 0; dyn_p.show_off = 0; dyn_p.opts = 0;
         if (ft == FX_DELAY && i == 1) {
             dyn_p.kind = PK_ENUM; dyn_p.max = 7; dyn_p.opts = O_TIME;
-        } else if ((ft == FX_SHIFT && i == 0) || (ft == FX_FILTER && i == 3) || (ft == FX_THUMP && i == 3)) {
+        } else if ((ft == FX_SHIFT && i == 0) || (ft == FX_FILTER && i == 3) || (ft == FX_THUMP && i == 3) ||
+                   (ft == FX_GRAIN && i == 3)) {
             dyn_p.kind = PK_PCT; dyn_p.max = 100; dyn_p.show_off = -50;
         } else {
             dyn_p.kind = PK_PCT; dyn_p.max = 100;
@@ -234,6 +235,8 @@ uint8_t *page_value(int pg, int i)
 /* ---- UI runtime state ----------------------------------------------------------------- */
 static uint32_t now, last_ms, frame_n;
 static f32 tsec, reel_ph;
+static int grain_freeze;                         /* GRAIN's FREEZE held (fx_grain_freeze) */
+static int fx_tap_waits;                         /* FX pressed on GRAIN's page: a tap closes it as it is let go */
 static Vis vis;
 static f32 vk[4], vkv[4];
 static uint32_t vrng = 0x9E3779B9u;
@@ -621,6 +624,10 @@ SMALL void h1_button(int btn, int down)
     if (btn < 0 || btn >= H1_NBTN) return;
     if (!down) {
         btn_held &= ~(1u << btn);
+        if (btn == H1_BTN_FX && grain_freeze) {   /* (GRAIN's FREEZE: only while FX is held) */
+            grain_freeze = 0;
+            fx_grain_freeze(0);
+        }
         if (btn == H1_BTN_REC && clear_all_asked == 1) {   /* the hold that asked let go: 3 s to tap REC */
             clear_all_asked = 2;
             clear_all_ms = now;
@@ -637,6 +644,7 @@ SMALL void h1_button(int btn, int down)
         }
         if (btn == H1_BTN_GLO)  open_page(PG_GLO);
         if (btn == H1_BTN_SEQ)  open_page(PG_SEQ);
+        if (btn == H1_BTN_FX && fx_tap_waits) open_page(PG_FX);   /* (a tap on GRAIN's page: closes it) */
         if (btn == H1_BTN_HOME) {
             if (page == PG_HOME) name_t = 0.0f;
             page = PG_HOME;
@@ -755,8 +763,14 @@ SMALL void h1_button(int btn, int down)
         }
     }
 
+    fx_tap_waits = 0;
     switch (btn) {
-    case H1_BTN_FX:    open_page(PG_FX); break;
+    case H1_BTN_FX:
+        if (page == PG_FX && st.fx_type == FX_GRAIN && st.fx_on)
+            fx_tap_waits = 1;                    /* held: FREEZE (holds); let go soon: closes the page */
+        else
+            open_page(PG_FX);
+        break;
     case H1_BTN_SEL:   open_page(PG_MIX); break;
     case H1_BTN_ENV:   open_page(PG_ENV); break;
     case H1_BTN_LFO:   open_page(PG_LFO); break;
@@ -774,6 +788,7 @@ SMALL void h1_button(int btn, int down)
 #define HOLD_RESET_ALL  4000u
 #define HOLD_EDIT       400u
 #define HOLD_USB        1000u
+#define HOLD_FREEZE     250u                     /* FX held on GRAIN's page: FREEZE */
 
 static void (*usb_fn)(int on);
 static int usb_host;
@@ -802,6 +817,13 @@ void h1_toast(const char *text)
 
 static void holds(void)
 {
+    if ((btn_held & (1u << H1_BTN_FX)) && fx_tap_waits && !btn_fired[H1_BTN_FX] && now - btn_ms[H1_BTN_FX] > HOLD_FREEZE) {
+        btn_fired[H1_BTN_FX] = 1;
+        fx_tap_waits = 0;
+        grain_freeze = 1;
+        fx_grain_freeze(1);
+        toast("FREEZE", 0, 0, 0, -1);
+    }
     if ((btn_held & (1u << H1_BTN_EDIT)) && !btn_fired[H1_BTN_EDIT] && now - btn_ms[H1_BTN_EDIT] > HOLD_EDIT) {
         btn_fired[H1_BTN_EDIT] = 1;
         ring_show(RING_INST);
@@ -1318,10 +1340,10 @@ static void draw_fx_page(void)
     f32 cx = 120.0f, cy = 100.0f;
     draw_topbar(O_TRK[st.track], FX_NAMES[ft], st.fx_on ? "FX ON" : "BYPASS");
 
-    /* 8 FX selector pips */
+    /* a selector pip for each effect, centred */
     for (i = 0; i < NFX; i++) {
         g_color(i == ft ? GC_CYAN : GC_SLATE);
-        g_disc(64.0f + (f32)i * 16.0f, 36.0f, i == ft ? 3.2f : 1.6f, i == ft ? 1.0f : 0.45f);
+        g_disc(120.0f + ((f32)i - (f32)(NFX - 1) * 0.5f) * 16.0f, 36.0f, i == ft ? 3.2f : 1.6f, i == ft ? 1.0f : 0.45f);
     }
     if (!st.fx_on) g_dim(0.35f);
 
@@ -1389,6 +1411,28 @@ static void draw_fx_page(void)
             g_poly(xy, 40, 0, 2.2f, 0.88f);
         }
         break;
+    case FX_GRAIN: {
+        /* the buffer as a line, newest on the right (the write head: still when frozen); each grain a dash
+         * over where it reads, as long as SIZE, tilted by PITCH, as many as DENSITY, coming and going */
+        int ng = 3 + (int)(k2 * 13.0f);
+        f32 tilt = (k3 - 0.5f) * 0.9f, len = 6.0f + 30.0f * k1;
+        g_color(GC_SLATE);
+        g_line(24.0f, 140.0f, 216.0f, 140.0f, 1.4f, 0.7f);
+        g_color(grain_freeze ? GC_CYAN : GC_ORANGE);
+        g_line(216.0f, 132.0f, 216.0f, 148.0f, 2.2f, grain_freeze ? 1.0f : 0.5f + 0.5f * lev);
+        for (i = 0; i < ng; i++) {
+            uint32_t h = (uint32_t)i * 2654435761u;
+            f32 life = tsec * (0.6f + 1.4f * k2) + (f32)(h >> 24) * (1.0f / 256.0f), ph = life - (f32)(int)life;
+            uint32_t g2 = h ^ ((uint32_t)(int)life * 40503u);
+            f32 x = 210.0f - k0 * 170.0f + ((f32)((g2 >> 8) & 255u) - 127.5f) * 0.12f;
+            f32 y = 62.0f + (f32)((g2 >> 16) & 255u) * (66.0f / 255.0f);
+            f32 a = sin_turns(ph * 0.5f) * (0.35f + 0.65f * lev);
+            g_color(KCOL[i & 3]);
+            g_line(x - len * 0.5f, y + tilt * len * 0.5f, x + len * 0.5f, y - tilt * len * 0.5f, 2.2f, a);
+            g_line(x, y + 6.0f, x, 136.0f, 0.8f, a * 0.25f);
+        }
+        break;
+    }
     default: {
         f32 xy[2 * 48];
         for (i = 0; i < 48; i++) {

@@ -84,7 +84,8 @@ the kick are placeholders until judged by ear (`build/samples-preview/`); the pi
 CI's flash number, and timing on the FM-1 with eight-note chords (LIVE and HALL run three readers a voice).
 At release, as for CYCLE: the site's banks, `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s inks, the release
 checklist's engine count, `app/fm1.toml`'s description, and a picture of its own.
-: GRAIN, a granular send effect — no new RAM
+
+## Sprint 5: GRAIN, a granular send effect — no new RAM (done)
 
 - A ninth effect (slot 8, made room for by sprint 2). DELAY, SHIFT, CHORUS and TANK share `echo_buf`
   (64 KB) and only one effect runs at a time, so GRAIN uses the same buffer: about 0.74 s mono at 44.1 kHz.
@@ -92,6 +93,14 @@ checklist's engine count, `app/fm1.toml`'s description, and a picture of its own
   Ideas from Clouds (MIT, Emilie Gillet), written for this buffer, not ported.
 - Device: time it with eight-note chords. It runs on the first core with the mix, so its budget is what
   PLATE leaves.
+
+Done on branch `grain` (cut from `kits`): effect 9, knobs POSITION, SIZE, DENSITY (0: off), PITCH. Eight grains
+at most, started once a block; each grain's read worked out at its start to stay behind the write head and
+inside the buffer. FREEZE: FX held on the FX page with GRAIN in hand (momentary, not saved: a latched freeze
+would never let the state save; decided with the user 2026-11-22). On the host, eight grains cost about half
+of PLATE (22 against 42 ms for 20 s of audio). Still to do: CI's flash number and timing on the FM-1 with
+eight-note chords. At release: the site's effect list (`tools/build_site.py`), `PRODUCT.md`, the guide's FX
+page.
 
 ## Sprint 6: PERC with more modes — code only, decided by the FM-1
 

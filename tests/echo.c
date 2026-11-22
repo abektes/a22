@@ -5,11 +5,14 @@
  * fraction of a sample for about 13 minutes, then whole samples, then pairs, and the echo went
  * grainy until a restart (h1 issue #31). a22's DELAY (core/fx.c) reads from the integer counter with
  * the fraction kept apart; this keeps it that way. Run by tests/run_tests.sh: the effect alone, fed
- * the same note at start and again after about 25 minutes of silence. */
+ * the same note at start and again after about 25 minutes of silence. GRAIN, on the same buffer and counter,
+ * the same: its grains are kept as distances behind the write head, so a take after the 25 minutes is the
+ * take from the start to the bit (it starts again from silence, with its random numbers wound back). */
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "../core/internal.h"
+#include "../core/dsp.h"
 
 #define HEAR (44100 / CTRL)                      /* one second of blocks */
 static f32 take[2][HEAR * CTRL];
@@ -86,15 +89,16 @@ static f32 run_fx(int type, const uint8_t *p, int on, int blocks, int noise)
 
 static int tails(void)
 {
-    static const int T[3] = {FX_PLATE, FX_DELAY, FX_TANK};
-    static const char *const NAME[3] = {"PLATE", "DELAY", "TANK"};
-    static const char *const HOW[3] = {"after FILTER", "after a bypass", "after MIX at 0"};
+    static const int T[4] = {FX_PLATE, FX_DELAY, FX_TANK, FX_GRAIN};
+    static const char *const NAME[4] = {"PLATE", "DELAY", "TANK", "GRAIN"};
+    static const char *const HOW[3] = {"after FILTER", "after a bypass", "after MIX (GRAIN: DENSITY) at 0"};
     uint8_t p[4] = {70, 3, 70, 30}, p0[4] = {0, 3, 70, 30}, pf[4] = {50, 50, 50, 50};
     int t, how, bad = 0;
-    for (t = 0; t < 3; t++)
+    for (t = 0; t < 4; t++)
         for (how = 0; how < 3; how++) {
             f32 pk;
             fx_reset();
+            if (T[t] == FX_GRAIN) { p0[0] = 70; p0[2] = 0; } else { p0[0] = 0; p0[2] = 70; }
             run_fx(T[t], p, 1, HEAR, 1);                       /* a second of noise into it */
             if (how == 0) run_fx(FX_FILTER, pf, 1, 6 * HEAR, 0);
             else if (how == 1) run_fx(T[t], p, 0, 6 * HEAR, 0);
@@ -105,17 +109,20 @@ static int tails(void)
                 printf("FAIL echo: %s %s gives %.1f dBFS of its old tail\n", NAME[t], HOW[how], 20.0 * log10(pk));
             }
         }
-    if (!bad) printf("echo: PLATE, DELAY and TANK come back silent after another effect, a bypass and MIX at 0\n");
+    if (!bad) printf("echo: PLATE, DELAY, TANK and GRAIN come back silent after another effect, a bypass and MIX at 0\n");
     return bad;
 }
 
+static int which = FX_DELAY;
+static const uint8_t PG[4] = {30, 40, 70, 60};    /* GRAIN: near, mid-length grains, dense, a little up */
 static void block(const f32 *in, f32 *out)
 {
     f32 r[CTRL];
     memset(out, 0, CTRL * sizeof *out);
     memset(r, 0, sizeof r);
-    fx_send_block(in, in, out, r, FX_DELAY, P, 120.0f, 1);
+    fx_send_block(in, in, out, r, which, which == FX_GRAIN ? PG : P, 120.0f, 1);
 }
+static f32 grain_take[2][HEAR * CTRL];
 
 static void silence(long blocks)
 {
@@ -141,8 +148,9 @@ static void listen(f32 *out)                     /* a 50 ms note, then what the 
 
 int main(void)
 {
-    double diff = 0.0, loud = 0.0;
+    double diff = 0.0, loud = 0.0, gdiff = 0.0, gloud = 0.0;
     int i;
+    dsp_init();
     fx_init(44100.0f);
     if (taps() | tails())
         return 1;
@@ -150,8 +158,25 @@ int main(void)
     silence(4 * HEAR);                           /* the delay settles on its time */
     listen(take[0]);
     silence(4 * HEAR);
+    which = FX_GRAIN;
+    listen(grain_take[0]);
+    which = FX_DELAY;
+    silence(4 * HEAR);
     silence((1L << 25) / (CTRL / 2));            /* the write counter past 2^25: about 25 minutes on */
     listen(take[1]);
+    which = FX_GRAIN;
+    listen(grain_take[1]);
+    which = FX_DELAY;
+    for (i = 0; i < HEAR * CTRL; i++) {
+        double d = fabs((double)grain_take[1][i] - (double)grain_take[0][i]);
+        if (d > gdiff) gdiff = d;
+        gloud += (double)grain_take[0][i] * grain_take[0][i];
+    }
+    if (gloud < 0.01 || gdiff != 0.0) {
+        printf("FAIL echo: GRAIN after 25 minutes differs from its first take by up to %.5f (energy %.3f)\n", gdiff, gloud);
+        return 1;
+    }
+    printf("echo: GRAIN the same to the bit after 25 minutes on (energy %.2f)\n", gloud);
     for (i = 0; i < HEAR * CTRL; i++) {
         double d = fabs((double)take[1][i] - (double)take[0][i]);
         if (d > diff) diff = d;

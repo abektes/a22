@@ -33,6 +33,20 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   treatments; `tests/state.c` that a state from before SKINS brings it up as new. The names and the picks
   are placeholders until judged by ear; the picture is KIT's.
 
+- A ninth effect, GRAIN: a granular cloud made of what the tracks send it. The last 0.74 s are kept (in
+  the buffer DELAY, SHIFT, CHORUS and TANK use, so no more RAM), and up to eight grains read them back.
+  POSITION sets how far back they read, SIZE how long each is (15 to 364 ms), DENSITY how many start a
+  second (2 to 60, at 0 it is off), PITCH an octave down to an octave up. Each grain sits at its own place
+  in the stereo field. Hold FX on the FX page with GRAIN in hand to FREEZE it: nothing new goes in while it
+  is held and the grains go on with what is there (a tap of FX still closes the page, on its release; it
+  is not saved, and a latched freeze would never be quiet enough for a save). Where the grains overlap it
+  is about as loud as what goes in; sparse, short grains peak at 1.5 times it. A grain's whole read is
+  kept behind the write head and inside the buffer, so its window closes before a wrap. Ideas from Clouds
+  (MIT, Emilie Gillet), written for this buffer. The other eight effects sound the same to the bit.
+  `tests/grain.c` checks it bounded at every corner of the knobs, at its pitch, free of clicks and stuck
+  reads, its level, FREEZE and the panel; `tests/echo.c` that it comes back silent and is the same after
+  25 minutes on; `tests/state.c` that a state from before it brings it up at its defaults.
+
 **Playing**
 - DICE. **EDIT + LFO** rolls the four knobs of the algorithm in hand. Each knob moves only so far from that
   algorithm's own setting, by a span chosen per engine knob: pitch-like and stepped knobs (KIT TUNE, FM-4
