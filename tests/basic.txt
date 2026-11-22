@@ -118,3 +118,21 @@ peakreset
 wait 4500
 expect peak_db_min -50
 tap PLAY
+# CLEAR ALL? is spoken, stays until answered, and its answer is spoken: waiting keeps the tape, a tap clears it
+wait 200
+listen
+wait 100
+press REC
+wait 3200
+release REC
+wait 1500
+said CLEAR ALL? TAP REC
+wait 2000
+said TAPE KEPT
+press REC
+wait 3200
+release REC
+wait 300
+tap REC
+wait 200
+said TAPE CLEARED

@@ -12,7 +12,8 @@
  *     5  K1 turned one detent at a time from OFF reaches every mode, up to CHORD, and back to OFF
  *   SHAKE's two subpages
  *     6  1/2 MODE GRAV SPIN BOUNCE and 2/2 MODE CAGE each set their own setting, 2/2's empty columns set
- *        nothing; leaving SHAKE from 2/2 leaves the page one subpage again, and SHAKE comes back on 1/2 */
+ *        nothing; leaving SHAKE from 2/2 leaves the page one subpage again, and SHAKE comes back on 1/2
+ *     7  SHAKE turned on opens on 1/2, even when 2/2 was left by a track change, not by the mode */
 #include <stdio.h>
 #include <string.h>
 #include "../core/internal.h"
@@ -96,7 +97,7 @@ int main(int argc, char **argv)
         go(100);
         show(H1_ENC_K1, "K1 dragged to 0");
         CHECK(mode() != ARP_SHAKE, "1  K1's slider dragged back down leaves SHAKE");
-        CHECK(st.shake[0] != 0 || mode() != ARP_SHAKE, "1  ...and does not take GRAV to 0 instead (the screenshot)");
+        CHECK(st.shake[0] == 45, "1  ...and leaves GRAV as it was, not at 0 (the screenshot)");
 
         /* 2: any slider on this page, any value, that gets out of SHAKE */
         fresh();
@@ -185,8 +186,11 @@ int main(int argc, char **argv)
         h1_control_set(H1_ENC_K2, 30);
         CHECK(st.shake[3] == 30 && st.shake[0] == 70, "6  K2 sets CAGE");
         memcpy(was, st.shake, 4);
-        h1_control(H1_ENC_K3, &lo, &hi, 0, 0);
-        CHECK(lo == hi, "6  an empty column has nothing for a slider to set");
+        {
+            const char *tx = 0;
+            h1_control(H1_ENC_K3, &lo, &hi, 0, &tx);
+            CHECK(lo == hi && tx && !tx[0], "6  an empty column has nothing for a slider to set, and no value");
+        }
         h1_encoder(H1_ENC_K3, 5);
         h1_encoder(H1_ENC_K4, -5);
         h1_control_set(H1_ENC_K3, 40);
@@ -204,6 +208,41 @@ int main(int argc, char **argv)
         h1_encoder(H1_ENC_SELECT, 1);
         h1_encoder(H1_ENC_SELECT, 1);
         CHECK(h1_page() == PG_ARP && sub_now(0) == 0, "6  SELECT twice: round to 1/2");
+    }
+
+    /* ---- SHAKE opens on 1/2 however 2/2 was left ---- */
+    {
+        fresh();
+        h1_control_set(H1_ENC_K1, ARP_SHAKE);
+        go(100);
+        h1_encoder(H1_ENC_SELECT, 1);
+        go(100);
+        CHECK(sub_now(0) == 1, "7  SHAKE 2/2 on T1");
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* to T2 */
+        go(100);
+        CHECK(mode() != ARP_SHAKE, "7  T2's mode is not SHAKE");
+        h1_control_set(H1_ENC_ALGO, ARP_SHAKE);  /* the simulator's slider, straight to SHAKE */
+        go(100);
+        CHECK(mode() == ARP_SHAKE && sub_now(0) == 0, "7  SHAKE turned on with the ALGORITHM slider: on 1/2");
+        h1_control_set(H1_ENC_ALGO, ARP_UP);
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, -1); h1_button(H1_BTN_EDIT, 0);  /* back to T1 */
+        go(100);
+        h1_encoder(H1_ENC_SELECT, 1);            /* T1 is in SHAKE: to 2/2 */
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* to T2, in UP */
+        go(100);
+        h1_encoder(H1_ENC_ALGO, -1);             /* UP -> SHAKE, one detent */
+        go(100);
+        CHECK(mode() == ARP_SHAKE && sub_now(0) == 0, "7  SHAKE turned on with ALGORITHM: on 1/2");
+        h1_encoder(H1_ENC_SELECT, 1);
+        h1_control_set(H1_ENC_K1, ARP_UP);
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, -1); h1_button(H1_BTN_EDIT, 0);  /* T1, SHAKE */
+        go(100);
+        h1_encoder(H1_ENC_SELECT, 1);
+        h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* T2, UP */
+        go(100);
+        h1_control_set(H1_ENC_K1, ARP_SHAKE);
+        go(100);
+        CHECK(mode() == ARP_SHAKE && sub_now(0) == 0, "7  SHAKE turned on with K1's slider: on 1/2");
     }
 
     printf("arpmode: %d checks, %d failed\n", checks, fails);

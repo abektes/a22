@@ -292,9 +292,19 @@ static char *put_i(char *d, int v)
     return d;
 }
 
+/* CLEAR ALL?: REC held past 2.8 s asks, and the question stays on screen until it is answered. A tap of REC
+ * within 3 s of letting go of the hold clears the whole tape. Anything else keeps it: waiting, another button,
+ * a key, an encoder, or anything that puts up a toast of its own (so a prompt the screen no longer shows can
+ * never be answered by a tap meant to record). */
+#define CLEAR_ALL_WAIT 3000u
+static int clear_all_asked;              /* 1: asked, REC still held; 2: REC let go, waiting for its tap */
+static uint32_t clear_all_ms;            /* when REC was let go */
+int h1_clear_all_asked(void) { return clear_all_asked != 0; }
+
 static void toast(const char *a, int num, int has_num, const char *b, int pips)
 {
     char *d = toast_s;
+    clear_all_asked = 0;                         /* (the question is no longer on screen: the tape is kept) */
     if (a) d = put_s(d, a);
     if (has_num) d = put_i(d, num);
     if (b) put_s(d, b);
@@ -313,10 +323,19 @@ static void fit_text(f32 cx, f32 y, const char *s, f32 size, f32 max_w, f32 a)
     g_text(cx, y, s, size, maxf(1.25f, size * 0.13f), a, 1);
 }
 
+static void clear_all_keep(void)                 /* CLEAR ALL? answered no, by anything but a tap of REC */
+{
+    if (clear_all_asked) toast("TAPE KEPT", 0, 0, 0, -1);
+}
+
 static APART void value_text(int pg, int i, char *out)
 {
     const ParamDef *p = page_param(pg, i);
     int v = *page_value(pg, i);
+    if (!p->name[0]) {                           /* an empty column (SHAKE 2/2) says nothing */
+        out[0] = 0;
+        return;
+    }
     if (pg == PG_SEQ && subpage[pg] == 1 && i == 1 && v == 0) {
         put_s(out, "END");
         return;
@@ -421,6 +440,7 @@ void h1_key(int key, int down)
 {
     int i;
     if (key < 0 || key >= H1_NKEYS) return;
+    if (down) clear_all_keep();
     /* SAVE + White Keys 1..8: Instant Patch Snapshots! */
     if (down && (btn_held & (1u << H1_BTN_SAVE))) {
         for (i = 0; i < NSNAP; i++) {
@@ -542,15 +562,15 @@ static void octave(int d)
     mark_dirty();
 }
 
-#define CLEAR_ALL_WAIT 3000u             /* REC held past 2.8 s asks; a tap of REC this soon after clears it all */
-static int clear_all_asked;              /* 1: CLEAR ALL? is up, waiting for its tap of REC */
-static uint32_t clear_all_ms;
-
 SMALL void h1_button(int btn, int down)
 {
     if (btn < 0 || btn >= H1_NBTN) return;
     if (!down) {
         btn_held &= ~(1u << btn);
+        if (btn == H1_BTN_REC && clear_all_asked == 1) {   /* the hold that asked let go: 3 s to tap REC */
+            clear_all_asked = 2;
+            clear_all_ms = now;
+        }
         if (btn_fired[btn]) return;
         if (btn == H1_BTN_REC) {
             if (page == PG_ARP && st.ip[st.inst].arp[0] == ARP_RIFF)
@@ -588,14 +608,14 @@ SMALL void h1_button(int btn, int down)
 
     /* CLEAR ALL? asked: a tap of REC (EDIT not held) clears the whole tape; any other button keeps it */
     if (clear_all_asked) {
-        clear_all_asked = 0;
-        if (btn == H1_BTN_REC && !(btn_held & (1u << H1_BTN_EDIT)) && now - clear_all_ms < CLEAR_ALL_WAIT) {
+        if (btn == H1_BTN_REC && clear_all_asked == 2 && !(btn_held & (1u << H1_BTN_EDIT)) &&
+            now - clear_all_ms < CLEAR_ALL_WAIT) {
             btn_fired[btn] = 1;                  /* (its release and holds do nothing more) */
             eng_post(EV_CLEAR, 0);
             toast("TAPE CLEARED", 0, 0, 0, -1);
             return;
         }
-        toast("TAPE KEPT", 0, 0, 0, -1);
+        clear_all_keep();
     }
 
     /* EDIT + Button Shift Shortcuts */
@@ -714,6 +734,7 @@ void h1_toast(const char *text)
     }
     while (i > 0 && toast_s[i - 1] == ' ') i--;
     toast_s[i] = 0;
+    clear_all_asked = 0;
     toast_t = 0.0f;
     toast_pips = -1;
 }
@@ -737,14 +758,11 @@ static void holds(void)
     }
     if ((btn_held & (1u << H1_BTN_REC)) && btn_fired[H1_BTN_REC] == 2 && now - btn_ms[H1_BTN_REC] > 2800u) {
         btn_fired[H1_BTN_REC] = 1;               /* (the whole tape only once asked: a long hold is easy by accident) */
-        clear_all_asked = 1;
-        clear_all_ms = now;
         toast("CLEAR ALL? TAP REC", 0, 0, 0, -1);
+        clear_all_asked = 1;
     }
-    if (clear_all_asked && !(btn_held & (1u << H1_BTN_REC)) && now - clear_all_ms >= CLEAR_ALL_WAIT) {
-        clear_all_asked = 0;
-        toast("TAPE KEPT", 0, 0, 0, -1);
-    }
+    if (clear_all_asked == 2 && now - clear_all_ms >= CLEAR_ALL_WAIT)
+        clear_all_keep();
     if ((btn_held & (1u << H1_BTN_SEQ)) && !btn_fired[H1_BTN_SEQ] && now - btn_ms[H1_BTN_SEQ] > 550u) {
         btn_fired[H1_BTN_SEQ] = 1;
         set_seq_mode(st.seq[0] == SEQ_STEP ? SEQ_TAPE : SEQ_STEP);
@@ -849,6 +867,7 @@ static void set_knob(int i, int v)
 
 static void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / ARP page, or EDIT + ALGORITHM */
 {
+    if (m == ARP_SHAKE && st.ip[st.inst].arp[0] != ARP_SHAKE) subpage[PG_ARP] = 0;   /* SHAKE opens on 1/2 */
     st.ip[st.inst].arp[0] = (uint8_t)m;
     if (page == PG_ARP) sync_cols(PG_ARP);
     toast("SEQ: ", 0, 0, O_ARPMODE[m], -1);
@@ -860,7 +879,7 @@ static APART void set_param(int i, int v)
     const ParamDef *p = page_param(page, i);
     uint8_t *q = page_value(page, i);
     v = iclamp(v, p->min, p->max);
-    active_col = i;
+    if (p->name[0]) active_col = i;              /* (an empty column is never the one in hand) */
     if (v == *q) return;
     if (page == PG_SEQ && st.seq[0] == SEQ_STEP && i == 0) { set_seq_mode(v); return; }
     if (page == PG_SEQ && ((st.seq[0] == SEQ_TAPE && subpage[PG_SEQ] == 0 && i == 0) ||
@@ -868,6 +887,7 @@ static APART void set_param(int i, int v)
         set_track(v);
         return;
     }
+    if (page == PG_ARP && i == 0 && v == ARP_SHAKE) subpage[PG_ARP] = 0;   /* SHAKE opens on 1/2 */
     *q = (uint8_t)v;
     if (page == PG_GLO && subpage[PG_GLO] == 1 && i == 3 && !v) eng_post(EV_UNLATCH, 0);
     if (page == PG_GLO && subpage[PG_GLO] == 2 && i == 0) {  /* a new mode: its type in its range */
@@ -884,6 +904,7 @@ static int step_cursor_live(void) { return page == PG_HOME && seq.mode == SEQ_ST
 SMALL void h1_encoder(int enc, int d)
 {
     if (!d || enc < 0 || enc >= H1_NENC) return;
+    clear_all_keep();
     switch (enc) {
     case H1_ENC_PRESET:
         if (btn_held & (1u << H1_BTN_EDIT)) {
@@ -993,6 +1014,7 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
 SMALL void h1_control_set(int enc, int v)
 {
     if (enc < 0 || enc >= H1_NENC) return;
+    clear_all_keep();
     switch (enc) {
     case H1_ENC_PRESET: set_instrument(iclamp(v, 0, NINST - 1)); break;
     case H1_ENC_ALGO:
@@ -1780,6 +1802,7 @@ void ui_frame(uint32_t now_ms)
     vis.algo = st.ip[st.inst].algo;
     vis.algo_t = sat(vis.algo_t + dt / 0.35f);
     name_t += dt; page_t += dt; toast_t += dt; vol_t += dt; ring_t += dt; ring_up += dt;
+    if (clear_all_asked) toast_t = 0.0f;         /* CLEAR ALL? stays up until it is answered */
 
     build_palette();
     g_clear();
@@ -1852,6 +1875,7 @@ SMALL void ui_init(void)
     pal_bright_seen = 0;
     dirty = 0;
     btn_held = 0;
+    clear_all_asked = 0;
     ring_kind = 0;
     glob_held = master_raw = -1;
     ring_t = 9.0f;

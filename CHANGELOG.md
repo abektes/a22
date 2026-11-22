@@ -7,12 +7,16 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 **Tape and sequencers**
 - Holding REC past three seconds no longer clears the whole tape at once, which was easy to do by accident
-  (jakehandy/h1#49). It asks CLEAR ALL?, and a tap of REC within three seconds clears it; any other button,
-  or waiting, keeps it. The track in hand is still cleared at 0.7 s, as before.
+  (jakehandy/h1#49). It asks CLEAR ALL?, and the question stays on screen (and is spoken to a screen
+  reader) until it is answered. A tap of REC within three seconds of letting go clears the whole tape.
+  Anything else keeps it: waiting, another button, a key, an encoder, or another message covering the
+  question. The track in hand is still cleared at 0.7 s, as before.
 - SHAKE could not be left from the SEQ page's knobs (abektes/a22#1). Its settings took all four columns, so the knob
   that had just turned SHAKE on became GRAV, and in the simulator nothing on the page could change the
   mode. KNOB 1 is now MODE in every mode. In SHAKE the page has two subpages: MODE, GRAV, SPIN, BOUNCE,
-  then (SELECT) MODE, CAGE. GRAV, SPIN and BOUNCE each moved one knob to the right.
+  then (SELECT, or ARP again) MODE, CAGE, and SHAKE always opens on the first. GRAV, SPIN and BOUNCE each
+  moved one knob to the right. In SHAKE, ARP on its own page now turns to the other subpage instead of going
+  home, as on MIX, ENV and GLO.
 - The simulator's ALGORITHM slider on the SEQ page sets the sequencer mode, as the FM-1's encoder does. It
   used to say PRESET and change the engine's algorithm.
 - SHAKE's PLAY KEYS TO DROP sits inside the cage, on two lines; it ran across the cage's walls.

@@ -90,8 +90,9 @@ When it is full the screen says **TAPE FULL**.
 - **EDIT + REC** cuts the track in hand's notes (between the loop's in and out bars) to a clipboard, and
   **EDIT + PLAY** pastes them at the current bar.
 - **EDIT + OCT −** and **EDIT + OCT +** move the loop's in and out bars.
-- **Hold REC** clears the track in hand. Keep holding (about three seconds) and it asks CLEAR ALL?: tap REC
-  within three seconds to clear the whole tape. Any other button, or waiting, keeps it.
+- **Hold REC** clears the track in hand. Keep holding (about three seconds) and it asks CLEAR ALL?, until
+  it is answered: tap REC within three seconds of letting go to clear the whole tape. Anything else (another
+  button, a key, an encoder, or waiting) keeps it.
 
 The tape and every setting are saved by themselves and come back after a restart.
 
@@ -236,7 +237,7 @@ These come from fm1-base, which A22 is built on:
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, the
   algorithm, the page and each control's value as it changes.
 - Package identity `FM-1_4122`. A release X.Y.Z answers `FM-1_4122XXYYZZ`.
-- The firmware's image is 406 KB of its 568 KB flash slot and uses 440 KB of the chip's 475 KB of SRAM.
+- The firmware's image is 406 KB of its 582 KB flash slot and uses 440 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 

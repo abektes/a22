@@ -68,7 +68,9 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
       EDIT pins the knob strip.
 - [ ] Tape: REC arms, the first key starts the take, REC closes it and it plays on; REC while it plays
       overdubs; PLAY stops and starts. Hold REC clears the track in hand; held three seconds it asks
-      CLEAR ALL?, and only a tap of REC then clears every track (from the release after 0.1.0).
+      CLEAR ALL?, and only a tap of REC then clears every track (from the release after 0.1.0). The
+      question stays on screen until answered; let go, wait three seconds, and it says TAPE KEPT; let go
+      and turn an encoder or play a key, and a tap of REC records instead of clearing.
 - [ ] Tracks: EDIT + PRESETS goes T1 to T4, each keeps its engine and algorithm; EDIT + SEL mutes the
       track in hand; the MIX page's volume, pan and send work per track.
 - [ ] Step: hold SEQ swaps TAPE and STEP. REC writes, PLAY runs the pattern, a tap of EDIT is a rest,
@@ -76,6 +78,9 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
       track's lane.
 - [ ] RIFF and SHAKE (EDIT + ALGORITHM): a riff records and plays from any key; SHAKE's balls play
       their notes and, once they bounce out, nothing keeps sounding.
+- [ ] The SEQ page (abektes/a22#1): KNOB 1 turns through every mode, into SHAKE and out again. In SHAKE,
+      MODE GRAV SPIN BOUNCE, then SELECT for MODE CAGE; SHAKE turned on again opens on the first. PLAY KEYS
+      TO DROP sits inside the smallest cage (CAGE 0). In the simulator, the ALGORITHM slider there is SEQ MODE.
 - [ ] Metronome: hold GLO cycles CLICK REC, CLICK ON, CLICK OFF, and holding never opens the page.
 - [x] MIDI in over USB plays notes, and CC 20 to 23 move the four knobs. *Remote: CC 20 turned CHIP's
       DUTY to 16 and 79; eight MIDI notes held raised the audio's load from 25% to 39%.*

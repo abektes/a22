@@ -170,6 +170,7 @@
       .encoders-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
+    .enc-card.is-empty { opacity: 0.35; }
     .enc-card {
       background: #f5f6f8;
       border: 1px solid #c9ccd4;
@@ -554,7 +555,7 @@
           }
         });
         encBox.appendChild(card);
-        encEls.push({ spec, slider, nameEl, valEl });
+        encEls.push({ spec, card, slider, nameEl, valEl });
       }
 
       const btnBox = document.getElementById("buttons");
@@ -714,6 +715,8 @@
         const nm = readCstr(ctlPtr + 12, 32);
         const tx = readCstr(ctlPtr + 44, 32);
         if (item.nameEl.textContent !== nm) item.nameEl.textContent = nm;
+        item.card.classList.toggle("is-empty", !nm);         /* a column the page leaves empty (SHAKE 2/2) */
+        item.slider.disabled = !nm;
         if (item.valEl.textContent !== tx) item.valEl.textContent = tx;
         if (document.activeElement !== item.slider) {
           item.slider.min = String(iv[1]);

@@ -108,6 +108,7 @@ int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current instrument, 0..7 (LAVA 0..8) */
 int h1_page(void);                               /* 0 = home, else a settings page */
 const char *h1_toast_now(void);                  /* the toast showing, "" when none */
+int h1_clear_all_asked(void);                    /* 1 while CLEAR ALL? waits for its answer */
 int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
 int h1_instrument_volume(int inst);              /* 0..100: the instrument's own volume (EDIT held, and SELECT) */
 int h1_volume_ring(void);                        /* the volume ring: 0 not up, 1 GLOBAL (MASTER), 2 INSTRUMENT */

@@ -616,7 +616,7 @@ def manual():
             REC while it plays overdubs, PLAY starts and stops it. Knobs turned while recording play back as automation. SPEED plays
             it at half or double speed or backwards; TRICK adds a tape brake or stutters.</p>
           <p style="margin-top:12px">Hold REC to clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC within three
-            seconds to clear the whole tape. Any other button, or waiting, keeps it.</p></div>
+            seconds of letting go to clear the whole tape. Anything else, or waiting, keeps it.</p></div>
         <div><h3>Step</h3>
           <p>Hold SEQ to swap the tape for the step sequencer. REC turns step writing on and off, PLAY runs the pattern,
             SELECT moves the cursor and a tap of EDIT leaves a rest. Up to eight notes a step.</p>

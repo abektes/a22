@@ -102,6 +102,31 @@ static void clear_all_asks(void)
     h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
     tap(H1_BTN_HOME);
     CHECK(h1_loop_room() == room, "another button answers no");
+    /* (abektes/a22 review: the question faded after 1.25 s and its 3 s ran from the asking, REC still held, so a
+     * tap meant to record could clear it all with nothing on screen; and only a button answered no) */
+    h1_button(H1_BTN_REC, 1); until(now() + 4300); h1_button(H1_BTN_REC, 0); until(now() + 2000);
+    CHECK(h1_clear_all_asked() && !strcmp(h1_toast_now(), "CLEAR ALL? TAP REC"),
+          "REC held long and let go: two seconds on, the question is still on screen");
+    until(now() + 1200);
+    CHECK(!h1_clear_all_asked() && h1_loop_room() == room, "its three seconds run from letting go, then it is kept");
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    h1_encoder(H1_ENC_SELECT, 1); h1_encoder(H1_ENC_SELECT, -1);           /* (the tempo, up and back) */
+    CHECK(!h1_clear_all_asked() && strcmp(h1_toast_now(), "CLEAR ALL? TAP REC"), "an encoder answers no");
+    tap(H1_BTN_REC);
+    CHECK(h1_loop_room() == room, "so the tap of REC after it does not clear the tape");
+    tap(H1_BTN_REC);
+    until(now() + 100);
+    CHECK(h1_loop_room() == room, "(and REC tapped again leaves it as it was)");
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    h1_key(7, 1); until(now() + 100); h1_key(7, 0); until(now() + 100);
+    CHECK(!h1_clear_all_asked() && h1_loop_room() == room, "a key answers no");
+    h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
+    h1_toast("USB HOST");                                                   /* a toast of its own */
+    CHECK(!h1_clear_all_asked(), "a toast that covers the question answers no");
+    tap(H1_BTN_REC);
+    CHECK(h1_loop_room() == room, "so the tap of REC after it does not clear the tape either");
+    tap(H1_BTN_REC);
+    until(now() + 100);
     h1_button(H1_BTN_REC, 1); until(now() + 3300); h1_button(H1_BTN_REC, 0); until(now() + 100);
     tap(H1_BTN_REC);
     CHECK(h1_loop_room() == NLEV / 2, "a tap of REC answers yes: the whole tape is empty");
