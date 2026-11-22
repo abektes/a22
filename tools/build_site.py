@@ -632,7 +632,8 @@ def manual():
 
     <section class="chapter" id="effects" aria-labelledby="h-effects">
       <h2 id="h-effects">Effects</h2>
-      <p>One effect at a time, chosen on the FX page with ALGORITHM; each track sets how much it sends. The master bus has its own
+      <p>One effect at a time, chosen on the FX page with ALGORITHM; for PLATE, DELAY, SHIFT, CHORUS and TANK each track sets how
+        much it sends, while FILTER, LOFI and THUMP work on the whole mix. The master bus has its own
         three-band EQ and drive.</p>
       <table class="chart"><thead><tr><th>Effect</th><th>What it is</th><th>Knobs</th></tr></thead><tbody>{fx}</tbody></table>
     </section>

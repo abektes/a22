@@ -297,6 +297,10 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
             if (sn->menv[j] > 100) sn->menv[j] = 50;
             if (sn->fx_p[j] > 100) sn->fx_p[j] = 50;
         }
+        if (sn->lfo[0] > 6) sn->lfo[0] = 0;          /* (as a track's: a bad save loaded out-of-range values) */
+        if (sn->lfo[1] > 100) sn->lfo[1] = 50;
+        if (sn->lfo[2] > 100) sn->lfo[2] = 0;
+        if (sn->lfo[3] > 6) sn->lfo[3] = 0;
     }
     for (i = 0; i < NSTEP; i++)
         for (j = 0; j < NSNOTE; j++) {

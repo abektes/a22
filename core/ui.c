@@ -339,8 +339,13 @@ static APART void value_text(int pg, int i, char *out)
         out[0] = 0;
         return;
     }
-    if (pg == PG_SEQ && subpage[pg] == 1 && i == 1 && v == 0) {
-        put_s(out, "END");
+    if (pg == PG_SEQ && st.seq[0] == SEQ_TAPE && subpage[pg] == 1 && i == 0) {
+        put_i(out, v + 1);                       /* IN BAR: bars counted from 1, as its toast and the tape's */
+        return;
+    }
+    if (pg == PG_SEQ && st.seq[0] == SEQ_TAPE && subpage[pg] == 1 && i == 1 &&
+        (v == 0 || v <= st.tape[1] || v > (1 << (st.seq[1] < 6 ? st.seq[1] : 2)))) {
+        put_s(out, "END");                       /* (OUT at or before IN, or past the tape, plays to the end) */
         return;
     }
     if (p->kind == PK_ENUM) {
@@ -795,6 +800,7 @@ static void holds(void)
         int alg = st.ip[st.inst].algo, i;
         btn_fired[H1_BTN_SAVE] = 2;
         st.ip[st.inst] = insts[st.inst]->def;
+        st.trk[st.track].algo = st.ip[st.inst].algo & 7;   /* (the steps played the old one until a snapshot) */
         knobs_default(st.inst, -1);
         vis.algo_prev = alg; vis.algo = st.ip[st.inst].algo; vis.algo_t = 0.0f;
         for (i = 0; i < 4; i++) knob_touch[i] = 0.0f;
@@ -805,6 +811,7 @@ static void holds(void)
         int i;
         btn_fired[H1_BTN_SAVE] = 3;
         for (i = 0; i < NINST; i++) { st.ip[i] = insts[i]->def; knobs_default(i, -1); }
+        st.trk[st.track].algo = st.ip[st.inst].algo & 7;
         st.keys[0] = st.keys[1] = st.keys[2] = st.keys[3] = 0;
         st.glo[0] = 118; st.glo[1] = 0; st.glo[2] = 50; st.glo[3] = 100;
         st.octave = 0;

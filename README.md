@@ -43,7 +43,8 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 
 ## Effects
 
-One effect at a time, chosen on the FX page with ALGORITHM. Each track sets how much of it it sends.
+One effect at a time, chosen on the FX page with ALGORITHM. PLATE, DELAY, SHIFT, CHORUS and TANK are sends: each
+track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix, whatever the sends are.
 
 | Effect | Knobs |
 |---|---|

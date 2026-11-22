@@ -81,11 +81,17 @@ static volatile uint32_t scope_w;
 static volatile uint32_t evq[64];
 static volatile uint32_t ev_w, ev_r;
 
+/* The queue's last 8 slots are kept for note-offs: full, it dropped whatever came, a note-off too, and that note hung.
+ * What it drops is counted (eng_events_dropped). */
+static uint32_t ev_dropped;
+uint32_t eng_events_dropped(void) { return ev_dropped; }
 static void post(uint32_t e)
 {
-    uint32_t w = ev_w, nx = (w + 1u) & 63u;
-    if (nx == ev_r)
+    uint32_t w = ev_w, nx = (w + 1u) & 63u, used = (w - ev_r) & 63u;
+    if (nx == ev_r || (used >= 63u - 8u && ((e >> 8) & 255u) != EV_NOTE_OFF)) {
+        ev_dropped++;
         return;
+    }
     evq[w] = e;
     ev_w = nx;
 }

@@ -382,6 +382,59 @@ int main(void)
         CHECK(h1_state_dirty(), "saving: a knob set over MIDI CC 20 is saved");
     }
 
+    /* The review's small ones: the event queue keeps room for note-offs; a snapshot's LFO is clamped on load; the TAPE
+     * EDIT page counts bars from 1 and shows END for an OUT that plays to the end; holding SAVE resets the track's
+     * algorithm too */
+    {
+        static uint8_t buf[sizeof(H1State)];
+        uint32_t size, d0;
+        int i, lo, hi;
+        const char *tx = 0;
+        h1_init(44100);
+        go(200);
+        eng_post_note(1, 41, 100, 1);            /* a note on, played */
+        go(100);
+        d0 = eng_events_dropped();
+        for (i = 0; i < 80; i++) eng_post(EV_AUTOMATION, 0);   /* more events than the queue holds */
+        eng_post_note(0, 41, 0, 1);              /* and the note's off after them */
+        CHECK(eng_events_dropped() > d0, "queue: what does not fit is counted as dropped");
+        go(200);
+        for (i = 0; i < NVOICE; i++)
+            if (voices[i].stage && voices[i].gate && voices[i].note == 41) break;
+        CHECK(i == NVOICE, "queue: the note-off after the flood still got in (its note ends)");
+        eng_post(EV_PANIC, 1);
+        go(200);
+
+        memcpy(buf, h1_state(&size), size);
+        ((H1State *)buf)->snap[0].used = 1;
+        ((H1State *)buf)->snap[0].lfo[0] = 200;
+        ((H1State *)buf)->snap[0].lfo[1] = 250;
+        ((H1State *)buf)->snap[0].lfo[3] = 99;
+        h1_state_load(buf, size);
+        CHECK(st.snap[0].lfo[0] <= 6 && st.snap[0].lfo[1] <= 100 && st.snap[0].lfo[3] <= 6, "load: a snapshot's LFO comes back in range");
+
+        h1_init(44100);
+        go(200);
+        st.seq[0] = SEQ_TAPE; st.seq[1] = 2;     /* 4 bars */
+        tap(H1_BTN_SEQ); h1_encoder(H1_ENC_SELECT, 1);   /* TAPE EDIT */
+        st.tape[1] = 0; st.tape[2] = 0;
+        h1_control(H1_ENC_K1, &lo, &hi, 0, &tx);
+        CHECK(tx && !strcmp(tx, "1"), "TAPE EDIT: IN BAR counts from 1");
+        st.tape[1] = 2; st.tape[2] = 1;
+        h1_control(H1_ENC_K2, &lo, &hi, 0, &tx);
+        CHECK(tx && !strcmp(tx, "END"), "TAPE EDIT: an OUT BAR before IN BAR shows END, as it plays");
+        st.tape[2] = 4;
+        h1_control(H1_ENC_K2, &lo, &hi, 0, &tx);
+        CHECK(tx && !strcmp(tx, "4"), "TAPE EDIT: an OUT BAR after IN BAR shows its bar");
+        tap(H1_BTN_HOME);
+
+        st.ip[st.inst].algo = (uint8_t)((insts[st.inst]->def.algo + 3) & 7);
+        st.trk[st.track].algo = st.ip[st.inst].algo;
+        h1_button(H1_BTN_SAVE, 1); go(2500); h1_button(H1_BTN_SAVE, 0); go(100);   /* the engine reset */
+        CHECK(st.ip[st.inst].algo == insts[st.inst]->def.algo && st.trk[st.track].algo == (st.ip[st.inst].algo & 7),
+              "SAVE held: the engine reset, and the track plays its reset algorithm");
+    }
+
     printf("basics: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

@@ -721,7 +721,8 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
         } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
             static const f32 SDIV[3] = {0.5f, 0.25f, 0.125f};
             f32 len = SDIV[trick - TRICK_STUT8] * 60.0f / maxf(40.0f, bpm) * SRf;
-            tfx_stut_len = clampf(len, 256.0f, (f32)(TFX_FRAMES - 64u));
+            while (len > (f32)(TFX_FRAMES - 64u)) len *= 0.5f;   /* (in time: clamped, 1/8 was 277 ms below 108 BPM) */
+            tfx_stut_len = maxf(len, 256.0f);
             tfx_stut_anchor = (f32)((tfx_w % TFX_FRAMES + TFX_FRAMES - (uint32_t)tfx_stut_len) % TFX_FRAMES);
             tfx_stut_pos = 0.0f;
         }

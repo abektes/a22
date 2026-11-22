@@ -325,6 +325,7 @@ uint32_t eng_sounding_lo(void);
 int eng_seq_leds(uint32_t *out, int page_open, int blink);
 uint32_t eng_voices(void);
 int eng_quiet(void);
+uint32_t eng_events_dropped(void);
 void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 int eng_seq_has(int trk);
 
