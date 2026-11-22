@@ -102,10 +102,19 @@ of PLATE (22 against 42 ms for 20 s of audio). Still to do: CI's flash number an
 eight-note chords. At release: the site's effect list (`tools/build_site.py`), `PRODUCT.md`, the guide's FX
 page.
 
-## Sprint 6: PERC with more modes — code only, decided by the FM-1
+## Sprint 6: PERC with more modes — code only, decided by the FM-1 (built; waiting for the FM-1)
 
 - PERC is a four-mode modal resonator. Try eight to twelve modes and a sympathetic string option on a
   branch. Kept only if eight-note chords stay under about 80% peak on the device.
+
+Built on branch `perc` (cut from `grain`): eight modes (the voice has room for eight without growing: the
+modes in `s[]`, the cavity and mallet moved to `ph[]`, the strings as float bits in `u[2..3]`, `q[0..1]`), the
+first four as they were. Sympathetic strings (an octave and a twelfth) in SPACE 60..100. A dead mode is
+skipped until the next strike. Measured on the host, voice time only (eight-note chords, RING up): before
+39 ms avg / 41 max per 8 s, after 45 / 52 (x1.28 worst), HANDPAN at SPACE 100 57 (x1.43); with every mode
+running, as at the strike, x1.6 to x1.8. Against PERC's 51% peak on the unit (idle with PLATE 10%), that
+suggests about 62% held, 69% with the strings, and up to about 83% at the instant of a strike with the
+strings: the FM-1 decides. If it is over, cut the strings or drop to six modes.
 
 ## Later: a multi-model engine
 

@@ -1,21 +1,24 @@
 /* A22 - PERC: Modal & Tuned Physical Percussion Synthesizer.
  *
- * Pure mathematical 4-mode coupled-form damped sinusoidal modal resonator bank
- * + Helmholtz cavity resonance + velocity-sensitive FM/noise mallet striker.
+ * Pure mathematical 8-mode coupled-form damped sinusoidal modal resonator bank
+ * + Helmholtz cavity resonance + velocity-sensitive FM/noise mallet striker
+ * + two sympathetic strings (an octave and a twelfth over the note) in SPACE's top 40%.
+ * (Modes 1-4 are h1's four as they were; 5-8, quieter and shorter, came in a22's sprint 6.)
  * Unconditionally stable at all frequencies, 0 KB extra RAM, chromatically playable across
  * all 27 keys: Handpan, Marimba, Kalimba, Tabla, Woodblocks, Gamelan, Steel Pan, IDM Glitch.
  *
  *   K1 (BLUE)   PITCH   modal overtone stretch (warm wood <-> pure <-> metallic bell)
  *   K2 (GREEN)  MALLET  striker hardness & attack click (soft felt -> hard brass/wood)
  *   K3 (WHITE)  RING    modal resonance decay & sustain bloom
- *   K4 (ORANGE) SPACE   stereo modal spread & resonant acoustic cavity body */
+ *   K4 (ORANGE) SPACE   stereo modal spread & resonant acoustic cavity body; from 60 up, sympathetic strings */
 #include "internal.h"
 #include "dsp.h"
 
+#define NMODE 8
 typedef struct ModalAlgo {
-    f32 rat[4];      /* 4 modal frequency ratios relative to fundamental */
-    f32 amp[4];      /* relative mode amplitudes */
-    f32 dec[4];      /* base mode decay times (seconds) */
+    f32 rat[NMODE];  /* modal frequency ratios relative to fundamental */
+    f32 amp[NMODE];  /* relative mode amplitudes */
+    f32 dec[NMODE];  /* base mode decay times (seconds) */
     f32 helm;        /* Helmholtz low-cavity ratio (0 = none) */
     f32 h_amp;       /* Helmholtz level */
     f32 bend_st;     /* initial pitch bend in semitones (Tabla upward pressure bend!) */
@@ -23,20 +26,51 @@ typedef struct ModalAlgo {
 } ModalAlgo;
 
 static const ModalAlgo MA[NALGO] = {
-    /* 0 HANDPAN */ {{1.00f, 2.00f, 3.00f, 4.02f},  {1.00f, 0.56f, 0.34f, 0.16f}, {2.40f, 1.50f, 0.95f, 0.45f}, 0.50f, 0.36f,  0.0f, 2.5f},
-    /* 1 MARIMBA */ {{1.00f, 3.98f, 9.20f, 1.003f}, {1.00f, 0.42f, 0.16f, 0.38f}, {0.95f, 0.18f, 0.06f, 0.85f}, 0.00f, 0.00f,  0.0f, 3.1f},
-    /* 2 KALIMBA */ {{1.00f, 2.86f, 6.24f, 1.006f}, {1.00f, 0.38f, 0.24f, 0.42f}, {1.45f, 0.42f, 0.14f, 1.35f}, 0.50f, 0.20f,  0.0f, 4.4f},
-    /* 3 TABLA   */ {{1.00f, 1.48f, 1.98f, 2.52f},  {1.00f, 0.58f, 0.46f, 0.28f}, {0.82f, 0.52f, 0.35f, 0.22f}, 0.50f, 0.26f, -3.2f, 2.8f},
-    /* 4 WOOD    */ {{1.00f, 2.58f, 4.16f, 6.32f},  {1.00f, 0.52f, 0.28f, 0.15f}, {0.26f, 0.12f, 0.06f, 0.04f}, 0.00f, 0.00f,  0.0f, 3.7f},
-    /* 5 GAMELAN */ {{1.00f, 1.007f, 2.756f, 5.40f},{0.90f, 0.86f, 0.45f, 0.25f}, {3.20f, 3.10f, 1.35f, 0.55f}, 0.00f, 0.00f,  0.0f, 2.7f},
-    /* 6 STEEL   */ {{1.00f, 2.00f, 2.99f, 5.04f},  {0.92f, 0.72f, 0.48f, 0.26f}, {1.80f, 1.40f, 0.88f, 0.38f}, 0.00f, 0.00f,  0.0f, 4.0f},
-    /* 7 GLITCH  */ {{1.00f, 1.732f, 3.317f, 7.14f},{0.85f, 0.75f, 0.55f, 0.42f}, {0.42f, 0.24f, 0.14f, 0.08f}, 0.00f, 0.00f,  9.5f, 5.9f},
+    /* 0 HANDPAN: the shell's harmonics, and doublets a little apart that beat */
+    {{1.00f, 2.00f, 3.00f, 4.02f, 5.03f, 6.05f, 1.004f, 2.012f}, {1.00f, 0.56f, 0.34f, 0.16f, 0.10f, 0.06f, 0.16f, 0.10f},
+     {2.40f, 1.50f, 0.95f, 0.45f, 0.30f, 0.22f, 2.20f, 1.30f}, 0.50f, 0.36f,  0.0f, 2.5f},
+    /* 1 MARIMBA: the bar's torsional and lateral modes, and the tuned overtone's doublet */
+    {{1.00f, 3.98f, 9.20f, 1.003f, 2.71f, 5.66f, 3.996f, 15.2f}, {1.00f, 0.42f, 0.16f, 0.38f, 0.20f, 0.14f, 0.24f, 0.08f},
+     {0.95f, 0.18f, 0.06f, 0.85f, 0.16f, 0.10f, 0.22f, 0.04f}, 0.00f, 0.00f,  0.0f, 3.1f},
+    /* 2 KALIMBA: the tine's upper bending modes and the box */
+    {{1.00f, 2.86f, 6.24f, 1.006f, 4.10f, 1.50f, 8.90f, 10.4f}, {1.00f, 0.38f, 0.24f, 0.42f, 0.28f, 0.30f, 0.16f, 0.12f},
+     {1.45f, 0.42f, 0.14f, 1.35f, 0.20f, 0.40f, 0.12f, 0.09f}, 0.50f, 0.20f,  0.0f, 4.4f},
+    /* 3 TABLA: the loaded head's near-harmonic series on up */
+    {{1.00f, 1.48f, 1.98f, 2.52f, 2.98f, 3.50f, 4.00f, 1.003f}, {1.00f, 0.58f, 0.46f, 0.28f, 0.22f, 0.12f, 0.10f, 0.30f},
+     {0.82f, 0.52f, 0.35f, 0.22f, 0.20f, 0.15f, 0.12f, 0.70f}, 0.50f, 0.26f, -3.2f, 2.8f},
+    /* 4 WOOD: the block's higher modes, short */
+    {{1.00f, 2.58f, 4.16f, 6.32f, 8.60f, 1.60f, 3.40f, 11.0f}, {1.00f, 0.52f, 0.28f, 0.15f, 0.12f, 0.22f, 0.16f, 0.08f},
+     {0.26f, 0.12f, 0.06f, 0.04f, 0.04f, 0.12f, 0.07f, 0.03f}, 0.00f, 0.00f,  0.0f, 3.7f},
+    /* 5 GAMELAN: the bronze's split modes */
+    {{1.00f, 1.007f, 2.756f, 5.40f, 2.77f, 4.10f, 8.90f, 1.52f}, {0.90f, 0.86f, 0.45f, 0.25f, 0.25f, 0.15f, 0.08f, 0.12f},
+     {3.20f, 3.10f, 1.35f, 0.55f, 1.20f, 0.70f, 0.30f, 1.40f}, 0.00f, 0.00f,  0.0f, 2.7f},
+    /* 6 STEEL: the note's harmonics and its doublets */
+    {{1.00f, 2.00f, 2.99f, 5.04f, 4.00f, 1.004f, 6.03f, 2.008f}, {0.92f, 0.72f, 0.48f, 0.26f, 0.18f, 0.16f, 0.10f, 0.12f},
+     {1.80f, 1.40f, 0.88f, 0.38f, 0.50f, 1.60f, 0.25f, 1.20f}, 0.00f, 0.00f,  0.0f, 4.0f},
+    /* 7 GLITCH: more square roots */
+    {{1.00f, 1.732f, 3.317f, 7.14f, 2.236f, 4.58f, 5.39f, 9.90f}, {0.85f, 0.75f, 0.55f, 0.42f, 0.40f, 0.30f, 0.25f, 0.20f},
+     {0.42f, 0.24f, 0.14f, 0.08f, 0.20f, 0.12f, 0.10f, 0.06f}, 0.00f, 0.00f,  9.5f, 5.9f},
 };
 
 static struct {
     int algo;
     f32 stretch, mallet, ring, space;
 } PR;
+
+static int perc_nmode = NMODE;
+f32 perc_mode_ratio(int algo, int m)            /* (for tests/perc.c) */
+{
+    return MA[algo & 7].rat[m & (NMODE - 1)];
+}
+void perc_test_modes(int n) { perc_nmode = n >= 1 && n <= NMODE ? n : NMODE; }   /* (tests/perc.c: 4 as h1's) */
+
+/* Voice state: s[0..15] the eight modes (x, y), ph[0..1] the mallet's FM phases, ph[2..3] the cavity, ph[4]
+ * the mallet's envelope, ph[5] the bend's, ph[6] the mallet's low-pass, u[0] noise, u[1] samples since the
+ * strike, and the two strings' x, y as float bits in u[2], u[3], q[0], q[1] (they keep ringing on a
+ * re-strike). */
+typedef union { f32 f; uint32_t u; } FB;
+static f32 fb_get(uint32_t w) { FB b; b.u = w; return b.f; }
+static uint32_t fb_put(f32 f) { FB b; b.f = f; return b.u; }
 
 static void perc_block(const Blk *b)
 {
@@ -54,14 +88,17 @@ static void perc_note(Voice *v, const Blk *b)
     if (!v->u[0]) v->u[0] = 0x9E2C0001u + (uint32_t)v->idx * 7919u;
     if (v->env < 0.001f) {
         for (i = 0; i < 16; i++) v->s[i] = 0.0f;
-        for (i = 0; i < 6; i++) v->ph[i] = 0.0f;
+        for (i = 0; i < 8; i++) v->ph[i] = 0.0f;
+        v->u[2] = v->u[3] = v->q[0] = v->q[1] = fb_put(0.0f);
     } else {
         /* Keep slight natural sympathetic ring on re-strike */
-        for (i = 0; i < 10; i++) v->s[i] *= 0.35f;
+        for (i = 0; i < 16; i++) v->s[i] *= 0.35f;
+        v->ph[2] *= 0.35f;
+        v->ph[3] *= 0.35f;
     }
-    v->s[10] = 1.0f;   /* mallet impulse envelope */
-    v->s[11] = 1.0f;   /* pitch bend envelope (Tabla / Glitch) */
-    v->s[12] = 0.0f;   /* mallet LPF state */
+    v->ph[4] = 1.0f;   /* mallet impulse envelope */
+    v->ph[5] = 1.0f;   /* pitch bend envelope (Tabla / Glitch) */
+    v->ph[6] = 0.0f;   /* mallet LPF state */
     v->u[1]  = 0u;     /* sample counter since strike */
 }
 
@@ -73,9 +110,11 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     f32 stretch = exp2fx((PR.stretch - 0.5f) * 1.15f);   /* 0.67x .. 1.49x upper-mode stretch */
     f32 ring_mul = exp2fx((PR.ring - 0.5f) * 3.8f);      /* 0.27x .. 3.7x decay scale */
     f32 wid = 0.12f + 0.88f * PR.space;
-    f32 bend_e = v->s[11];
-    f32 f0, mc[4], ms[4], ma[4], hc = 0.0f, hs = 0.0f;
-    f32 mal_env = v->s[10], mal_lp = v->s[12];
+    f32 bend_e = v->ph[5];
+    f32 f0, mc[NMODE], ms[NMODE], ma[NMODE], hc = 0.0f, hs = 0.0f;
+    f32 mal_env = v->ph[4], mal_lp = v->ph[6];
+    f32 sym = clampf((PR.space - 0.6f) * 2.5f, 0.0f, 1.0f);   /* the strings: SPACE 60 .. 100 */
+    f32 sc[2] = {0.0f, 0.0f}, ss[2] = {0.0f, 0.0f}, sx[2], sy[2];
     f32 mal_dec = exp2fx(-1.4427f / ((0.0018f + 0.011f * (1.0f - PR.mallet)) * b->sr));
     f32 mal_cut = 0.10f + 0.85f * PR.mallet;
     f32 d_fm0, d_fm1, p0 = v->ph[0], p1 = v->ph[1];
@@ -91,11 +130,11 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     d_fm0 = minf(f0 * b->isr, 0.44f);
     d_fm1 = minf(f0 * a->fm_click * b->isr, 0.44f);
 
-    /* Precompute exact coupled-form rotation coefficients (cos, sin) * r for 4 modes */
-    for (m = 0; m < 4; m++) {
+    /* Precompute exact coupled-form rotation coefficients (cos, sin) * r for the modes */
+    for (m = 0; m < NMODE; m++) {
         f32 rat = (m == 0) ? a->rat[0] : (1.0f + (a->rat[m] - 1.0f) * stretch);
         f32 fm = f0 * rat;
-        if (fm >= 0.43f * b->sr) {
+        if (fm >= 0.43f * b->sr || m >= perc_nmode) {
             mc[m] = ms[m] = ma[m] = 0.0f;
         } else {
             f32 t60 = maxf(0.020f, a->dec[m] * ring_mul * clampf(exp2fx((60.0f - pitch) * (1.0f / 42.0f)), 0.45f, 1.65f));
@@ -105,6 +144,23 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             ms[m] = r * tsin(w);
             /* Mallet hardness scales upper mode excitation! */
             ma[m] = a->amp[m] * (m == 0 ? 1.0f : (0.28f + 1.25f * PR.mallet * vel));
+        }
+        /* a mode that has died away, with no strike left to wake it, is not worked out this block (the new
+         * short ones are gone in a fraction of a second: most of a held chord's time, most modes are) */
+        if (mal_env <= 0.0005f && absf(v->s[2 * m]) + absf(v->s[2 * m + 1]) < 1e-6f) {
+            v->s[2 * m] = v->s[2 * m + 1] = 0.0f;
+            mc[m] = ms[m] = ma[m] = 0.0f;
+        }
+    }
+    sx[0] = fb_get(v->u[2]); sy[0] = fb_get(v->u[3]); sx[1] = fb_get(v->q[0]); sy[1] = fb_get(v->q[1]);
+    if (sym > 0.0f) {
+        for (m = 0; m < 2; m++) {
+            f32 fs = f0 * (f32)(m + 2);                          /* an octave and a twelfth up */
+            if (fs < 0.43f * b->sr) {
+                f32 r = clampf(exp2fx(-10.0f / (3.2f * ring_mul * b->sr)), 0.90f, 0.99995f);
+                sc[m] = r * tcos(fs * b->isr);
+                ss[m] = r * tsin(fs * b->isr);
+            }
         }
     }
     if (a->helm > 0.0f) {
@@ -129,10 +185,11 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
             mal_env *= mal_dec;
         }
 
-        /* Tick 4 coupled-form modal resonators with wide stereo mode & register panning */
+        /* Tick the coupled-form modal resonators with wide stereo mode & register panning */
         {
-            static const f32 MPAN[4] = {-0.38f, 0.72f, -0.84f, 0.92f};
-            for (m = 0; m < 4; m++) {
+            static const f32 MPAN[NMODE] = {-0.38f, 0.72f, -0.84f, 0.92f, -0.55f, 0.48f, -0.18f, 0.26f};
+            for (m = 0; m < NMODE; m++) {
+                if (ma[m] == 0.0f && mc[m] == 0.0f) continue;     /* (above the top: off) */
                 f32 x = v->s[2 * m], y = v->s[2 * m + 1];
                 f32 nx = mc[m] * x - ms[m] * y + exc * ma[m];
                 f32 ny = ms[m] * x + mc[m] * y;
@@ -147,13 +204,26 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
         /* Optional Helmholtz acoustic cavity resonance (Handpan / Kalimba / Tabla) */
         if (a->helm > 0.0f) {
-            f32 hx = v->s[8], hy = v->s[9];
+            f32 hx = v->ph[2], hy = v->ph[3];
             f32 nhx = hc * hx - hs * hy + exc * a->h_amp * (0.45f + 0.95f * PR.space);
             f32 nhy = hs * hx + hc * hy;
-            v->s[8] = nhx;
-            v->s[9] = nhy;
+            v->ph[2] = nhx;
+            v->ph[3] = nhy;
             sl += nhy;
             sr += nhy;
+        }
+
+        /* Sympathetic strings: struck by the mallet and by the modes, ringing on after them */
+        if (sym > 0.0f) {
+            f32 drive = (exc * 0.5f + (sl + sr) * 0.02f) * sym;
+            for (m = 0; m < 2; m++) {
+                f32 nx = sc[m] * sx[m] - ss[m] * sy[m] + drive;
+                f32 ny = ss[m] * sx[m] + sc[m] * sy[m];
+                sx[m] = nx;
+                sy[m] = ny;
+            }
+            sl += (sy[0] * 0.75f + sy[1] * 0.35f) * sym;
+            sr += (sy[1] * 0.75f + sy[0] * 0.35f) * sym;
         }
 
         /* Direct subtle acoustic mallet knock */
@@ -170,8 +240,12 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
     v->u[0] = rng; v->u[1] = scnt;
     v->ph[0] = p0; v->ph[1] = p1;
-    v->s[10] = mal_env; v->s[11] *= 1.0f - onepole_k(PR.algo == 7 ? 0.018f : 0.075f, b->sr / (f32)n);
-    v->s[12] = mal_lp;
+    v->ph[4] = mal_env; v->ph[5] *= 1.0f - onepole_k(PR.algo == 7 ? 0.018f : 0.075f, b->sr / (f32)n);
+    v->ph[6] = mal_lp;
+    if (sym <= 0.0f) {                           /* (the strings let go of what they had once SPACE leaves them) */
+        sx[0] *= 0.5f; sy[0] *= 0.5f; sx[1] *= 0.5f; sy[1] *= 0.5f;
+    }
+    v->u[2] = fb_put(sx[0]); v->u[3] = fb_put(sy[0]); v->q[0] = fb_put(sx[1]); v->q[1] = fb_put(sy[1]);
 }
 
 /* ---- 4-Color Vector Picture: Handpan / Modal Resonant Drum & Chladni Ripples ----- */

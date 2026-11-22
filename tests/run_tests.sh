@@ -16,6 +16,8 @@
 #              the treatments are shorter, longer and darker than the dry kits
 #   grain      GRAIN: bounded at every corner, at its pitch, no clicks, its level, FREEZE (FX held on its
 #              page) and DENSITY 0 off
+#   perc       PERC's eight modes heard on every algorithm, its sympathetic strings in SPACE's top, every
+#              note sounds and ends
 #   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
@@ -68,6 +70,8 @@ $CC -std=c99 $SAN core/*.c tests/skins.c -o build/a22skins -lm
 build/a22skins
 $CC -std=c99 $SAN core/*.c tests/grain.c -o build/a22grain -lm
 build/a22grain
+$CC -std=c99 $SAN core/*.c tests/perc.c -o build/a22perc -lm
+build/a22perc
 $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm

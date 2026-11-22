@@ -47,6 +47,18 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   reads, its level, FREEZE and the panel; `tests/echo.c` that it comes back silent and is the same after
   25 minutes on; `tests/state.c` that a state from before it brings it up at its defaults.
 
+- PERC rings with eight modes a note where it had four: each algorithm keeps its four as they were and
+  gains four quieter, shorter ones (HANDPAN's and STEEL's beating doublets, MARIMBA's and KALIMBA's
+  upper bar and tine modes, TABLA's head on up its near-harmonic series, WOOD's higher block modes,
+  GAMELAN's split bronze, GLITCH's square roots), heard 13 to 25 dB under the whole. **Saved sounds change
+  a little:** a tape or snapshot on PERC plays the new modes too (as loud as before, within 0.2 dB).
+  SPACE from 60 up brings in two sympathetic strings, an octave and a twelfth over the note, struck by the
+  mallet and the modes and ringing on after them; at SPACE's default (52) and below 60 there are none. A
+  mode that has died away is not worked out until the next strike, so a held chord costs about 1.3 times
+  what it did (1.4 with the strings), measured on a computer; the FM-1 decides whether it stays.
+  `tests/perc.c` checks that the new modes are heard on every algorithm, the strings, and every note
+  sounding and ending.
+
 **Playing**
 - DICE. **EDIT + LFO** rolls the four knobs of the algorithm in hand. Each knob moves only so far from that
   algorithm's own setting, by a span chosen per engine knob: pitch-like and stepped knobs (KIT TUNE, FM-4

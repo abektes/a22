@@ -39,7 +39,7 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 | **HAZE** | evolving ambient textures | AETHER, VOX, SOLAR, ICE, MIST, ABYSS, PRISM, GHOST | MORPH, FORMANT, DRIFT, SHIMMER |
 | **MONO** | monophonic leads and basses, with glide | ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER | FM-BITE, CUTOFF, GLIDE, SUB-DRV |
 | **KIT** | drum kits, a drum on every note of the octave | 808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD | TUNE, DECAY, PUNCH, FM-GRIT |
-| **PERC** | tuned percussion | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
+| **PERC** | tuned percussion: eight modes a note, and sympathetic strings in SPACE's top | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
 | **WAVE** | wavetables: eight banks of fifteen waves, morphing, band-limited per octave | HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL | WAVE, SCAN, SPREAD, FILTER |
 | **CHIP** | 8-bit console voices: pulses, stepped triangle, noise, arpeggios | PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET | DUTY, SWEEP, ARP, CRUSH |
 | **CYCLE** | WAVE's player on single cycles of recorded instruments ([AKWF](docs/WAVETABLES.md), CC0): four banks, each smooth and stepped | STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX | WAVE, SCAN, SPREAD, FILTER |
