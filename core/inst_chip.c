@@ -60,11 +60,10 @@ static inline f32 tri16(f32 ph)
     return (f32)(int)((t + 1.0f) * 7.5f + 0.5f) * (2.0f / 15.0f) - 1.0f;
 }
 
-static inline __attribute__((always_inline)) void chip_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
-                                                                int n, const int algo)
+static void chip_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     static const int8_t ARP3[4] = {0, 4, 7, 12};                    /* major: root, third, fifth, octave */
-    int i, hold = C.hold, cnt = (int)v->s[5], arp_i;
+    int algo = C.algo, i, hold = C.hold, cnt = (int)v->s[5], arp_i;
     uint32_t r = v->u[0] ? v->u[0] : 0x7FFFu;
     f32 pitch = v->pitch + b->bend, f, d0, d1, dn, vib, held = v->s[6], lp = v->s[8];
     f32 p0 = v->ph[0], p1 = v->ph[1], pn = v->ph[2];
@@ -142,22 +141,6 @@ static inline __attribute__((always_inline)) void chip_render_a(Voice *v, const 
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = pn;
     v->s[0] = nv; v->s[5] = (f32)cnt; v->s[6] = held; v->s[8] = lp;
     v->u[0] = r;
-}
-
-/* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
- * fold away); the same code, bit-exact */
-static void chip_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
-{
-    switch (C.algo & 7) {
-    case 0: chip_render_a(v, b, out_l, out_r, n, 0); break;
-    case 1: chip_render_a(v, b, out_l, out_r, n, 1); break;
-    case 2: chip_render_a(v, b, out_l, out_r, n, 2); break;
-    case 3: chip_render_a(v, b, out_l, out_r, n, 3); break;
-    case 4: chip_render_a(v, b, out_l, out_r, n, 4); break;
-    case 5: chip_render_a(v, b, out_l, out_r, n, 5); break;
-    case 6: chip_render_a(v, b, out_l, out_r, n, 6); break;
-    default: chip_render_a(v, b, out_l, out_r, n, 7); break;
-    }
 }
 
 /* ---- picture: a pixel screen with the wave in steps, and the four channels' meters ------------------ */
