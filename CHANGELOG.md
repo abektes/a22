@@ -27,6 +27,12 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   sent as CC 20-23. `tests/dice.c` rolls every algorithm and checks the spans, the panel, and that a roll
   stays within 6 dB of how loud the algorithm is at its own setting (it measures -4.5 to +4.5 dB).
 
+**Fixes**
+- CUT (EDIT + REC) of a track holding more than 512 events, knob moves included, wrote past the end of the
+  clip's memory (in 0.1.0 to 0.4.0): only notes checked for room, so a take with a lot of knob movement could
+  overrun it. Every event now needs a place; what does not fit stays on the tape, as notes always did.
+  Found by the crash hunt; `tests/tape.c` cuts and pastes a take of 1,200 knob moves.
+
 **Inside**
 - The saved state is version 5: it has room for sixteen engines and twelve effects (there are twelve and
   eight), and records how many effects it was saved with, as it already did engines. An engine or effect

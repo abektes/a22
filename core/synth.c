@@ -1122,8 +1122,10 @@ static void tape_cut(void)
         is_open = (int)((open[p >> 5] >> (p & 31)) & 1u);
         if (in && kind == LEV_OFF && !is_open)
             in = 0;                              /* (the end of a note begun before IN, or one left on the tape) */
-        if (in && kind == LEV_ON && nclip + nop + 2 > NCLIP)
-            in = 0;                              /* (the clip is full: it stays on the tape) */
+        if (in && kind != LEV_OFF && nclip + nop + (kind == LEV_ON && !is_open ? 2 : 1) > NCLIP)
+            in = 0;                              /* (the clip is full: it stays on the tape. Every event but the end
+                                                  * of a note it holds needs a place, and a new note one for its end
+                                                  * too: knob moves took places unchecked until 0.4.0) */
         if (in) {
             clip_ev[nclip] = *e;
             clip_ev[nclip].tick = (uint16_t)((f32)e->tick - in_t);
