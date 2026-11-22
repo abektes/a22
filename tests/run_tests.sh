@@ -12,6 +12,8 @@
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
 #              changes, varispeed reaches the track in hand, the white keys show 64 steps and the tape
+#   tape       the tape's edges: SNAP keeps a note's length, mute, BARS turned down while playing, no REC in REV,
+#              CUT and clearing one track let go of the right notes, a take's first note on its first pass
 #   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
@@ -52,6 +54,8 @@ $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm
 build/a22tracks
+$CC -std=c99 $SAN core/*.c tests/tape.c -o build/a22tape -lm
+build/a22tape
 $CC -std=c99 $SAN core/*.c tests/overload.c -o build/a22overload -lm
 build/a22overload
 # (25 minutes of DELAY: without the checkers, or it takes most of an hour)

@@ -579,6 +579,9 @@ SMALL void h1_button(int btn, int down)
         if (btn == H1_BTN_REC) {
             if (page == PG_ARP && st.ip[st.inst].arp[0] == ARP_RIFF)
                 eng_post(EV_RIFF_REC, 0);
+            else if (st.seq[0] == SEQ_TAPE && st.tape[0] == TAPE_SPD_REV &&
+                     (seq.loop_state == LOOP_EMPTY || seq.loop_state == LOOP_IDLE || seq.loop_state == LOOP_PLAY))
+                toast("NO REC IN REV", 0, 0, 0, -1);   /* (a take in REV would play back as held notes) */
             else
                 eng_post(EV_REC, 0);
         }
