@@ -41,6 +41,12 @@ void h1_frame(uint32_t now_ms);                  /* advance the animation and dr
 
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */
 void h1_render(int32_t *lr, uint32_t n);
+/* Whether the last audio half went out late (rendered after its time): call once a render, from where h1_render is
+ * called. Two late halves in a row and a voice lets go fast (10 ms), one at a time, a note the player is not holding
+ * first, so the sound gets back in time instead of running late half after half (which starves the main loop).
+ * h1_voices_shed: how many so far. */
+void h1_late(int late);
+uint32_t h1_voices_shed(void);
 
 /* A second core, where a port has one. run hands it fn(arg) and returns 1, or returns 0 (then the core
  * that asked does the work); wait returns 0 when the job is back, anything else if it was dropped (then

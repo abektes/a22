@@ -41,6 +41,7 @@ static struct {
     int algo;
     f32 morph, form, drift, shim;
     f32 lfo1, lfo2;
+    Svf air;        /* the airy smoothing low-pass: SHIMMER's alone, so once a block, not once a voice */
 } DM;
 static f32 dm_p1, dm_p2, dm_t_was;
 
@@ -59,6 +60,7 @@ static void haze_block(const Blk *b)
     DM.shim  = b->k[3];
     DM.lfo1  = tsin(dm_p1);
     DM.lfo2  = tsin(dm_p2);
+    svf_set(&DM.air, clampf(480.0f * exp2fx((0.35f + 0.65f * DM.shim) * 5.2f), 320.0f, 17500.0f), 0.75f, b->isr);
 }
 
 static void haze_note(Voice *v, const Blk *b)
@@ -93,7 +95,7 @@ static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     f32 sh_amt = DM.shim * (0.35f + 0.65f * bloom);
     f32 fmix = clampf(a->fmix * (0.35f + 0.85f * DM.form), 0.0f, 0.85f);
     f32 p0 = v->ph[0], p1 = v->ph[1], pm = v->ph[2], ps = v->ph[3], psh = v->ph[4], pw = v->ph[7];
-    Svf fm1, fm2, air;
+    Svf fm1, fm2, air = DM.air;
     int i;
 
     /* Interpolate dual formant frequencies smoothly across 5 vowels + slow drift + Mod-Env */
@@ -107,7 +109,6 @@ static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         f32 q2 = 3.2f + 3.2f * DM.morph;
         svf_set(&fm1, f1, q1, b->isr);
         svf_set(&fm2, f2, q2, b->isr);
-        svf_set(&air, clampf(480.0f * exp2fx((0.35f + 0.65f * DM.shim) * 5.2f), 320.0f, 17500.0f), 0.75f, b->isr);
     }
 
     for (i = 0; i < n; i++) {

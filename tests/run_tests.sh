@@ -4,7 +4,7 @@
 # compiler's address and undefined-behaviour checkers:
 #   a22_test   two cores bit-exact on all 96 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
-#   basics     the limiter on every algorithm, velocity, the tape through a power cycle, MIDI out
+#   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
@@ -12,6 +12,7 @@
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
 #              changes, varispeed reaches the track in hand, the white keys show 64 steps and the tape
+#   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
 #   lines      g_line, g_poly and g_arc against a distance worked out in floats
@@ -51,6 +52,8 @@ $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm
 build/a22tracks
+$CC -std=c99 $SAN core/*.c tests/overload.c -o build/a22overload -lm
+build/a22overload
 # (25 minutes of DELAY: without the checkers, or it takes most of an hour)
 $CC -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/a22echo -lm
 build/a22echo

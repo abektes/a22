@@ -8,6 +8,8 @@
  *                   panel's key to the bit
  *   the tape saved  h1_loop / h1_loop_load bring a recording back after a power cycle, from any address;
  *                   it asks to be saved when it changed and not once it is
+ *   WAVE's SPREAD   at 0 a note is centred (both sides the same), and it grows wider over the knob's
+ *                   whole turn, on every bank
  *   MIDI out        keys, the arpeggiator and the tape go out, CC 20-23 with the knobs, nothing that came in
  *                   is sent back, and HUSH tells the computer (CC 123)
  *
@@ -126,6 +128,35 @@ static Heard one_note(int vel, int unused)
     return heard;
 }
 
+/* ---- WAVE's SPREAD: a held C4 on bank a, SPREAD at sp, no FX; .energy is the side's over the middle's ---- */
+static Heard wave_width(int a, int sp)
+{
+    static int32_t out[512];
+    double mid = 0.0, side = 0.0;
+    int i, j;
+    h1_init(44100);
+    h1_control_set(H1_ENC_PRESET, 10);           /* (WAVE) */
+    h1_control_set(H1_ENC_ALGO, a);
+    h1_control_set(H1_ENC_K3, sp);
+    st.fx_on = 0;
+    go(300);
+    h1_key(7, 1);
+    go(250);                                     /* (past the attack) */
+    for (i = 0; i < 260; i++) {                  /* (1.5 s) */
+        h1_render(out, 256);
+        if (i % 3 == 0)
+            h1_frame(ms += 17);
+        for (j = 0; j < 512; j += 2) {
+            double m = 0.5 * ((double)out[j] + (double)out[j + 1]), d = 0.5 * ((double)out[j] - (double)out[j + 1]);
+            mid += m * m;
+            side += d * d;
+        }
+    }
+    memset(&heard, 0, sizeof heard);
+    heard.energy = mid > 0.0 ? side / mid : -1.0;
+    return heard;
+}
+
 /* ---- MIDI out ---- */
 static uint8_t mo[1024][3];
 static int nmo;
@@ -205,6 +236,25 @@ int main(void)
         CHECK(bright_soft < bright_hard * 0.9, "and darker");
         printf("  velocity 40: %.1f dB, brightness %.2f of 127's\n", 10.0 * log10(soft.energy / hard.energy),
                bright_soft / bright_hard);
+    }
+
+    /* ---- WAVE's SPREAD: centred at 0, then wider at every quarter of the turn ---- */
+    {
+        static const int SP[5] = {0, 25, 50, 75, 100};
+        for (a = 0; a < 8; a++) {
+            double w[5];
+            int k, wider = 1;
+            for (k = 0; k < 5; k++)
+                w[k] = taken(wave_width, a, SP[k]).energy;
+            for (k = 1; k < 5; k++)
+                wider &= w[k] > w[k - 1] * 1.5;
+            if (w[0] >= 0.02 || !wider || w[4] < 0.3)
+                printf("  WAVE %s: side/middle %.4f %.4f %.4f %.4f %.4f at SPREAD 0, 25, 50, 75, 100\n",
+                       inst_wave.algo[a], w[0], w[1], w[2], w[3], w[4]);
+            CHECK(w[0] >= 0.0 && w[0] < 0.02, "WAVE at SPREAD 0 is centred");
+            CHECK(wider, "WAVE grows wider at every quarter of SPREAD's turn");
+            CHECK(w[4] >= 0.3, "WAVE at full SPREAD is wide");
+        }
     }
 
     /* ---- the tape: a take, its notes and a knob out over MIDI, saved, a power cycle, loaded, played ---- */

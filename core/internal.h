@@ -39,6 +39,7 @@ typedef struct Voice {
     uint8_t trk;                 /* 0..NTRACK-1 (tape track owner) */
     uint8_t vel;                 /* MIDI/step velocity 1..127 */
     uint8_t declick;             /* 1: stolen voice declick active */
+    uint8_t shed;                /* 1: let go fast, the audio running out of time (eng_late) */
     uint32_t serial;             /* increments on every note-on */
     uint32_t stamp;              /* allocation timestamp */
     f32 pitch, target;           /* MIDI note (gliding) and target */
@@ -314,6 +315,8 @@ int eng_layer_rec(void);
 int eng_loop_used(void);
 uint32_t eng_loop_full(void);
 void eng_render(int32_t *lr, uint32_t n);
+void eng_late(int late);
+uint32_t eng_shed_count(void);
 void eng_snapshot(Vis *vis);
 uint32_t eng_sounding_lo(void);
 int eng_seq_leds(uint32_t *out, int page_open, int blink);

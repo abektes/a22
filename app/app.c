@@ -499,7 +499,12 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
      * everything louder: #38.) */
     float m = held < 0 ? (float)master_q12 * (1.0f / 4096.0f) : p * p;
     float gain = m * m;                                     /* and the square of that: MASTER's curve on the FM-1 */
-    uint32_t i, t0 = plat_ticks24(), us;
+    uint32_t i, t0 = plat_ticks24(), us, xr = plat_xruns();
+    static uint32_t xr_seen;
+    /* the half before went out late (the platform counts them): two in a row and the core lets a voice go. (Not
+     * fm1-base's APP_OVERLOAD: that comes at 90 % of the time, where nothing is late yet.) */
+    h1_late(xr != xr_seen);
+    xr_seen = xr;
     h1_render(lr, n);                                       /* 24-bit, already limited */
     for (i = 0; i < n; i++) {
         gain_now += (gain - gain_now) * 0.004f;             /* ~5 ms: turning MASTER does not click */
@@ -583,7 +588,7 @@ static char *say_num(char *d, char *end, uint32_t v)
 
 static void say_perf(void)
 {
-    char t[150], *d, *end = t + sizeof t - 1;
+    char t[176], *d, *end = t + sizeof t - 1;
     uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am;
     f = plat_lock();
     nb = pf_blocks; au = pf_audio; am = pf_audio_max;
@@ -603,6 +608,16 @@ static void say_perf(void)
     d = say_num(d, end, nb ? (au / nb) * 100u / pf_block_us : 0u);
     d = say_cat(d, end, " MAX ");
     d = say_num(d, end, am * 100u / pf_block_us);
+    {   /* the halves the render ran late for, and the voices let go to catch up, since the last PERF */
+        static uint32_t xr_was, shed_was;
+        uint32_t xr = plat_xruns(), sh = h1_voices_shed();
+        d = say_cat(d, end, " LATE ");
+        d = say_num(d, end, xr - xr_was);
+        d = say_cat(d, end, " SHED ");
+        d = say_num(d, end, sh - shed_was);
+        xr_was = xr;
+        shed_was = sh;
+    }
     d = say_cat(d, end, ". KB ");                           /* sent to the panel a frame, and in how many rectangles */
     d = say_num(d, end, (sent.bytes / n + 512u) / 1024u);
     d = say_cat(d, end, " RECTS ");
