@@ -3,7 +3,11 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.4.0
+
+Identity `FM-1_4122000400`. Released 2026-11-22. Installed and run on one FM-1 (a development build of the
+same code). The numbers go from 0.1.0 to 0.4.0 to keep clear of h1's own tags (0.1.0 to 0.3.0). Settings and
+the tape saved by 0.1.0 load as they were.
 
 **Sound**
 - WAVE's SPREAD is heard over its whole turn. At 0 a note is now centred; before, each note's right side
