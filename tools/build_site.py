@@ -10,12 +10,26 @@ The look is a synth's voice-ROM catalogue: twelve banks (A to L, one an engine) 
 """
 import html
 import os
+import re
 import shutil
 import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 REPO = "https://github.com/abektes/a22"
 RELEASE = REPO + "/releases/latest"
+
+
+def released_version():
+    """The CHANGELOG's newest released heading (## X.Y.Z): what the download buttons name, so it can't fall behind"""
+    with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
+        for line in f:
+            m = re.match(r"## (\d+\.\d+\.\d+)\b", line)
+            if m:
+                return m.group(1)
+    sys.exit("build_site: no released version in CHANGELOG.md")
+
+
+VERSION = released_version()
 COFFEE = "https://buymeacoffee.com/abektes"
 HUB = "https://thefirmwarehub.com"
 SIM = "sim/"
@@ -472,7 +486,7 @@ def front():
       </div>
       <div class="side">
         <div class="actions">
-          <a class="btn" href="{RELEASE}">{DOWN}Download 0.1.0</a>
+          <a class="btn" href="{RELEASE}">{DOWN}Download {VERSION}</a>
           <a class="more" href="{SIM}">Play it in your browser {ARROW}</a>
         </div>
         <p class="small">Free and open source. Installs over USB from the stock firmware or another custom one, and goes back the same way.</p>
@@ -498,9 +512,9 @@ def front():
     <div><h2 id="install">Install</h2>
       <p class="aside">About two minutes, over a USB cable that carries data. Back up anything the firmware you are leaving has made first.</p></div>
     <ol class="steps">
-      <li><span>Download <a href="{RELEASE}">a22-0.1.0.fwsc</a> from the latest release, and clone the repository for its installer.</span></li>
+      <li><span>Download <a href="{RELEASE}">a22-{VERSION}.fwsc</a> from the latest release, and clone the repository for its installer.</span></li>
       <li><span>Install the MIDI library the installer uses.</span><pre>pip3 install mido python-rtmidi</pre></li>
-      <li><span>Plug in the FM-1 and run the installer. It asks before it writes and checks the FM-1 afterwards.</span><pre>python3 base/tools/fm1_install.py a22-0.1.0.fwsc</pre></li>
+      <li><span>Plug in the FM-1 and run the installer. It asks before it writes and checks the FM-1 afterwards.</span><pre>python3 base/tools/fm1_install.py a22-{VERSION}.fwsc</pre></li>
     </ol>
     <aside class="note"><p>Works from the stock firmware (V15) and from other custom firmwares. On anything older than V15, update with M-VAVE's own updater first.</p></aside>
   </div>
