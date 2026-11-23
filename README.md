@@ -181,7 +181,8 @@ go back. It's never kept, so the FM-1 always starts as a USB device.
 
 ## Install
 
-Releases are on [GitHub](https://github.com/abektes/a22/releases). A22 is not listed on The Firmware Hub yet.
+Releases are on [GitHub](https://github.com/abektes/a22/releases), and A22 is listed on
+[The Firmware Hub](https://thefirmwarehub.com), which offers each new release a few hours after it is out.
 
 ### Before you install
 
