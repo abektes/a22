@@ -31,7 +31,11 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   below the limiter; at full track volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher).
   `tests/skins.c` checks every drum on every algorithm sounds and ends, the chokes, ROOM and the
   treatments; `tests/state.c` that a state from before SKINS brings it up as new. The names and the picks
-  are placeholders until judged by ear; the picture is KIT's.
+  are placeholders until judged by ear. Its picture is the kit seen from the player's seat, each drum where
+  its pan puts it: STUDIO's set or ORCH's (bass drum in its frame, three tenors, timpani, clash cymbals).
+  Heads ripple when struck, cymbals wobble, the hat's plates close when the closed hat cuts the open one;
+  ROOM draws the walls and two fainter ripples off them, TIGHT's ripples are short, VINTAGE and SHELLAC
+  are in gold and coarser.
 
 - A ninth effect, GRAIN: a granular cloud made of what the tracks send it. The last 0.74 s are kept (in
   the buffer DELAY, SHIFT, CHORUS and TANK use, so no more RAM), and up to eight grains read them back.

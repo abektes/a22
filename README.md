@@ -16,7 +16,7 @@ A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and buil
 <p>
 <img src="docs/img/a22/fm4.png" width="120" alt="FM-4"> <img src="docs/img/a22/electric.png" width="120" alt="ELECTRIC"> <img src="docs/img/a22/stack.png" width="120" alt="STACK"> <img src="docs/img/a22/analog.png" width="120" alt="ANALOG"> <img src="docs/img/a22/shaper.png" width="120" alt="SHAPER">
 <img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
-<img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP"> <img src="docs/img/a22/cycle.png" width="120" alt="CYCLE">
+<img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP"> <img src="docs/img/a22/cycle.png" width="120" alt="CYCLE"> <img src="docs/img/a22/skins.png" width="120" alt="SKINS">
 </p>
 
 > **A22 is early.** It has been installed and run on one FM-1 (every engine, effect and the tape driven over

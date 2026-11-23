@@ -80,10 +80,11 @@ Done as SKINS (engine 14), on branch `kits`: STUDIO, LIVE, TIGHT, VINTAGE, ORCH,
 TUNE, DECAY, TONE, ROOM. Thirteen new hits (17,879 bytes) appended to `sources.DRUMS`, so KIT's 33 are cut
 again unchanged and KIT renders the same to the bit; the kits reuse nine of KIT's hits too. LIVE and HALL's
 room is two more readers of the same hit started 9.7 and 17.3 ms late (no buffer). The names, the picks and
-the kick are placeholders until judged by ear (`build/samples-preview/`); the picture is KIT's. Still to do:
+the kick are placeholders until judged by ear (`build/samples-preview/`). Its picture (branch `skins-picture`)
+is the kit from the player's seat, ORCH's laid out apart; it draws in KIT's time. Still to do:
 CI's flash number, and timing on the FM-1 with eight-note chords (LIVE and HALL run three readers a voice).
 At release, as for CYCLE: the site's banks, `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s inks, the release
-checklist's engine count, `app/fm1.toml`'s description, and a picture of its own.
+checklist's engine count, `app/fm1.toml`'s description, and `docs/img/a22/skins.png`.
 
 ## Sprint 5: GRAIN, a granular send effect — no new RAM (done)
 

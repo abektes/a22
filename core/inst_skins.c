@@ -17,7 +17,12 @@
  *   K3 (WHITE)  TONE    dark .. bright
  *   K4 (ORANGE) ROOM    the reflections' level (at 0 the two extra readers do not run)
  *
- * The picture is KIT's pads. */
+ * The picture is the kit itself, from above, the player at the bottom (each drum where its pan puts it):
+ * STUDIO's set (kick, snare, hats, two rack toms, the floor tom, the ride) or ORCH's (concert bass drum,
+ * marching and rope snares, three tenors, timpani, suspended and clash cymbals, triangle). Heads ripple when
+ * struck, cymbals wobble, the hat's plates close when the closed hat cuts the open one. TUNE sizes the heads,
+ * DECAY how long they ring, TONE how bright a strike flashes, ROOM the walls and two fainter ripples off them
+ * (the two reflections the sound has); TIGHT's ripples are short, VINTAGE and SHELLAC are in gold, coarser. */
 #include "internal.h"
 #include "dsp.h"
 #include "plunk_data.h"
@@ -241,6 +246,205 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     v->q[3] = cnt;
 }
 
+/* ---- the picture ------------------------------------------------------------------------- */
+enum { P_NONE, P_KICK, P_BASS, P_DRUM, P_SNARE, P_RIM, P_HAT, P_CYM, P_CLASH, P_TIMP, P_TRI, P_TAMB, P_COW, P_CLAP };
+typedef struct Piece { uint8_t kind, x, y, r; } Piece;
+
+static const Piece PIECE[2][NDRUM] = {
+    /* STUDIO:  kick, rim (on the snare), snare, clap, floor tom, rack tom 2, hats, rack tom 1, tambourine,
+     *          cowbell, open hats (the hats' piece), ride */
+    {{P_KICK, 120, 112, 22}, {P_RIM, 96, 146, 15}, {P_SNARE, 96, 146, 15}, {P_CLAP, 66, 164, 7},
+     {P_DRUM, 164, 142, 18}, {P_DRUM, 140, 78, 13}, {P_HAT, 56, 126, 17}, {P_DRUM, 102, 78, 12},
+     {P_TAMB, 30, 160, 8}, {P_COW, 160, 106, 7}, {P_NONE, 56, 126, 17}, {P_CYM, 192, 84, 24}},
+    /* ORCH:    bass drum, rim (on the marching snare), marching snare, rope snare, three tenors, the clash
+     *          cymbals held short (the pair's piece), triangle, timpani, let ring (the pair), suspended */
+    {{P_BASS, 116, 106, 27}, {P_RIM, 98, 152, 13}, {P_SNARE, 98, 152, 13}, {P_SNARE, 140, 152, 13},
+     {P_DRUM, 152, 56, 12}, {P_DRUM, 126, 56, 11}, {P_CLASH, 190, 116, 17}, {P_DRUM, 100, 56, 10},
+     {P_TRI, 198, 54, 10}, {P_TIMP, 46, 134, 22}, {P_NONE, 190, 116, 17}, {P_CYM, 52, 72, 20}},
+};
+
+static f32 sk_e[NDRUM], sk_age[NDRUM];
+static uint32_t sk_seen[NVOICE];
+static int sk_gold;
+
+static f32 sn(f32 x) { return sk_gold ? (f32)ifloor(x * (1.0f / 3.0f) + 0.5f) * 3.0f : x; }   /* (VINTAGE: coarser) */
+static void sk_col(int c) { g_color(sk_gold ? GC_GOLD : c); }
+
+/* rings rippling out over a head of radius r, and ROOM's two fainter ones a moment later */
+static void sk_ripple(f32 x, f32 y, f32 r, int d, f32 speed, f32 room, int c)
+{
+    static const f32 LAG[2] = {0.06f, 0.11f};
+    f32 e = sk_e[d], age = sk_age[d];
+    int j;
+    if (e < 0.02f) return;
+    sk_col(c);
+    for (j = 0; j < 2; j++) {
+        f32 u = age * speed - 0.45f * (f32)j;
+        if (u > 0.0f && u < 1.0f) g_ring(sn(x), sn(y), r * (0.2f + 0.8f * u), 1.6f, e * (1.0f - u));
+    }
+    if (room > 0.02f)
+        for (j = 0; j < 2; j++) {
+            f32 u = (age - LAG[j]) * speed * 0.7f;
+            if (u > 0.0f && u < 1.0f) g_ring(sn(x), sn(y), r * (1.0f + 0.9f * u), 1.0f, room * e * 0.45f * (1.0f - u));
+        }
+}
+
+static void skins_draw(const Vis *vis)
+{
+    int kit = (vis->algo >> 2) & 1, treat = vis->algo & 3, i;
+    f32 dt = vis->dt, tune = vis->k[0], dec = vis->k[1], tone = vis->k[2], room = vis->k[3];
+    f32 sz = 0.86f + 0.28f * tune, speed = treat == 2 ? 4.2f : 2.2f;
+    const Piece *P = PIECE[kit];
+
+    sk_gold = treat == 3;
+    if (vis->fresh) {
+        for (i = 0; i < NDRUM; i++) sk_e[i] = 0.0f, sk_age[i] = 9.0f;
+        for (i = 0; i < NVOICE; i++) sk_seen[i] = vis->v[i].serial;
+    }
+    for (i = 0; i < NVOICE; i++)
+        if (vis->v[i].on && vis->v[i].serial != sk_seen[i]) {
+            int d = vis->v[i].note % 12;
+            sk_seen[i] = vis->v[i].serial;
+            sk_e[d] = 0.45f + 0.55f * (f32)vis->v[i].vel * (1.0f / 127.0f);
+            sk_age[d] = 0.0f;
+            if (d == HAT) sk_e[OHAT] = minf(sk_e[OHAT], 0.05f);       /* (closed: it cuts the open one) */
+        }
+    for (i = 0; i < NDRUM; i++) {
+        sk_age[i] += dt;
+        sk_e[i] = maxf(0.0f, sk_e[i] - dt / ((0.10f + 0.9f * dec) * (treat == 2 ? 0.5f : 1.0f) * (treat == 1 ? 1.4f : 1.0f)));
+    }
+
+    /* the room: its walls as ROOM brings them in */
+    if (room > 0.02f) {
+        sk_col(GC_SLATE);
+        g_box(sn(16.0f), sn(38.0f), 208.0f, 140.0f, 1.0f, 0.10f + 0.40f * room);
+    }
+
+    for (i = 0; i < NDRUM; i++) {
+        const Piece *p = &P[i];
+        f32 x = (f32)p->x, y = (f32)p->y, r = (f32)p->r * sz, e = sk_e[i];
+        f32 flash = e * (0.20f + 0.55f * tone);
+        switch (p->kind) {
+        case P_KICK: {                                               /* a bass drum on its side: shell, two heads */
+            f32 h = r * 1.25f;
+            sk_col(GC_ORANGE);
+            g_box(sn(x - r), sn(y - h * 0.5f), 2.0f * r, h, 1.8f, 0.8f);
+            g_ellipse(sn(x), sn(y + h * 0.5f), r, 3.0f + 5.0f * e, 1.6f, 0.7f + 0.3f * e);   /* the beater's head */
+            g_ellipse(sn(x), sn(y - h * 0.5f), r, 3.0f, 1.2f, 0.5f);
+            if (e > 0.02f) { g_rect(sn(x - r), sn(y - h * 0.5f), 2.0f * r, h, flash * 0.5f); }
+            sk_ripple(x, y, r, i, speed, room, GC_ORANGE);
+            break;
+        }
+        case P_BASS:                                                 /* a concert bass drum in its frame */
+            sk_col(GC_ORANGE);
+            g_ring(sn(x), sn(y), r, 2.2f, 0.85f);
+            g_ring(sn(x), sn(y), r * 0.86f, 1.0f, 0.4f);
+            g_line(sn(x - r * 0.7f), sn(y + r * 0.7f), sn(x - r * 0.9f), sn(y + r * 1.25f), 1.4f, 0.6f);
+            g_line(sn(x + r * 0.7f), sn(y + r * 0.7f), sn(x + r * 0.9f), sn(y + r * 1.25f), 1.4f, 0.6f);
+            if (e > 0.02f) g_disc(sn(x), sn(y), r * 0.86f, flash * 0.6f);
+            sk_ripple(x, y, r * 0.86f, i, speed * 0.8f, room, GC_ORANGE);
+            break;
+        case P_DRUM:
+        case P_SNARE: {
+            int c = p->kind == P_SNARE ? GC_WHITE : (kit ? GC_BLUE : GC_GREEN);
+            sk_col(c);
+            g_ring(sn(x), sn(y), r, 2.0f, 0.85f);
+            if (p->kind == P_SNARE) {                                /* the wires under the head */
+                g_line(sn(x - r * 0.6f), sn(y - 2.5f), sn(x + r * 0.6f), sn(y - 2.5f), 1.0f, 0.35f + 0.4f * e);
+                g_line(sn(x - r * 0.6f), sn(y + 2.5f), sn(x + r * 0.6f), sn(y + 2.5f), 1.0f, 0.35f + 0.4f * e);
+            }
+            if (e > 0.02f) g_disc(sn(x), sn(y), r * 0.9f, flash);
+            sk_ripple(x, y, r, i, speed, room, c);
+            break;
+        }
+        case P_RIM: {                                                /* the stick across the snare's rim */
+            f32 a = sk_e[i];
+            if (a > 0.02f) {
+                sk_col(GC_CYAN);
+                g_line(sn(x - r * 1.3f), sn(y + r * 0.9f), sn(x + r * 0.5f), sn(y - r * 0.9f), 2.2f, a);
+                g_arc(sn(x), sn(y), r, 0.55f, 0.95f, 2.6f, a);
+            }
+            break;
+        }
+        case P_HAT: {                                                /* two plates: apart while open, shut on the closed hit */
+            f32 eo = sk_e[OHAT], ec = sk_e[HAT];
+            f32 gap = 1.5f + 9.0f * eo * (1.0f - ec);
+            sk_col(GC_GOLD);
+            g_line(sn(x), sn(y - gap * 0.5f - 4.0f), sn(x), sn(y + 16.0f), 1.2f, 0.5f);
+            g_ellipse(sn(x), sn(y - gap * 0.5f), r, r * 0.28f, 1.6f, 0.75f + 0.25f * maxf(eo, ec));
+            g_ellipse(sn(x), sn(y + gap * 0.5f), r, r * 0.28f, 1.6f, 0.65f + 0.35f * maxf(eo, ec));
+            if (maxf(eo, ec) > 0.02f) g_ellipse(sn(x), sn(y), r, r * 0.28f + gap * 0.5f, 0.0f, maxf(eo, ec) * (0.15f + 0.3f * tone));
+            break;
+        }
+        case P_CYM: {                                                /* on its stand, wobbling when struck */
+            f32 ry = r * 0.32f * (1.0f + 0.7f * e * sin_turns(sk_age[i] * 4.5f));
+            sk_col(GC_GOLD);
+            g_line(sn(x), sn(y), sn(x), sn(y + 26.0f), 1.2f, 0.5f);
+            g_ellipse(sn(x), sn(y), r, maxf(1.5f, absf(ry)), 1.8f, 0.8f + 0.2f * e);
+            g_disc(sn(x), sn(y), 2.5f, 0.9f);
+            if (e > 0.02f) g_ellipse(sn(x), sn(y), r, maxf(1.5f, absf(ry)), 0.0f, flash * 0.5f);
+            if (room > 0.02f && e > 0.02f) g_ellipse(sn(x), sn(y), r * (1.0f + 0.5f * (1.0f - e)), maxf(1.5f, absf(ry)) * 1.4f, 1.0f, room * e * 0.35f);
+            break;
+        }
+        case P_CLASH: {                                              /* a pair: swung apart while ringing, held shut short */
+            f32 eo = sk_e[OHAT], ec = sk_e[HAT];
+            f32 gap = 2.0f + 12.0f * eo * (1.0f - ec);
+            f32 wob = 1.0f + 0.3f * eo * sin_turns(sk_age[OHAT] * 4.0f);
+            sk_col(GC_GOLD);
+            g_ellipse(sn(x - gap * 0.5f), sn(y), r * 0.3f * wob, r, 1.8f, 0.8f + 0.2f * maxf(eo, ec));
+            g_ellipse(sn(x + gap * 0.5f), sn(y), r * 0.3f * wob, r, 1.8f, 0.8f + 0.2f * maxf(eo, ec));
+            if (maxf(eo, ec) > 0.02f) g_glow(sn(x), sn(y), r, maxf(eo, ec) * (0.2f + 0.3f * tone));
+            break;
+        }
+        case P_TIMP:                                                 /* a copper bowl on three legs */
+            sk_col(GC_ORANGE);
+            g_ring(sn(x), sn(y), r, 2.4f, 0.85f);
+            g_ring(sn(x), sn(y), r * 0.72f, 1.0f, 0.35f);
+            g_line(sn(x - r * 0.8f), sn(y + r * 0.6f), sn(x - r), sn(y + r * 1.15f), 1.3f, 0.5f);
+            g_line(sn(x + r * 0.8f), sn(y + r * 0.6f), sn(x + r), sn(y + r * 1.15f), 1.3f, 0.5f);
+            if (e > 0.02f) g_disc(sn(x), sn(y), r * 0.9f, flash * 0.7f);
+            sk_ripple(x, y, r, i, speed * 0.7f, room, GC_ORANGE);
+            break;
+        case P_TRI: {
+            f32 t[6] = {sn(x), sn(y - r), sn(x + r * 0.9f), sn(y + r * 0.7f), sn(x - r * 0.9f), sn(y + r * 0.7f)};
+            sk_col(GC_CYAN);
+            g_poly(t, 3, 0, 1.6f + e, 0.7f + 0.3f * e);
+            if (e > 0.02f) g_glow(sn(x), sn(y), r * 1.4f, e * 0.4f);
+            break;
+        }
+        case P_TAMB: {
+            int j;
+            sk_col(GC_GOLD);
+            g_ring(sn(x), sn(y), r, 1.6f, 0.7f + 0.3f * e);
+            for (j = 0; j < 5; j++) {
+                f32 a = (f32)j * 0.2f + e * 0.06f * sin_turns(sk_age[i] * 9.0f);
+                g_disc(sn(x + cos_turns(a) * r), sn(y + sin_turns(a) * r), 1.6f, 0.6f + 0.4f * e);
+            }
+            break;
+        }
+        case P_COW: {
+            f32 cb[8] = {sn(x - r * 0.5f), sn(y - r), sn(x + r * 0.5f), sn(y - r), sn(x + r * 0.9f), sn(y + r), sn(x - r * 0.9f), sn(y + r)};
+            sk_col(GC_GOLD);
+            g_poly(cb, 4, 1, 1.5f, 0.7f + 0.3f * e);
+            if (e > 0.02f) g_fill(cb, 4, flash * 0.6f);
+            break;
+        }
+        case P_CLAP:
+            sk_col(GC_WHITE);
+            g_arc(sn(x - 3.0f), sn(y), r, 0.30f, 0.70f, 1.6f, 0.5f + 0.5f * e);
+            g_arc(sn(x + 3.0f), sn(y), r, 0.80f, 1.20f, 1.6f, 0.5f + 0.5f * e);
+            if (e > 0.02f) g_glow(sn(x), sn(y), r * 1.6f, e * 0.35f);
+            break;
+        default:
+            break;
+        }
+    }
+    /* the player's stool */
+    sk_col(GC_SLATE);
+    g_ring(sn(120.0f), sn(172.0f), 7.0f, 1.2f, 0.45f);
+    g_color(GC_WHITE);
+}
+
 const InstDef inst_skins = {
     "SKINS",
     {238, 241, 245},
@@ -256,5 +460,5 @@ const InstDef inst_skins = {
         {0, 50, 18}                  /* Mix: a low reverb send, as KIT's */
     },
     2.30f,                           /* (with algo_gain in synth.c: as loud as KIT on a bar of beats) */
-    sk_block, sk_note, sk_render, 0, kit_draw, 0
+    sk_block, sk_note, sk_render, 0, skins_draw, 0
 };

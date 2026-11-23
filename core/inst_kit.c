@@ -256,7 +256,7 @@ static void kit_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 static f32 pad_hit[NDRUM], pad_pop[NDRUM], pad_popv[NDRUM];
 static uint32_t db_seen[NVOICE];
 
-void kit_draw(const Vis *vis)
+static void kit_draw(const Vis *vis)
 {
     static const int PCOL[NDRUM] = {
         GC_ORANGE, GC_WHITE, GC_WHITE, GC_GREEN,
