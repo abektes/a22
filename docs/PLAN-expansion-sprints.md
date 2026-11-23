@@ -106,7 +106,7 @@ of PLATE (22 against 42 ms for 20 s of audio). Still to do: CI's flash number an
 eight-note chords. At release: the site's effect list (`tools/build_site.py`), `PRODUCT.md`, the guide's FX
 page.
 
-## Sprint 6: PERC with more modes — code only, decided by the FM-1 (built; waiting for the FM-1)
+## Sprint 6: PERC with more modes — code only, decided by the FM-1 (built; timed on the FM-1: at the limit)
 
 - PERC is a four-mode modal resonator. Try eight to twelve modes and a sympathetic string option on a
   branch. Kept only if eight-note chords stay under about 80% peak on the device.
@@ -119,6 +119,24 @@ skipped until the next strike. Measured on the host, voice time only (eight-note
 running, as at the strike, x1.6 to x1.8. Against PERC's 51% peak on the unit (idle with PLATE 10%), that
 suggests about 62% held, 69% with the strings, and up to about 83% at the instant of a strike with the
 strings: the FM-1 decides. If it is over, cut the strings or drop to six modes.
+
+Timed on the FM-1 on 2026-11-23 (`tools/fm1_profile.py`, build of branch `virtuosity`: eight-note chords,
+2.2 s each, every algorithm):
+
+| | Average | Worst average | Peak |
+|---|---|---|---|
+| PERC, PLATE (before sprint 6: 47% / 51% peak) | 60% | 72% (GAMELAN) | 78% (GAMELAN) |
+| PERC, PLATE, SPACE 100 (strings) | 63% | 72% (GAMELAN) | 78% (GAMELAN) |
+| PERC, GRAIN | 64% | 75% (GAMELAN) | **81% (GAMELAN): over** |
+| SKINS, PLATE | 37% | 51% (HALL) | 67% (HALL) |
+| FM-4, GRAIN / PLATE | 70% / 69% | 74% / 73% | 76% / 75% |
+| SHAPER, GRAIN / PLATE | 68% / 67% | 74% / 74% | 77% / 77% |
+
+Idle, each effect alone: PLATE 10%, DELAY 12%, FILTER 13%, SHIFT 15%, CHORUS 15%, TANK 13%, LOFI 14%, THUMP
+13%, **GRAIN 25%** (PLATE sleeps in silence; GRAIN writes and reads on). So: PERC is at the limit, over it
+only on GAMELAN with GRAIN (its new modes ring longest, so few are skipped); GRAIN costs what PLATE does
+under load but 15 points more in silence. Next: GRAIN asleep in silence (as PLATE), and GAMELAN's new modes
+shorter, or six modes on GAMELAN only; then time again.
 
 ## Later: a multi-model engine
 
