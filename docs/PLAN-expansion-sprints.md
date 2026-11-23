@@ -106,7 +106,7 @@ of PLATE (22 against 42 ms for 20 s of audio). Still to do: CI's flash number an
 eight-note chords. At release: the site's effect list (`tools/build_site.py`), `PRODUCT.md`, the guide's FX
 page.
 
-## Sprint 6: PERC with more modes — code only, decided by the FM-1 (built; timed on the FM-1: at the limit)
+## Sprint 6: PERC with more modes — code only, decided by the FM-1 (kept: under 80% on the FM-1)
 
 - PERC is a four-mode modal resonator. Try eight to twelve modes and a sympathetic string option on a
   branch. Kept only if eight-note chords stay under about 80% peak on the device.
@@ -137,6 +137,18 @@ Idle, each effect alone: PLATE 10%, DELAY 12%, FILTER 13%, SHIFT 15%, CHORUS 15%
 only on GAMELAN with GRAIN (its new modes ring longest, so few are skipped); GRAIN costs what PLATE does
 under load but 15 points more in silence. Next: GRAIN asleep in silence (as PLATE), and GAMELAN's new modes
 shorter, or six modes on GAMELAN only; then time again.
+
+Done (commit 71d7616: GRAIN asleep in silence; GAMELAN's new modes 0.55/0.35/0.18/0.6 s; modes skipped under
+about -90 dB) and timed again on the FM-1 the same day:
+
+| | Average | Worst average | Peak |
+|---|---|---|---|
+| PERC, PLATE | 59% | 66% (GAMELAN) | 76% (GAMELAN) |
+| PERC, GRAIN | 58% | 69% (GAMELAN) | 79% (GAMELAN) |
+| PERC, PLATE, SPACE 100 (strings) | 62% | 67% (HANDPAN) | 75% (GAMELAN) |
+
+Idle: GRAIN 10% (was 25%), as PLATE. Every PERC algorithm under 80% with either effect, so sprint 6 stays,
+with GAMELAN against GRAIN the closest (79%).
 
 ## Later: a multi-model engine
 
