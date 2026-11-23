@@ -17,7 +17,7 @@
  *   K3 (WHITE)  TONE    dark .. bright
  *   K4 (ORANGE) ROOM    the reflections' level (at 0 the two extra readers do not run)
  *
- * The picture is the kit as a sound field (below, before the InstDef). */
+ * The picture is a ghost in a shell (below, before the InstDef). */
 #include "internal.h"
 #include "dsp.h"
 #include "plunk_data.h"
@@ -247,57 +247,48 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     v->q[3] = cnt;
 }
 
-/* ---- the picture: the kit as a sound field, the listener at the bottom ------------------------------
- * Faint half rings around the listener, as a sonar's. Each drum is a mark placed by its pan (left, right)
- * and its register (low drums near, high ones far): a ring for a skin, a bar for metal, a dot for the
- * rest; ORCH's pans lay it out apart from STUDIO's. A strike flares its mark and sends a wavefront down to
- * the listener. TUNE sizes the marks, DECAY how long a wave lasts, TONE how bright and thin it is, ROOM
- * the field's rings and two fainter, wider wavefronts after it (the sound's two reflections). TIGHT's
- * waves are short; VINTAGE and SHELLAC draw in gold, with few segments, angular. The hat's two bars sit
- * apart while the open hat rings and close when the closed hat cuts it. */
-enum { M_SKIN, M_METAL, M_DOT };
-static const uint8_t REACH[NDRUM] = {40, 62, 58, 76, 70, 84, 102, 92, 116, 110, 102, 124};   /* from the listener */
-static const uint8_t MARK[2][NDRUM] = {
-    {M_SKIN, M_DOT, M_SKIN, M_DOT, M_SKIN, M_SKIN, M_METAL, M_SKIN, M_DOT, M_METAL, M_METAL, M_METAL},
-    {M_SKIN, M_DOT, M_SKIN, M_SKIN, M_SKIN, M_SKIN, M_METAL, M_SKIN, M_METAL, M_SKIN, M_METAL, M_METAL},
-};
-static const uint8_t MCOL[2][NDRUM] = {
-    {GC_ORANGE, GC_CYAN, GC_WHITE, GC_CYAN, GC_GREEN, GC_GREEN, GC_GOLD, GC_GREEN, GC_CYAN, GC_GOLD, GC_GOLD, GC_GOLD},
-    {GC_ORANGE, GC_CYAN, GC_WHITE, GC_WHITE, GC_BLUE, GC_BLUE, GC_GOLD, GC_BLUE, GC_GOLD, GC_ORANGE, GC_GOLD, GC_GOLD},
-};
-#define LX 120.0f
-#define LY 170.0f
-
+/* ---- the picture: a ghost in a shell ---------------------------------------------------------
+ * Three layers. In the middle the ghost, the low end: a soft glow that swells on the kick and breathes.
+ * Round it the skin, a membrane for the snare, rim, clap and toms: a strike pushes a dent into it at the
+ * angle the drum's pan gives it, and the dent springs back. Outside, the shell, a ring of metal segments
+ * for the hats and cymbals: struck, they shimmer; the open hat pushes them apart and the closed hat snaps
+ * them shut. ORCH's layers are faceted (octagons), STUDIO's round. LIVE and HALL send ghost shells drifting
+ * out (the room); TIGHT and MARCH pull the layers in close, with short, sharp dents; VINTAGE and SHELLAC
+ * are gold, drawn with few segments, a little broken. TUNE spaces the layers, DECAY is how slowly a dent
+ * springs back, TONE how bright and thin the shell is, ROOM how many ghost shells and how bright. */
+#define CX 120.0f
+#define CY 108.0f
 static f32 sk_e[NDRUM], sk_age[NDRUM];
 static uint32_t sk_seen[NVOICE];
 static int sk_gold;
 
 static void sk_col(int c) { g_color(sk_gold ? GC_GOLD : c); }
-
-/* an arc around the listener, radius r, from angle a0 to a1 (turns, 0 straight up), in n segments */
-static void sk_arc(f32 r, f32 a0, f32 a1, int n, f32 w, f32 a)
+static int sk_metal(int kit, int d)              /* the shell's drums: hats, cymbals and the bells */
 {
-    f32 xy[2 * 17];
-    int j;
-    if (r < 2.0f || a < 0.01f) return;
-    if (n > 16) n = 16;
-    for (j = 0; j <= n; j++) {
-        f32 t = a0 + (a1 - a0) * (f32)j / (f32)n;
-        xy[2 * j] = LX + r * sin_turns(t);
-        xy[2 * j + 1] = LY - r * cos_turns(t);
-    }
-    g_poly(xy, n + 1, 0, w, a);
+    return d == HAT || d == OHAT || d == CYM || (d == EXTRA1 && kit) || (d == EXTRA2 && !kit);
 }
+static f32 sk_angle(int kit, int d) { return (f32)KITS[kit][d].pan * 0.0105f; }   /* turns, 0 at the top */
+static f32 sk_facet(int kit, f32 th)             /* ORCH: a radius that draws an octagon, STUDIO: a circle */
+{
+    f32 u;
+    if (!kit) return 1.0f;
+    u = th * 8.0f;
+    u = (u - (f32)ifloor(u)) - 0.5f;             /* -0.5 .. 0.5 across a facet */
+    return 0.924f / cos_turns(u * 0.125f);
+}
+static f32 sk_wrap(f32 d) { return d - (f32)ifloor(d + 0.5f); }   /* an angle difference, -0.5 .. 0.5 turns */
 
 static void skins_draw(const Vis *vis)
 {
-    int kit = (vis->algo >> 2) & 1, treat = vis->algo & 3, i, j;
+    int kit = (vis->algo >> 2) & 1, treat = vis->algo & 3, i, j, n;
     f32 dt = vis->dt, tune = vis->k[0], dec = vis->k[1], tone = vis->k[2], room = vis->k[3];
-    f32 life = (0.25f + 1.1f * dec) * (treat == 2 ? 0.45f : treat == 1 ? 1.3f : 1.0f);
-    int seg = sk_gold ? 4 : 12;
+    f32 gap = (15.0f + 12.0f * tune) * (treat == 2 ? 0.62f : 1.0f);
+    f32 r_skin = 23.0f + gap, r_shell = r_skin + gap;
+    f32 life = (0.18f + 0.9f * dec) * (treat == 2 ? 0.5f : 1.0f);
+    f32 busy = 0.0f, eo, ec, xy[2 * 49];
 
     sk_gold = treat == 3;
-    seg = sk_gold ? 4 : 12;
+    n = sk_gold ? 12 : 48;
     if (vis->fresh) {
         for (i = 0; i < NDRUM; i++) sk_e[i] = 0.0f, sk_age[i] = 9.0f;
         for (i = 0; i < NVOICE; i++) sk_seen[i] = vis->v[i].serial;
@@ -313,62 +304,93 @@ static void skins_draw(const Vis *vis)
     for (i = 0; i < NDRUM; i++) {
         sk_age[i] += dt;
         sk_e[i] = maxf(0.0f, sk_e[i] - dt / life);
+        busy += sk_e[i];
     }
+    eo = sk_e[OHAT];
+    ec = sk_e[HAT];
 
-    /* the listener's glow, as warm as the playing is busy */
-    {
-        f32 busy = 0.0f;
-        for (i = 0; i < NDRUM; i++) busy += sk_e[i];
-        sk_col(GC_ORANGE);
-        g_glow(LX, LY - 30.0f, 46.0f + 10.0f * room, minf(0.42f, 0.10f + 0.16f * busy));
-    }
-    /* the field: half rings round the listener, brighter with ROOM */
-    sk_col(GC_SLATE);
-    for (j = 1; j <= 3; j++)
-        sk_arc(42.0f * (f32)j, -0.24f, 0.24f, seg + 4, 1.0f, 0.16f + 0.30f * room);
-    sk_col(GC_WHITE);
-    g_disc(LX, LY, 3.5f, 0.9f);
-    g_arc(LX, LY, 8.0f, 0.88f, 1.12f, 1.2f, 0.5f);
-
-    for (i = 0; i < NDRUM; i++) {
-        const Pad *p = &KITS[kit][i];
-        f32 ang = (f32)p->pan * 0.0042f, R = (f32)REACH[i];        /* (pan 44 is about 66 degrees) */
-        f32 x = LX + R * sin_turns(ang), y = LY - R * cos_turns(ang);
-        f32 e = sk_e[i], age = sk_age[i], sz = (4.5f + 3.0f * tune);
-        int c = MCOL[kit][i], k = MARK[kit][i];
-        if (i == OHAT) continue;                                     /* (the hats' mark is HAT's) */
-        sk_col(GC_SLATE);                                            /* its spoke to the listener */
-        g_line(LX + 10.0f * sin_turns(ang), LY - 10.0f * cos_turns(ang), x, y, 1.0f, 0.12f + 0.25f * e);
-
-        /* the wavefront down to the listener, and ROOM's two after it */
-        if (e > 0.02f) {
-            f32 u = minf(1.0f, age / (0.35f * life + 0.05f)), r = R * (1.0f - u);
-            f32 span = 0.02f + 0.05f * u, w = 1.2f + 1.8f * (1.0f - tone);
-            sk_col(c);
-            sk_arc(r, ang - span, ang + span, seg / 2 + 1, w, e * (0.45f + 0.5f * tone));
-            if (room > 0.02f)
-                for (j = 1; j <= 2; j++) {
-                    f32 uj = minf(1.0f, maxf(0.0f, age - 0.07f * (f32)j) / (0.35f * life + 0.05f));
-                    if (uj > 0.0f && uj < 1.0f)
-                        sk_arc(R * (1.0f - uj), ang - span * (1.0f + 1.5f * (f32)j), ang + span * (1.0f + 1.5f * (f32)j),
-                               seg / 2 + 2, 1.0f, room * e * (0.40f - 0.12f * (f32)j));
-                }
+    /* the room: ghost shells drifting out, as many and as bright as ROOM (more on LIVE and HALL) */
+    if (room > 0.02f) {
+        int ghosts = 1 + (int)(room * 2.5f) + (treat == 1);
+        for (j = 0; j < ghosts; j++) {
+            f32 ph = vis->t * 0.22f + (f32)j / (f32)ghosts, u = ph - (f32)ifloor(ph);
+            f32 r = r_shell + 4.0f + u * (30.0f + 10.0f * room);
+            for (i = 0; i <= n; i++) {
+                f32 th = (f32)i / (f32)n;
+                xy[2 * i] = CX + r * sk_facet(kit, th) * sin_turns(th);
+                xy[2 * i + 1] = CY - r * sk_facet(kit, th) * cos_turns(th);
+            }
+            sk_col(GC_CYAN);
+            g_poly(xy, n + 1, 0, 1.0f, room * (1.0f - u) * (0.18f + 0.25f * minf(1.0f, busy)));
         }
+    }
 
-        /* its mark */
-        sk_col(c);
-        if (e > 0.04f) g_glow(x, y, sz * 2.6f, e * (0.25f + 0.35f * tone));
-        if (k == M_SKIN) {
-            f32 rr = sz * (i == KICK ? 1.6f : 1.0f) * (1.0f + 0.35f * e);
-            if (e > 0.04f) g_disc(x, y, rr, e * 0.85f);
-            g_ring(x, y, rr, 1.8f, 0.75f + 0.25f * e);
-        } else if (k == M_METAL) {
-            f32 gap = 0.0f;
-            if (i == HAT) gap = 1.0f + 6.0f * sk_e[OHAT] * (1.0f - sk_e[HAT]);   /* the hats: open, or shut */
-            g_line(x - sz * 1.4f, y - gap, x + sz * 1.4f, y - gap, 2.0f, 0.75f + 0.25f * maxf(e, sk_e[OHAT] * (i == HAT)));
-            if (i == HAT) g_line(x - sz * 1.4f, y + gap, x + sz * 1.4f, y + gap, 2.0f, 0.75f);
+    /* the ghost: the low end, swelling on the kick */
+    {
+        f32 k = sk_e[KICK], breath = 0.5f + 0.5f * sin_turns(vis->t * 0.25f);
+        f32 r = (8.0f + 3.0f * breath) * (1.0f + 0.9f * k);
+        sk_col(GC_ORANGE);
+        g_glow(CX, CY, r_skin * (0.9f + 0.5f * k), 0.16f + 0.40f * k + 0.06f * minf(1.0f, busy));
+        if (sk_gold) {
+            for (i = 0; i <= 6; i++) {
+                f32 th = (f32)i / 6.0f + vis->t * 0.02f;
+                xy[2 * i] = CX + r * sin_turns(th);
+                xy[2 * i + 1] = CY - r * cos_turns(th);
+            }
+            g_poly(xy, 7, 0, 1.8f, 0.8f);
         } else {
-            g_disc(x, y, sz * 0.6f * (1.0f + 0.4f * e), 0.7f + 0.3f * e);
+            g_disc(CX, CY, r * 0.55f, 0.35f + 0.5f * k);
+            g_ring(CX, CY, r, 1.8f, 0.6f + 0.4f * k);
+        }
+    }
+
+    /* the skin: dented where a drum is struck, springing back */
+    for (i = 0; i <= n; i++) {
+        f32 th = (f32)i / (f32)n, r = r_skin;
+        for (j = 0; j < NDRUM; j++) {
+            f32 x, b;
+            if (j == KICK || sk_metal(kit, j) || sk_e[j] < 0.01f) continue;
+            x = sk_wrap(th - sk_angle(kit, j)) * (1.0f / 0.07f);
+            if (x <= -1.0f || x >= 1.0f) continue;
+            b = (1.0f - x * x) * (1.0f - x * x);
+            r -= b * sk_e[j] * (treat == 2 ? 11.0f : 8.0f) * cos_turns(sk_age[j] * (treat == 2 ? 5.0f : 2.6f));
+        }
+        r *= sk_facet(kit, th);
+        xy[2 * i] = CX + r * sin_turns(th);
+        xy[2 * i + 1] = CY - r * cos_turns(th);
+    }
+    sk_col(GC_GREEN);
+    g_poly(xy, n + 1, 0, 2.2f, 0.85f);
+    for (j = 0; j < NDRUM; j++) {                                    /* where each skin drum sits, a tick */
+        f32 th = sk_angle(kit, j), r = r_skin * sk_facet(kit, th);
+        if (j == KICK || sk_metal(kit, j)) continue;
+        sk_col(j == SNARE || j == RIM ? GC_WHITE : GC_GREEN);
+        g_disc(CX + (r - 5.0f) * sin_turns(th), CY - (r - 5.0f) * cos_turns(th), 1.6f + 2.0f * sk_e[j], 0.35f + 0.65f * sk_e[j]);
+    }
+
+    /* the shell: metal segments, shimmering where struck, apart for the open hat, shut by the closed one */
+    {
+        int segs = sk_gold ? 8 : 16;
+        f32 spread = 7.0f * eo * (1.0f - ec) - 2.0f * ec;
+        for (i = 0; i < segs; i++) {
+            f32 c = ((f32)i + 0.5f) / (f32)segs, half = (0.5f / (f32)segs) * (0.72f - 0.25f * eo * (1.0f - ec));
+            f32 hit = 0.0f, r;
+            int k;
+            if (sk_gold && (i % 5) == 3) continue;                   /* (a little broken) */
+            for (j = 0; j < NDRUM; j++) {
+                f32 x;
+                if (!sk_metal(kit, j) || sk_e[j] < 0.01f) continue;
+                x = sk_wrap(c - sk_angle(kit, j)) * (1.0f / 0.16f);
+                if (x > -1.0f && x < 1.0f) hit = maxf(hit, sk_e[j] * (1.0f - x * x));
+            }
+            r = r_shell + spread + hit * 3.0f * sin_turns(vis->t * 9.0f + (f32)i * 0.37f);
+            for (k = 0; k <= 4; k++) {
+                f32 th = c - half + 2.0f * half * (f32)k * 0.25f, rr = r * sk_facet(kit, th);
+                xy[2 * k] = CX + rr * sin_turns(th);
+                xy[2 * k + 1] = CY - rr * cos_turns(th);
+            }
+            sk_col(hit > 0.05f ? GC_GOLD : GC_CYAN);
+            g_poly(xy, 5, 0, (2.6f - 1.2f * tone) + 1.2f * hit, (0.35f + 0.4f * tone) + 0.5f * hit);
         }
     }
     g_color(GC_WHITE);

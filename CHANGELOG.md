@@ -34,12 +34,13 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   below the limiter; at full track volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher).
   `tests/skins.c` checks every drum on every algorithm sounds and ends, the chokes, ROOM and the
   treatments; `tests/state.c` that a state from before SKINS brings it up as new. The names and the picks
-  are placeholders until judged by ear. Its picture is the kit as a sound field: the listener at the
-  bottom in half rings, each drum a mark placed by its pan and its register (a ring for a skin, a bar for
-  metal, a dot for the rest), so ORCH lays out apart from STUDIO. A strike flares its mark and sends a
-  wavefront down to the listener; ROOM brightens the rings and sends two fainter, wider fronts after it
-  (the sound's reflections); TIGHT's waves are short, VINTAGE and SHELLAC gold and angular. The hat's two
-  bars close when the closed hat cuts the open one.
+  are placeholders until judged by ear. Its picture is a ghost in a shell, three layers: in the middle the
+  ghost (the low end), a glow that swells on the kick; round it the skin, a membrane the snare, rim, clap
+  and toms dent where their pan puts them, springing back; outside the shell, metal segments the hats and
+  cymbals shimmer, pushed apart by the open hat and snapped shut by the closed one. ORCH's layers are
+  octagons, STUDIO's round; LIVE and HALL send ghost shells drifting out, TIGHT and MARCH pull the layers in
+  with short, sharp dents, VINTAGE and SHELLAC are gold, coarse and a little broken. TUNE spaces the layers,
+  DECAY sets how slowly a dent springs back, TONE how bright the shell is, ROOM how many ghost shells.
 
 - A ninth effect, GRAIN: a granular cloud made of what the tracks send it. The last 0.74 s are kept (in
   the buffer DELAY, SHIFT, CHORUS and TANK use, so no more RAM), and up to eight grains read them back.
