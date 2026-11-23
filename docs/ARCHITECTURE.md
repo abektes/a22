@@ -181,22 +181,16 @@ CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI
 echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
 (app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack is an input only.
 
-The saved state is version 9 (3344 bytes; 7 was never released). It has room for 16 instruments
-(`NSLOT`) of nine algorithms each, and keeps in `ninst` how many instruments it was saved with: on a
-load, the slots from there on come up as new, so adding an instrument (TILT and PLUNK) needs no new
-version; they are last in PRESETS so that an instrument's number, which a recorded note's part holds,
-never changed. Every older state is of fourteen instruments of eight algorithms (`H1Old`, read by offsets
-only): each of its tables goes to the start of version 9's, its parts are read the old way, HOOVER's
-knobs and the instruments past the fourteen come up as new. Version 8 (3160 bytes) is version 6 and,
-after the knob table, each step note's velocity and layer and the sixteen layers. A loop saved by 0.2.2 is loop version 1, read the same way; h1 now writes version 2. A version 6 state (1880 bytes)
-loads with its steps at full velocity on no layer, and LAYERS on. Versions 4 and 5 are the same up to the steps, where
-a step held four notes and not eight, and they have no table of knobs (an instrument's algorithms
-shared four). Version 4 (664 bytes) has no parts for its step notes; version 5 (920 bytes) has.
-`h1_state_load` takes all of them, straight from the bytes (`H1Old` in `internal.h` is the old layout): a version 4 state comes up with LAYERS
-on (since 0.2.2) and no parts kept, and in both older ones every algorithm starts from where the instrument's
-knobs stood, so nothing sounds different after an update. A step note with no part kept belongs
-to whichever instrument is in hand. An instrument's volume took a spare byte of version 6, so a
-v0.1.0 state loads as it is, at full, and a v0.1.0 firmware reads a newer state without minding.
+The saved state is version 5 (2,888 bytes). It has room for sixteen engines (`NSLOT`) and twelve
+effects (`NFXSLOT`), and keeps in `ninst` and `nfx` how many of each it was saved with: on a load, the slots
+from there on come up as new, so adding an engine or an effect needs no new version. New ones go last in
+PRESETS and the FX list, so that an engine's number, which a recorded note's part holds, and an effect's,
+which the state holds, never change. Slots no engine or effect has yet are kept empty. Version 4 (2,648
+bytes, saved by A22 0.1.0 to 0.4.0) has twelve engine slots and eight effect slots and is otherwise the
+same: `h1_state_load` reads it from its bytes a table at a time, by the offsets of `H1StateV4` in `h1.c`
+(compile-time checks hold its size and the spans the two versions share), so everything in it is kept.
+Any other version or size is refused and the settings start as new; the tape is saved apart and kept.
+`tests/state.c` loads a state written by 0.4.0's own core (`tests/state_v4.bin`) and compares every table.
 
 ## Controls as values
 

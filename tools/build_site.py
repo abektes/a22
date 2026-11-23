@@ -6,7 +6,7 @@ screen captures, the FM-1's own Barlow lettering (site/fonts) and the browser si
 
 .github/workflows/pages.yml runs it and publishes OUT to GitHub Pages (https://abektes.github.io/a22/). The
 simulator is web/ with dist/a22.rfm1 beside it, as the repository lays them out (it loads ../dist/a22.rfm1).
-The look is a synth's voice-ROM catalogue: twelve banks (A to L, one an engine) of eight voices.
+The look is a synth's voice-ROM catalogue: fourteen banks (A to N, one an engine) of eight voices.
 """
 import html
 import os
@@ -33,7 +33,7 @@ VERSION = released_version()
 COFFEE = "https://buymeacoffee.com/abektes"
 HUB = "https://thefirmwarehub.com"
 SIM = "sim/"
-BANKS = "ABCDEFGHIJKL"
+BANKS = "ABCDEFGHIJKLMN"
 
 
 # name, ink, picture, what it is, [(knob, what it does) x4], [(algorithm, what it is) x8]
@@ -118,6 +118,20 @@ ENGINES = [
       ("ARP", "a fast chord, a note at a time"), ("BASS", "a pulse over a triangle, low"),
       ("LEAD", "a duty that sways, delayed vibrato"), ("DRUM", "a falling triangle and a noise burst"),
       ("DUET", "two pulses a fifth apart")]),
+    ("CYCLE", (255, 170, 64), "cycle", "WAVE's player on single cycles of recorded instruments (AKWF, CC0).",
+     [("WAVE", "where in the bank, dark to bright"), ("SCAN", "how far a note moves up the bank as it dies"),
+      ("SPREAD", "the right side detuned and further along"), ("FILTER", "a resonant low-pass")],
+     [("STRING", "cello, violin and the string box"), ("REED", "clarinet, flute, alto sax and oboe"),
+      ("KEYS", "piano and electric piano"), ("VOICE", "the human voice"),
+      ("STEP-STR", "STRING, a whole wave at a time"), ("STEP-RD", "REED, a whole wave at a time"),
+      ("STEP-KEY", "KEYS, a whole wave at a time"), ("STEP-VOX", "VOICE, a whole wave at a time")]),
+    ("SKINS", (238, 241, 245), "skins", "Two recorded drum kits (Virtuosity Drums and VCSL, CC0): a drum on every key.",
+     [("TUNE", "the kit's pitch, an octave either way"), ("DECAY", "shorter or longer than recorded"),
+      ("TONE", "dark to bright"), ("ROOM", "the room's reflections")],
+     [("STUDIO", "an acoustic set, dry"), ("LIVE", "the set in a room"), ("TIGHT", "the set gated, harder"),
+      ("VINTAGE", "the set darker, driven"), ("ORCH", "a marching and orchestral kit, dry"),
+      ("HALL", "the orchestral kit in a hall"), ("MARCH", "the orchestral kit gated, harder"),
+      ("SHELLAC", "the orchestral kit off an old record")]),
 ]
 
 EFFECTS = [("PLATE", "plate reverb", "MIX, DECAY, DAMP, MOD"), ("DELAY", "tape ping-pong", "MIX, TIME, FEEDBK, TAPE"),
@@ -467,14 +481,14 @@ def front():
         </div>
       </div>""")
     spec = "".join(f"<tr><th scope=\"row\">{esc(k)}</th><td>{esc(v)}</td></tr>" for k, v in [
-        ("Sound", "Twelve engines, eight algorithms each, four live knobs. Eight effects and a master EQ with drive."),
+        ("Sound", "Fourteen engines, eight algorithms each, four live knobs. Eight effects and a master EQ with drive."),
         ("Making music", "A four-track tape with knob automation, a step sequencer, Riff and Shake, an arpeggiator, "
                          "chord memory and eight snapshots."),
         ("Pictures", "Every engine draws its own animated colour picture on the FM-1's screen, moving with the sound."),
         ("Connect", "USB audio and MIDI over one cable, MIDI in on the TRS jack, USB host for a keyboard."),
         ("Runs on", "The M-VAVE FM-1, with either flash chip. Not the SMK-37.")])
     return head("A22 · firmware for the M-VAVE FM-1",
-                "A22 is free, open-source firmware for the M-VAVE FM-1: twelve sound engines, ninety-six algorithms, "
+                "A22 is free, open-source firmware for the M-VAVE FM-1: fourteen sound engines, 112 algorithms, "
                 "a four-track tape, eight effects, USB audio and MIDI.") + masthead("home") + f"""<main id="main">
 <section class="cover" aria-label="A22">
   <div class="tabs" role="tablist" aria-label="Banks, one an engine" aria-orientation="vertical">{"".join(tabs)}</div>
@@ -482,7 +496,7 @@ def front():
     <div class="title">
       <div>
         <h1>A22</h1>
-        <p class="lede">Firmware for the M-VAVE FM-1. Twelve banks of sound, ninety-six voices.</p>
+        <p class="lede">Firmware for the M-VAVE FM-1. Fourteen banks of sound, 112 voices.</p>
       </div>
       <div class="side">
         <div class="actions">
@@ -500,7 +514,7 @@ def front():
 <section class="part" aria-labelledby="inside">
   <div class="inner">
     <div><h2 id="inside">What's inside</h2>
-      <p class="aside">A22 turns the FM-1 into an FM workstation. Everything is synthesised, apart from short drum recordings layered into four of KIT's kits.</p></div>
+      <p class="aside">A22 turns the FM-1 into an FM workstation. Most of it is synthesised: four of KIT's kits layer in short drum recordings, SKINS' two kits are made of them, and CYCLE plays single cycles of recorded instruments.</p></div>
     <table class="spec">{spec}</table>
     <aside class="note"><p>The firmware image is 406 KB of the FM-1's 568 KB slot and uses 440 KB of its 475 KB of memory.</p>
       <p>Package identity FM-1_4122.</p></aside>
@@ -529,7 +543,7 @@ def front():
       <p>The <a href="manual.html">manual</a> has every engine, control and page.</p>
     </div>
     <aside class="note"><p>A22 is early: installed and run on one FM-1 so far.</p>
-      <p>Measured there: 41 frames a second on average over all 96 algorithms, and no crash over a 30-minute run.</p></aside>
+      <p>Measured there with 0.4.0: 41 frames a second on average over its 96 algorithms, and no crash over a 30-minute run.</p></aside>
   </div>
 </section>
 </main>

@@ -52,13 +52,13 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
       *Remote, in part: PRESETS, ALGORITHM, K1 to K4, the pages, EDIT + ALGORITHM (sequencer mode),
       EDIT + ARP (hold), hold SAVE (two seconds reset CHIP to PULSE) and hold HOME all answered. Toasts
       are not on the screen reader's channel, so the rest needs eyes.*
-- [x] PRESETS goes through all twelve engines. Each one draws, animates smoothly and sounds. Note any
-      that stutter. *Remote: 88 of the 96 algorithms with an eight-note chord held and PLATE on (MONO's
-      eight skipped by the script's route, MONO seen on its own): 20 to 62 frames a second, the slowest
-      FM-4 (20 to 24) and STACK CHOIR (20); no crash.*
+- [ ] PRESETS goes through all fourteen engines. Each one draws, animates smoothly and sounds. Note any
+      that stutter. *0.4.0, remote: 88 of its 96 algorithms with an eight-note chord held and PLATE on
+      (MONO's eight skipped by the script's route, MONO seen on its own): 20 to 62 frames a second, the
+      slowest FM-4 (20 to 24) and STACK CHOIR (20); no crash.*
 - [ ] No crackle or dropouts with eight notes held on the heaviest engines (FM-4, SHAPER, HAZE) with
-      PLATE and DELAY turned up. *(ears; remote: the audio's busiest moment was 74% of its time over all
-      96, so there is headroom)*
+      PLATE and DELAY turned up. *(ears; 0.4.0, remote: the audio's busiest moment was 74% of its time
+      over its 96 algorithms, so there is headroom)*
 - [ ] MASTER goes from silent to full without clicks. Headphones and the speaker both play. The
       ring in the middle of the screen, marked GLOBAL, follows the knob and is gone a second after
       it stops; it does not come up by itself with the knob at rest.
@@ -81,6 +81,11 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
 - [ ] 0.4.0's sound changes, by ear: WAVE's eight presets (SPREAD 24 to 46, now narrower: raise it if they
       lost their width); DELAY at 120 BPM 1/4 (the right echo at 750 ms, not a comb); PLATE brought back
       after a bypass starts silent, with no click or gap in the sound (it clears 48 KB in one block).
+- [ ] DICE: EDIT + LFO rolls the four knobs of the algorithm in hand, and none of them runs away or goes
+      silent; EDIT + ENV goes back to the knobs from before the roll, and again to the roll. A roll while
+      the tape records is on the tape. *(ears for "runs away")*
+- [ ] Settings saved by 0.4.0 (version 4) load with everything kept: install 0.4.0, change an engine, an
+      algorithm, its knobs and an effect, save; install this release over it: they are all as they were.
 - [ ] Saving waits for silence: no stall heard in a reverb tail or under the metronome; SAVE says SAVE
       WHEN QUIET while something plays, and the setting is there after a restart.
 - [ ] PR #2 under load: HAZE with two tape tracks and eight keys. CC 119's PERF says LATE and SHED, no

@@ -3,9 +3,9 @@
  * A drum on every note of the octave, in KIT's layout: C kick, C# rim, D snare, D# clap (ORCH: a second
  * snare), E F G toms (rising about 4 semitones a step: one recorded tom plays two), F# hat, A# open hat
  * (choked by F#; ORCH: the short clash closes the long one), B ride or cymbal, G# and A two extras. The octaves
- * above and below shift the pitch. Every hit is one recording from VCSL (CC0), cut by tools/samples/drums.py
- * into plunk_data.c with KIT's, and read here as KIT reads its own: 4-bit ADPCM at the rate it was stored,
- * its own dying away put back by DECAY. Nothing is synthesized but the treatment around it:
+ * above and below shift the pitch. Every hit is one recording from Virtuosity Drums or VCSL (CC0), cut by
+ * tools/samples/drums.py into plunk_data.c with KIT's, and read here as KIT reads its own: 4-bit ADPCM at the
+ * rate it was stored, its own dying away put back by DECAY. Nothing is synthesized but the treatment around it:
  *   STUDIO, ORCH       dry, as recorded
  *   LIVE, HALL         a longer ring and two early reflections, read from the hit itself a little later:
  *                      two more readers of the same ADPCM, so no delay line and no RAM
