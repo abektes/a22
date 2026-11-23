@@ -17,6 +17,8 @@
  *   K3 (WHITE)  TONE    dark .. bright
  *   K4 (ORANGE) ROOM    the reflections' level (at 0 the two extra readers do not run)
  *
+ * The ENV page's PUNCH (0 by default) hardens the start of the kick, snare and toms, as KIT's does.
+ *
  * The picture is a ghost in a shell (below, before the InstDef). */
 #include "internal.h"
 #include "dsp.h"
@@ -186,6 +188,7 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     f32 comp = 1.0f / (0.60f + 0.40f * tr->drive);
     f32 hstep = 1.0f - tr->crush * 0.85f, hold = v->s[12], hc = v->s[13];
     f32 env = v->s[6], gl, gr;
+    f32 punch = tr->punch + (type == KICK || type == SNARE || type == TOML || type == TOMM || type == TOMH ? b->punch : 0.0f);
     Rd m, r1, r2;
     Svf lp;
 
@@ -205,8 +208,8 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
     for (i = 0; i < n; i++) {
         f32 x = rd_tick(&m, z, zd, inc) * gain * env, lo, bp;
-        if (tr->punch > 0.0f && cnt < pn)
-            x *= 1.0f + tr->punch * (1.0f - (f32)cnt / (f32)pn);
+        if (punch > 0.0f && cnt < pn)
+            x *= 1.0f + punch * (1.0f - (f32)cnt / (f32)pn);
         if (tr->crush > 0.0f) {              /* (held and rounded first: the filter after smooths the steps) */
             hc += hstep;
             if (hc >= 1.0f) {
@@ -405,7 +408,7 @@ const InstDef inst_skins = {
         {50, 50, 60, 0},             /* K1..K4 defaults */
         0,                           /* algo: STUDIO */
         {0, 80, 100, 62},            /* Amp ADSR (each hit's own envelope does the shaping, as KIT's) */
-        {50, 40, 75, 35},            /* Mod Env */
+        {50, 40, 75, 0},             /* Mod Env (PUNCH 0: the kits as picked) */
         {0, 45, 0, 0},               /* LFO */
         {0, 3, 1, 70},               /* Arp */
         {0, 50, 18}                  /* Mix: a low reverb send, as KIT's */

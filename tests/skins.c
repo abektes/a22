@@ -8,6 +8,8 @@
  *                  tail grows (at a track volume under the limiter)
  *   treatments     with the knobs alike, TIGHT is shorter than STUDIO, VINTAGE darker, LIVE longer, and
  *                  every one of the eight differs from every other on the snare
+ *   PUNCH          the ENV page's, off by default: turned up, the kick's start is harder and its body as it
+ *                  was, a hat is untouched, and nothing reaches the limiter's ceiling
  *
  * Each take is made in a process of its own (as tests/basics.c): h1_init does not wind the engine's
  * clocks back. Key 7 is middle C, so key 7 + d plays drum d (C kick .. B cymbal). */
@@ -148,6 +150,24 @@ static Heard hit(int a, int dr)
 }
 #define AS_IS (255 << 8)
 
+/* ---- one drum d on algorithm a with the ENV page's PUNCH at p (dp: d | p << 8 | LOUD): late is from 6 ms on ---- */
+#define LOUD (1 << 16)
+static Heard punched(int a, int dp)
+{
+    int d = dp & 0xFF, p = (dp >> 8) & 0xFF;
+    skins(a);
+    st.ip[SKINS].menv[3] = (uint8_t)p;
+    if (!(dp & LOUD)) st.trk[st.track].vol = 30;
+    go(100);
+    listen();
+    late_from = 265;
+    h1_key(7 + d, 1);
+    go(150);
+    h1_key(7 + d, 0);
+    go(300);
+    return heard;
+}
+
 int main(void)
 {
     int a, d, b;
@@ -223,6 +243,27 @@ int main(void)
             snprintf(what, sizeof what, "%s: VINTAGE is darker (%.3g against %.3g)", h1_algo_name(SKINS, a + 3), old_bright, dry_bright);
             CHECK(old_bright < 0.7 * dry_bright, what);
         }
+    }
+
+    {   /* PUNCH (the ENV page's), as KIT hears it: off by default; the kick's start harder, its body as it was;
+         * a hat not at all; and nothing past the limiter on any algorithm */
+        Heard k0 = taken(punched, 0, 0), k1 = taken(punched, 0, 0 | 100 << 8);
+        Heard h0 = taken(punched, 0, 6), h1 = taken(punched, 0, 6 | 100 << 8);
+        double e0 = k0.mid - k0.late, e1 = k1.mid - k1.late, body = k1.late / k0.late;
+        int inside = 1;
+        h1_init(44100);
+        CHECK(st.ip[SKINS].menv[3] == 0, "SKINS starts with PUNCH at 0");
+        snprintf(what, sizeof what, "PUNCH 100: the kick's first 6 ms are harder (%.3g against %.3g)", e1, e0);
+        CHECK(e1 > 1.2 * e0, what);
+        snprintf(what, sizeof what, "PUNCH 100: the kick's body is as it was (%.2f dB)", 10.0 * log10(body));
+        CHECK(body > 0.89 && body < 1.12, what);
+        CHECK(h0.hash == h1.hash, "PUNCH leaves the hat alone");
+        for (a = 0; a < 8; a++)
+            if (taken(punched, a, 0 | 100 << 8 | LOUD).peak >= 0x7FFFFF) {
+                inside = 0;
+                printf("  %s: the kick at PUNCH 100 reaches the limiter's ceiling\n", h1_algo_name(SKINS, a));
+            }
+        CHECK(inside, "PUNCH 100 stays inside the limiter on every algorithm");
     }
 
     printf("skins: %d checks, %d failed\n", checks, fails);
