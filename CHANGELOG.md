@@ -15,46 +15,34 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   shared phases, so a morph is within about 1 dB of the waves either side (`tools/akwf.py` says how they
   were picked). About 64 KB of flash. WAVE sounds the same to the bit: its tables are rewritten unchanged
   and its renders were compared before and after. `tests/basics.c` checks SPREAD on every CYCLE bank and
-  that the STEP- algorithms step; the two-core and DICE tests cover CYCLE with the rest.
-- A fourteenth engine, SKINS: two drum kits made only of recordings, in KIT's layout (C kick, C# rim, D
-  snare, E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set: the house kit
-  of [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0, Versilian Studios and
-  Karoryfer Samples), close mics: a snares-off kick, a centre snare and its cross-stick, a hand-muted low tom
-  and a high tom played as three, closed and open hats, a ride; with VCSL's clap, tambourine and cowbell.
-  (Picked by ear on a minimal lo-fi beat over VCSL's, whose kick was a concert bass drum cut short.) ORCH a marching and orchestral kit (concert bass
-  drum, marching snare and rimshot, a rope snare, two tenor drums as three toms, clash cymbals held short and
-  let ring, triangle, timpani, suspended cymbal). Each kit four ways: dry (STUDIO, ORCH), in a room (LIVE,
-  HALL: a longer ring and two early reflections, read from the hit itself a little later, so no delay line,
-  with no low end, so a kick is not thinned by copies of itself),
-  tight (TIGHT, MARCH: gated, with a harder start) and vintage (VINTAGE, SHELLAC: fewer samples and steps,
-  darker, driven). The closed hat cuts the open one short, the short clash the long one. Knobs TUNE, DECAY,
-  TONE, ROOM. Fourteen new hits (Virtuosity Drums' eight, pinned to one commit, and VCSL's six for ORCH),
-  cut by `tools/samples/drums.py` into the pool KIT already uses (the rest are KIT's): 18,541 bytes of flash.
-  KIT sounds the same to the bit: its 33 hits are cut again unchanged. Level matched to KIT on a bar of beats
-  below the limiter; at full track volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher).
-  `tests/skins.c` checks every drum on every algorithm sounds and ends, the chokes, ROOM and the
-  treatments; `tests/state.c` that a state from before SKINS brings it up as new. The names and the picks
-  are placeholders until judged by ear. Its picture is a ghost in a shell, three layers: in the middle the
-  ghost (the low end), a glow that swells on the kick; round it the skin, a membrane the snare, rim, clap
-  and toms dent where their pan puts them, springing back; outside the shell, metal segments the hats and
-  cymbals shimmer, pushed apart by the open hat and snapped shut by the closed one. ORCH's layers are
-  octagons, STUDIO's round; LIVE and HALL send ghost shells drifting out, TIGHT and MARCH pull the layers in
-  with short, sharp dents, VINTAGE and SHELLAC are gold, coarse and a little broken. TUNE spaces the layers,
-  DECAY sets how slowly a dent springs back, TONE how bright the shell is, ROOM how many ghost shells.
-
-- A ninth effect, GRAIN: a granular cloud made of what the tracks send it. The last 0.74 s are kept (in
-  the buffer DELAY, SHIFT, CHORUS and TANK use, so no more RAM), and up to eight grains read them back.
-  POSITION sets how far back they read, SIZE how long each is (15 to 364 ms), DENSITY how many start a
-  second (2 to 60, at 0 it is off), PITCH an octave down to an octave up. Each grain sits at its own place
-  in the stereo field. Hold FX on the FX page with GRAIN in hand to FREEZE it: nothing new goes in while it
-  is held and the grains go on with what is there (a tap of FX still closes the page, on its release; it
-  is not saved, and a latched freeze would never be quiet enough for a save). Where the grains overlap it
-  is about as loud as what goes in; sparse, short grains peak at 1.5 times it. A grain's whole read is
-  kept behind the write head and inside the buffer, so its window closes before a wrap. Ideas from Clouds
-  (MIT, Emilie Gillet), written for this buffer. The other eight effects sound the same to the bit.
-  `tests/grain.c` checks it bounded at every corner of the knobs, at its pitch, free of clicks and stuck
-  reads, its level, FREEZE and the panel; `tests/echo.c` that it comes back silent and is the same after
-  25 minutes on; `tests/state.c` that a state from before it brings it up at its defaults.
+  that the STEP- algorithms step, on both sides alike (with SPREAD up the right side once jumped from wave to
+  wave while the left glided); the two-core and DICE tests cover CYCLE with the rest.
+- A fourteenth engine, SKINS: two drum kits made only of recordings, in KIT's layout (C kick, C# rim, D snare,
+  E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set: the house kit of
+  [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0, Versilian Studios and Karoryfer
+  Samples), close mics: a snares-off kick, a centre snare and its cross-stick, a hand-muted low tom and a high
+  tom played as three, closed and open hats, a ride; with VCSL's clap, tambourine and cowbell. (Picked by ear
+  on a minimal lo-fi beat over VCSL's, whose kick was a concert bass drum cut short.) ORCH a marching and
+  orchestral kit (concert bass drum, marching snare and rimshot, a rope snare, two tenor drums as three toms,
+  clash cymbals held short and let ring, triangle, timpani, suspended cymbal). Each kit four ways: dry
+  (STUDIO, ORCH), in a room (LIVE, HALL: a longer ring and two early reflections, read from the hit itself a
+  little later, so no delay line, with no low end, so a kick is not thinned by copies of itself), tight
+  (TIGHT, MARCH: gated, with a harder start) and vintage (VINTAGE, SHELLAC: fewer samples and steps, darker,
+  driven). The closed hat cuts the open one short, the short clash the long one. Knobs TUNE, DECAY, TONE,
+  ROOM; the ENV page's PUNCH (0 at the start) hardens the kick, snare and toms, as on KIT. Fourteen new hits
+  (Virtuosity Drums' eight, pinned to one commit, and VCSL's six for ORCH), cut by `tools/samples/drums.py`
+  into the pool KIT already uses (the rest are KIT's): 18,541 bytes of flash. KIT sounds the same to the bit:
+  its 33 hits are cut again unchanged. Level matched to KIT on a bar of beats below the limiter; at full track
+  volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher). `tests/skins.c` checks every drum on every
+  algorithm sounds and ends, the chokes, ROOM and the treatments; `tests/state.c` that a state from before
+  SKINS brings it up as new. STUDIO's picks are settled; the algorithm names and ORCH's picks wait to be
+  judged by ear. Its picture is a ghost in a shell, three layers: in the middle the ghost (the low end), a
+  glow that swells on the kick; round it the skin, a membrane the snare, rim, clap and toms dent where their
+  pan puts them, springing back; outside the shell, metal segments the hats and cymbals shimmer, pushed apart
+  by the open hat and snapped shut by the closed one. ORCH's layers are octagons, STUDIO's round; LIVE and
+  HALL send ghost shells drifting out, TIGHT and MARCH pull the layers in with short, sharp dents, VINTAGE and
+  SHELLAC are gold, coarse and a little broken. TUNE spaces the layers, DECAY sets how slowly a dent springs
+  back, TONE how bright the shell is, ROOM how many ghost shells.
 
 - PERC rings with eight modes a note where it had four: each algorithm keeps its four as they were and
   gains four quieter, shorter ones (HANDPAN's and STEEL's beating doublets, MARIMBA's and KALIMBA's
@@ -64,7 +52,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   SPACE from 60 up brings in two sympathetic strings, an octave and a twelfth over the note, struck by the
   mallet and the modes and ringing on after them; at SPACE's default (52) and below 60 there are none. A
   mode that has died away is not worked out until the next strike, so a held chord costs about 1.3 times
-  what it did (1.4 with the strings), measured on a computer; the FM-1 decides whether it stays.
+  what it did (1.4 with the strings), measured on a computer.
   `tests/perc.c` checks that the new modes are heard on every algorithm, the strings, and every note
   sounding and ending.
 
@@ -85,7 +73,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   Found by the crash hunt; `tests/tape.c` cuts and pastes a take of 1,200 knob moves.
 
 **Inside**
-- The saved state is version 5: it has room for sixteen engines and twelve effects (there are twelve and
+- The saved state is version 5: it has room for sixteen engines and twelve effects (there are fourteen and
   eight), and records how many effects it was saved with, as it already did engines. An engine or effect
   added later comes up as new in a state saved before it, without another version. Settings saved by
   0.1.0 to 0.4.0 (version 4) load with everything kept: `tests/state.c` loads a state written by 0.4.0's

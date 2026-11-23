@@ -89,7 +89,7 @@ CI's flash number, and timing on the FM-1 with eight-note chords (LIVE and HALL 
 At release, as for CYCLE: the site's banks, `fmhub.json`, `PRODUCT.md`, `DESIGN.md`'s inks, the release
 checklist's engine count, `app/fm1.toml`'s description, and `docs/img/a22/skins.png`.
 
-## Sprint 5: GRAIN, a granular send effect — no new RAM (done)
+## Sprint 5: GRAIN, a granular send effect — no new RAM (built, measured, taken out)
 
 - A ninth effect (slot 8, made room for by sprint 2). DELAY, SHIFT, CHORUS and TANK share `echo_buf`
   (64 KB) and only one effect runs at a time, so GRAIN uses the same buffer: about 0.74 s mono at 44.1 kHz.
@@ -105,6 +105,16 @@ would never let the state save; decided with the user 2026-11-22). On the host, 
 of PLATE (22 against 42 ms for 20 s of audio). Still to do: CI's flash number and timing on the FM-1 with
 eight-note chords. At release: the site's effect list (`tools/build_site.py`), `PRODUCT.md`, the guide's FX
 page.
+
+Taken out before the release (commit 3cab816, on the owner's word; `docs/PLAN-after-sprints.md`, findings 2
+and 3). Its timing on the FM-1 was taken with GRAIN's knobs as they stood, under one grain at a time on
+average: eight grains cost about four times that on the host, with GAMELAN already at 79% beside the default.
+And FREEZE clicked and thumped when pressed or let go while grains played (the largest step between samples
+3.5 to 4.8 times larger), which `tests/grain.c` did not catch: it only froze into silence. Effects are eight
+again, numbered as before, and a state saved by a development build with GRAIN in hand loads with PLATE
+(`tests/state.c`). To come back it needs: the FREEZE fix (tried in a scratch copy, worked) with a check that
+fails without it, `tools/fm1_profile.py` setting an effect's knobs, timing at SIZE and DENSITY 100 against
+PERC's GAMELAN, and about 3 KB of flash.
 
 ## Sprint 6: PERC with more modes — code only, decided by the FM-1 (kept: under 80% on the FM-1)
 
@@ -163,8 +173,13 @@ Planned after sprints 1–6, against the flash and audio time they leave.
 | 1 DICE | < 1 KB |
 | 2 State v5 | ~0.5 KB |
 | 3 AKWF banks (CYCLE) | 69 KB, measured by CI (image 479,660 B) |
-| 4 STUDIO + ORCH kits (SKINS) | 17.9 KB of hits + code, CI to measure |
-| 5 GRAIN | ~3 KB |
+| 4 STUDIO + ORCH kits (SKINS) | 17.9 KB of hits + code (with sprints 5 and 6: image 513,260 B, CI 45172547638) |
+| 5 GRAIN | ~3 KB; taken out |
 | 6 PERC | ~1 KB |
 | Later: progression generator, multi-model engine | ~1 KB + 5–8 KB |
 | Total | ~98–105 KB of 170 (sprint 4 at ~20 KB with its code), leaving ~65–72 KB (keep at least 45 KB) |
+
+Measured at the end, by CI: `virtuosity` with the sprints (GRAIN in) was 513,260 B, 68,304 B free of the
+581,564 B slot. Merged with `main`'s one render per algorithm (53.5 KB, measured without them) and GRAIN
+out, it is 563,708 B (CI 45191550090): 17,856 B free, under the 45 KB this plan keeps. What the release
+keeps of those renders is decision D1 in `docs/PLAN-after-sprints.md`.
