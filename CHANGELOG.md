@@ -93,6 +93,14 @@ Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's
   peak 74% (PERC GAMELAN). 0.4.0's 96 were 48% and 73% (FM-4 BASS); FM-4 now peaks at 71%, SHAPER at 70%,
   the new SKINS at 66% (HALL) and CYCLE at 43%. `tools/fm1_profile.py` times an engine,
   or all of them, on an FM-1 and fails past a limit.
+- Loop jams hold where 0.4.0 stuttered. A tester on 0.4.0 heard the audio stutter, and slow to half tempo, at
+  four layers of SHAPER CZ-SAW, ELECTRIC FELT and KIT WORLD. `tools/fm1_profile.py jam` builds that jam on an
+  FM-1, as full as it gets: four-note chords, three notes or three drums on every sixteenth on each of the four
+  tracks, two overdubs in other algorithms, and keys held on top, with PLATE. 0.4.0 missed 63 halves over it
+  (from the third layer on; 113% of the audio time at its peak with the fourth track) and let 8 voices go to
+  catch up; 0.5.0 missed 1 in each of two runs (the fourth track's chords), its highest peaks 87 and 91%. The
+  renders above are the likely reason: the jam plays three of their five engines. At that density 0.5.0 is still
+  near the limit, and the screen slows to 15 to 25 frames a second.
 
 **Inside**
 - The saved state is version 5: it has room for sixteen engines and twelve effects (there are fourteen and

@@ -145,18 +145,24 @@ The owner's, still open:
 
 ### A1. `main` into `virtuosity`
 
-- [ ] `git checkout virtuosity && git merge main` (no conflicts expected: `main`'s three commits touch
+*Done in ee85141. Checked again 2026-11-23 on fbb941d: `tests/run_tests.sh` all passed (117 sections the
+same on one core and two), `tests/run_fuzz.sh 8` nothing found.*
+
+- [x] `git checkout virtuosity && git merge main` (no conflicts expected: `main`'s three commits touch
       `core/inst_{analog,electric,fm4,shaper,stack}.c` only).
-- [ ] Run the core tests and `sh tests/run_fuzz.sh 8`. Expected: all pass, nothing found.
-- [ ] `build/a22cores` against `virtuosity`'s before the merge: all 117 sections the same.
+- [x] Run the core tests and `sh tests/run_fuzz.sh 8`. Expected: all pass, nothing found.
+- [x] `build/a22cores` against `virtuosity`'s before the merge: all 117 sections the same.
 
 ### A2. GRAIN out
+
+*Done in 3cab816 (GRAIN out, `tests/state.c`'s nine-effect check, `tests/grain.c` gone, `fm1_profile.py`'s
+FXK without it). `rg` finds only KIT's "grit grains" and the comet's grains in `core/gfx.c`.*
 
 Tried in a scratch copy of `virtuosity` for this plan: the steps below, then the core tests pass (`state`
 74 checks, `echo` without its GRAIN lines) and all 117 sections of `tests/cores.c` are the same as with
 GRAIN.
 
-- [ ] `git revert --no-commit 73df9b0`. It stops on conflicts, all one-sided:
+- [x] `git revert --no-commit 73df9b0`. It stops on conflicts, all one-sided:
   - `core/fx.c`, `core/internal.h`: take the reverted side in every hunk (GRAIN's state, `grain_clear`,
     `fx_grain`, the three `fx_grain_*` declarations: 71d7616's sleep in silence goes with them).
   - `tests/run_tests.sh`: drop the two `grain` lines of the header and the two that build and run it; keep
@@ -164,26 +170,29 @@ GRAIN.
   - `tests/grain.c`: `git rm`.
   - `CHANGELOG.md`, `docs/PLAN-expansion-sprints.md`: keep HEAD's text for now; E2 rewrites both.
   - `core/ui.c`, `tests/echo.c`, `tests/state.c`, `README.md` revert cleanly.
-- [ ] `tools/fm1_profile.py`: GRAIN's line out of `FXK`, and out of the `--fx` help text.
-- [ ] `rg -n -i "grain|freeze|fx_tap_waits" core tests tools app/words.tsv README.md`: nothing left but
+- [x] `tools/fm1_profile.py`: GRAIN's line out of `FXK`, and out of the `--fx` help text.
+- [x] `rg -n -i "grain|freeze|fx_tap_waits" core tests tools app/words.tsv README.md`: nothing left but
       `tests/echo.c`'s "grainy" and KIT's FM-GRIT.
-- [ ] Keep, from the same commits: state version 5's `NFXSLOT` and `nfx` (45fa9e0), GAMELAN's shorter modes
+- [x] Keep, from the same commits: state version 5's `NFXSLOT` and `nfx` (45fa9e0), GAMELAN's shorter modes
       and the skipped dead modes (71d7616's PERC half), `tools/fm1_profile.py` itself.
-- [ ] One check to add in `tests/state.c`: a version 5 state saved with nine effects and effect 8 in hand
+- [x] One check to add in `tests/state.c`: a version 5 state saved with nine effects and effect 8 in hand
       (what the owner's FM-1 holds from the development builds) loads with PLATE in hand, `nfx` 8 and slots
       8 to 11 empty. `h1_state_load` already does this (`st.fx_type >= NFX`, the `NFX..NFXSLOT` loop); the
       check keeps it so. The path for an effect newer than the state has no test until there is such an
       effect again.
-- [ ] Core tests, `sh tests/run_fuzz.sh 8`, `build/a22cores` (all 117 the same as before the revert).
-- [ ] Rebuild the simulator (`tools/build_rfm1.sh`), commit `dist/a22.rfm1` with it, push, and open a pull
+- [x] Core tests, `sh tests/run_fuzz.sh 8`, `build/a22cores` (all 117 the same as before the revert).
+- [x] Rebuild the simulator (`tools/build_rfm1.sh`), commit `dist/a22.rfm1` with it, push, and open a pull
       request to `main` (do not merge it): CI builds the firmware.
 
 ### A3. The flash number
 
-- [ ] Read the image size from the CI firmware job's line `ok    image N B; SRAM ...`
+*CI's image: 563,708 B (45191550090), 563,692 B with phase B (45195150042). D1 kept all five renders, so
+none was taken out.*
+
+- [x] Read the image size from the CI firmware job's line `ok    image N B; SRAM ...`
       (`gh run view RUN --log | rg "ok +image"`). Expected: about 563,800 B.
-- [ ] Put the number, and the two tables of finding 1, in front of the owner for D1.
-- [ ] To take an engine's specialised render out: restore its file to 0.4.0's
+- [x] Put the number, and the two tables of finding 1, in front of the owner for D1.
+- [x] To take an engine's specialised render out: restore its file to 0.4.0's
       (`git checkout 064492c -- core/inst_stack.c`, as 4c0eb47 did for CHIP and MONO: `virtuosity` never
       touched these five files), run `build/a22cores` (bit-exact, as the specialisation was), and read CI's
       image size again. Do this only for the engines D1 names, after C1 if D1 waits on it.
@@ -192,12 +201,14 @@ GRAIN.
 
 ### B1. CYCLE: the STEP- algorithms' right side glides as the left does
 
+*Done in 3073075; `tests/basics.c` checks the right side glides.*
+
 Files: `core/inst_wave.c`, `tests/basics.c` (beside its "CYCLE's STEP-" checks).
 
-- [ ] Check first (fails now): STEP-STR, K1 0, SCAN 100, SPREAD 100, FILTER 100, a note held 2.5 s; the
+- [x] Check first (fails now): STEP-STR, K1 0, SCAN 100, SPREAD 100, FILTER 100, a note held 2.5 s; the
       right channel's largest second difference over its rms is within 1.5 times the left's (3.3 times
       now, 1.0 with the fix).
-- [ ] The fix, tried in a scratch copy (`v->s[5]` is free in this player: WAVE's and the smooth CYCLE
+- [x] The fix, tried in a scratch copy (`v->s[5]` is free in this player: WAVE's and the smooth CYCLE
       sections of `tests/cores.c`, 80 to 87 and 96 to 99, stay the same to the bit):
 
 ```diff
@@ -228,39 +239,43 @@ Files: `core/inst_wave.c`, `tests/basics.c` (beside its "CYCLE's STEP-" checks).
      ml = pl - (f32)ial;
 ```
 
-- [ ] `build/a22cores` before and after: sections 0 to 99 the same; 100 to 103 (the STEP- algorithms)
+- [x] `build/a22cores` before and after: sections 0 to 99 the same; 100 to 103 (the STEP- algorithms)
       differ, and the ones after them through their tails. Confirm SKINS itself is unchanged with
       `build/a22skins` (its takes run in their own processes).
-- [ ] `build/a22basics` (its "plays the same whole wave for nearby K1" check must still pass), the core
+- [x] `build/a22basics` (its "plays the same whole wave for nearby K1" check must still pass), the core
       tests.
 
 ### B2. SKINS hears PUNCH (the ENV page's), as KIT does
+
+*Done in 2be3594, with PUNCH at full strength (`tr->punch + b->punch`) rather than 0.6 times; by ear in D.*
 
 Files: `core/inst_skins.c`, `tests/skins.c`.
 
 KIT adds `b->punch` to its kick's and toms' pitch drop and click (`core/inst_kit.c`, `kit_render`). SKINS'
 `Treat.punch` is extra level over the first 6 ms, on TIGHT and MARCH (0.90) and VINTAGE and SHELLAC (0.20).
 
-- [ ] `sk_render`: the start's extra level becomes `tr->punch + 0.6f * b->punch` on the kick, snare and
+- [x] `sk_render`: the start's extra level becomes `tr->punch + 0.6f * b->punch` on the kick, snare and
       toms (0.6 is a first value, for D2).
-- [ ] SKINS' default mod envelope has PUNCH at 35, copied from KIT (`{50, 40, 75, 35}`): make it 0, so
+- [x] SKINS' default mod envelope has PUNCH at 35, copied from KIT (`{50, 40, 75, 35}`): make it 0, so
       every algorithm at its defaults is the same to the bit as now and nothing picked by ear moves.
       (A unit that already saved SKINS keeps its 35 and will sound a little harder at the start: the
       owner's FM-1 only, nothing released.)
-- [ ] Checks: at PUNCH 0 each algorithm's hash is what it was before the change; at PUNCH 100 the kick's
+- [x] Checks: at PUNCH 0 each algorithm's hash is what it was before the change; at PUNCH 100 the kick's
       first 6 ms hold more energy than at 0 and the rest of the hit is the same within 0.5 dB; level stays
       inside the limiter.
-- [ ] `build/a22skins`, `build/a22cores` (SKINS' sections 104 to 111 differ only because their default
+- [x] `build/a22skins`, `build/a22cores` (SKINS' sections 104 to 111 differ only because their default
       moved, if at all: name them), the core tests.
 
 ### B3. PERC: the test's switch out of the firmware
 
+*Done in e4584fd.*
+
 Files: `core/inst_perc.c`, `core/internal.h`.
 
-- [ ] `perc_nmode` and `perc_test_modes` only where `H1_DEVICE` is not defined (the device and the host
+- [x] `perc_nmode` and `perc_test_modes` only where `H1_DEVICE` is not defined (the device and the host
       simulator build with it; the unit tests and the simulator's package do not); with it,
       `#define perc_nmode NMODE`.
-- [ ] `build/a22perc`, `build/a22cores` (all the same), `./build.sh --host` if Pillow is there, else leave
+- [x] `build/a22perc`, `build/a22cores` (all the same), `./build.sh --host` if Pillow is there, else leave
       the device build to CI.
 
 ## Phase C: on the FM-1 (after phase B is merged into `virtuosity`; the owner installs)
@@ -285,9 +300,9 @@ Files: `core/inst_perc.c`, `core/internal.h`.
 
 ### C2. The restart after an install
 
-- [ ] From the owner: which builds were the last two installs, and what `fm1_install.py` said
+- [x] From the owner: which builds were the last two installs, and what `fm1_install.py` said
       ("the FM-1 did not come back: power-cycle it" is its own message after 40 s without the app).
-- [ ] `python3 base/tools/fm1_remote.py crashes` after such an install and a power cycle: a crash record
+- [x] `python3 base/tools/fm1_remote.py crashes` after such an install and a power cycle: a crash record
       means the app started and fell over; none means it never started or never reached USB.
 - [x] The guess to test: image size. Install 0.4.0's package (410,720 B), then CI's merged build, then
       0.4.0's again, twice round, noting each time whether it came back. If only the large image fails,
@@ -322,22 +337,25 @@ Files: `core/inst_perc.c`, `core/internal.h`.
 
 ### E1. What names the engines
 
+*Done in 2040bd9: the site, `app/fm1.toml`, `firmware.json`, `fmhub.json` (265 characters; VCSL,
+Virtuosity Drums, AKWF), `PRODUCT.md`, `DESIGN.md`, `docs/ARCHITECTURE.md`'s version 5 paragraph.*
+
 The effects are eight again, so what says "eight effects" is right as it stands.
 
-- [ ] `tools/build_site.py`: fourteen banks, A to N (CYCLE is M, SKINS N); its counts in words ("Twelve
+- [x] `tools/build_site.py`: fourteen banks, A to N (CYCLE is M, SKINS N); its counts in words ("Twelve
       engines", "ninety-six") become fourteen and 112.
-- [ ] `app/fm1.toml`'s `description` and the top-level `firmware.json` (the build writes
+- [x] `app/fm1.toml`'s `description` and the top-level `firmware.json` (the build writes
       `app/build/firmware.json` from the toml: copy it, do not edit by hand).
-- [ ] `fmhub.json`: `what` (fourteen engines; keep it under the Hub's 300 characters, as 5ea9fce did) and
+- [x] `fmhub.json`: `what` (fourteen engines; keep it under the Hub's 300 characters, as 5ea9fce did) and
       `sounds` (VCSL, Virtuosity Drums and AKWF, all CC0).
-- [ ] `PRODUCT.md` (lines on twelve engines, the captures of "all twelve engines", "over 96 algorithms"),
+- [x] `PRODUCT.md` (lines on twelve engines, the captures of "all twelve engines", "over 96 algorithms"),
       `DESIGN.md` (twelve tabs A to L, `bank-a-fm4` to `bank-l-chip`, "Twelve banks share nine distinct
       inks": add CYCLE's and SKINS' inks from their `InstDef`).
-- [ ] `docs/RELEASE-CHECKLIST.md`: "all twelve engines", "88 of the 96 algorithms", "over all 96"; add
+- [x] `docs/RELEASE-CHECKLIST.md`: "all twelve engines", "88 of the 96 algorithms", "over all 96"; add
       lines for DICE and a version 4 state loading with everything kept.
-- [ ] `docs/ARCHITECTURE.md`: the saved-state paragraph rewritten for A22 (version 5, 2,888 bytes, sixteen
+- [x] `docs/ARCHITECTURE.md`: the saved-state paragraph rewritten for A22 (version 5, 2,888 bytes, sixteen
       engine slots and twelve effect slots, version 4 read by offsets).
-- [ ] `rg -n -i "twelve|12 engines|96 |grain" README.md PRODUCT.md DESIGN.md docs tools app/fm1.toml fmhub.json firmware.json`
+- [x] `rg -n -i "twelve|12 engines|96 |grain" README.md PRODUCT.md DESIGN.md docs tools app/fm1.toml fmhub.json firmware.json`
       and read what is left: h1's history and the plans may keep theirs.
 
 ### E2. The CHANGELOG and the plans
@@ -354,9 +372,15 @@ The effects are eight again, so what says "eight effects" is right as it stands.
 
 ### E3. Version, simulator, merge
 
-- [ ] `tools/build_rfm1.sh X.Y.Z` and commit `dist/a22.rfm1`.
-- [ ] CI green on the pull request from A2, with the release's test package (`a22-release-test`) installed
+- [x] `tools/build_rfm1.sh X.Y.Z` and commit `dist/a22.rfm1`. *fbb941d, version 0.5.0.*
+- [x] CI green on the pull request from A2, with the release's test package (`a22-release-test`) installed
       on the FM-1 and the checklist's sections 0 to 3 gone through.
+      *2026-11-23: CI 45235662579 green on fbb941d (PR 3). `a22-0.5.0-test.fwsc` installed over 0.4.0 in 21 s,
+      back by itself: `FM-1_4122000500`, USB name `A22 FM-1`, no crash saved; 0.4.0's settings (four tracks'
+      engines and algorithms, PLATE) kept. Checklist sections 0 to 3 otherwise as for 0.4.0: what needs ears
+      or hands is the owner's. A loop jam a tester reported stuttering on 0.4.0, measured on the FM-1 with
+      `tools/fm1_profile.py jam` (dense, four tracks): 0.4.0 63 late halves, 113% peak; 0.5.0 1 late half a run,
+      highest peaks 87 and 91% (two runs; peaks vary by run). In the CHANGELOG.*
 - [ ] With the owner's word: merge to `main` (the website republishes from `dist/a22.rfm1` and
       `tools/build_site.py`), tag, and the Hub's submission as `SUBMIT-0.4.0.md` did it.
 
@@ -368,3 +392,26 @@ The effects are eight again, so what says "eight effects" is right as it stands.
   with ANALOG's or STACK's lands on the 45 KB line; three or more do not fit. It also needs its own timing
   on the FM-1 at eight notes before it is kept.
 - Any change to PERC is timed again with C1's commands.
+
+## Phase G: loop jams, more headroom (the release after 0.5.0)
+
+0.5.0 holds the tester's jam (E3), but at full density it peaks at 87 to 91% with one late half, and the
+screen falls to 15 to 25 frames a second. Each change below is measured with `tools/fm1_profile.py jam
+--clear-tape` (run it twice: its peaks vary by run; LATE and SHED are the steadier numbers), and with
+`tests/corestat.c` (scenarios `reddit3`, `reddit4`) for the output staying the same to the bit. A host gain is
+not an FM-1 gain: one job list per block once cost the FM-1 1 to 6 points (corestat's header).
+
+- [ ] `block()`: of an odd number of voices, the larger half to the second core, a voice alone kept on the
+      first. Bit-exact on the host (all nine corestat scenarios, one core = two); 1 to 3% on the host. Tried
+      2026-11-23, not on the FM-1 yet.
+- [ ] Each voice's gain, declick and mix into the track done by the core that rendered it, summed in voice
+      order by the first (bit-exact): today the first core does that for every voice, group by group.
+- [ ] `ring_step`: the tape's pages written while the audio is light, or spaced out (each page write turns the
+      interrupts and XIP off for the page program, the audio's included).
+- [ ] `input_hz = 5000` (fm1-base: ~4% of the first core; velocity measured at 10000 only, the glow dimmer:
+      hands and eyes).
+- [ ] `audio_ahead = true` (one half of latency more; absorbs a spike, not a load past 100%).
+- [ ] Tape notes keep the part they were recorded with (`tape_fire_ev`), so an overdub after a change of
+      ALGO or engine splits its track into two groups, and `track_set` gives the second the first's knobs.
+      Decide first: does a track's tape follow the track's engine, as the step sequencer does?
+- [ ] The per-frame scans of the tape's events (`eng_seq_info`, `eng_seq_leds`) only when the tape changed.
