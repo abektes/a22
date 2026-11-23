@@ -103,11 +103,15 @@ Made:
 
 - **GRAIN is removed** (2026-11-23). Task A2. The state stays version 5 with its twelve effect slots, so an
   effect added later still needs no new version.
+- **D1: all five specialised renders stay** (the owner, 2026-11-23): 0.5.0 ships with 17,872 B free. There
+  are no new features waiting; flash is won back when one needs it. C1 says which renders earn their place:
+  FM-4 (71% with, 75% without) and SHAPER (70%, 77%); ANALOG, STACK and ELECTRIC peak at 50 to 65% with.
+- **D3: 0.5.0** (the owner, 2026-11-23).
 
 The owner's, still open:
 
-- **D1. Which specialised renders stay.** With GRAIN out: all five, about 18 KB free; FM-4 only, about
-  68 KB free (23 KB over the reserve); FM-4 and SHAPER, about 57 KB free. Without GRAIN the peaks nearest
+- **D1. Which specialised renders stay.** (Decided above.) With GRAIN out: all five, about 18 KB free; FM-4
+  only, about 68 KB free (23 KB over the reserve); FM-4 and SHAPER, about 57 KB free. Without GRAIN the peaks nearest
   80% in the sprint plan's tables are SHAPER (77% under PLATE, without its specialised render), PERC
   GAMELAN (76%) and FM-4 (75%). Suggested: keep FM-4's; keep another engine's only if task C1 shows its
   peak past 75% without it, which on those numbers means SHAPER's is the one to look at. Decide after A3
@@ -117,7 +121,7 @@ The owner's, still open:
   beside GRAIN. Under PLATE the longer ones peaked at 78%, so they could come back; it costs two points of
   the room PERC has.
 - **D3. The version number**, and whether the two later features go in this release or the next.
-  The owner, 2026-11-23: **0.5.0**. (The two later features: not decided.)
+  Decided, above: **0.5.0**. The two later features wait for the next release (none is built).
 
 ## Rules for every task
 
@@ -269,7 +273,7 @@ Files: `core/inst_perc.c`, `core/internal.h`.
       The five specialised engines should be lower than the sprint plan's numbers, the rest within a point.
       2026-11-23: every algorithm under 80%; all 112 average 49%, peak 74% (PERC GAMELAN). With their
       renders FM-4 peaks 71% (was 75% without), SHAPER 70% (was 77%). WIRE BOWED 63% against 59% in
-      0.4.0's table, nothing in WIRE changed; the rest within a point. (`all` skipped ELECTRIC, timed
+      `HANDOFF-perf-audio.md`'s table, nothing in WIRE changed; the rest within a point. (`all` skipped ELECTRIC, timed
       alone at 50%: its listing counted an engine twice when a PRESET turn did not land; fixed.)
 - [x] `tools/fm1_profile.py PERC --fx PLATE --knob 3=100 --knob 4=100`: RING and SPACE at their tops
       together (the sprint plan timed SPACE 100 alone). `--max 80` is the pass mark.
@@ -297,10 +301,10 @@ Files: `core/inst_perc.c`, `core/internal.h`.
       5. 0.4.0 → merged: back by itself, ~30 s.
       Both stumbles had the merged build on one side, but it also went through cleanly three times out of
       five, once each way: size not shown, not ruled out. Intermittent; a replug always recovers it.
-- [ ] This blocks the release: The Firmware Hub's checklist needs an install that ends in the firmware
+- [x] This blocks the release: The Firmware Hub's checklist needs an install that ends in the firmware
       running (`docs/RELEASE-CHECKLIST.md`, sections 1 and 3). Installs 1 and 5 did (0.4.0 → merged, the
-      way a user updates). For the owner: release with a known issue in the notes ("if the FM-1 does not
-      come back after an update, unplug and replug it: the update finishes"), or look into `base` first.
+      way a user updates). The owner chose a known issue in the CHANGELOG over looking into `base` first
+      (task E2).
 
 ## Phase D: by ear (the owner; an agent prepares, does not decide)
 
@@ -338,12 +342,13 @@ The effects are eight again, so what says "eight effects" is right as it stands.
 
 ### E2. The CHANGELOG and the plans
 
-- [ ] Unreleased becomes the version (D3) with its date and identity line, as 0.4.0's heading.
-- [ ] GRAIN's entry out. The state's sentence becomes "room for sixteen engines and twelve effects (there
+- [x] Unreleased becomes the version (D3) with its date and identity line, as 0.4.0's heading. With a
+      "Known issue" for C2's installs (the owner's choice over looking into `base` first).
+- [x] GRAIN's entry out. The state's sentence becomes "room for sixteen engines and twelve effects (there
       are fourteen and eight)"; the line "records how many effects it was saved with" stays.
-- [ ] Correct PERC's and SKINS' stale sentences (finding 5); add each phase B fix from its commit message;
+- [x] Correct PERC's and SKINS' stale sentences (finding 5); add each phase B fix from its commit message;
       put C1's numbers where PERC's entry says "measured on a computer".
-- [ ] `PLAN-expansion-sprints.md`: sprint 5 marked built, measured and taken out, with why (findings 2 and
+- [x] `PLAN-expansion-sprints.md`: sprint 5 marked built, measured and taken out, with why (findings 2 and
       3 here) and what it would need to come back; "Flash at the end" with CI's measured sizes and what D1
       left free.
 

@@ -165,10 +165,11 @@ with GAMELAN against GRAIN the closest (79%).
 CI's build of `virtuosity` at 52bd8db (sprints 1–6, `main`'s one render per algorithm, GRAIN out, phase B's
 fixes; image 563,692 B), timed on the FM-1 on 2026-11-23 with `tools/fm1_profile.py all --fx PLATE`
 (ELECTRIC on its own: the `all` listing then skipped an engine when a PRESET turn did not land; fixed since).
-Eight-note chords, 2.2 s each, every algorithm. Before: 0.4.0's numbers from `HANDOFF-perf-audio.md`, same
-chord and timing. Engines with one render per algorithm (ed6544f, 6494cf7) marked *.
+Eight-note chords, 2.2 s each, every algorithm. Before: the "after" column of `HANDOFF-perf-audio.md`'s
+table (0.4.0's audio work, same chord and timing; a different run from this plan's budget line, which has
+0.4.0's peak at 73%). Engines with one render per algorithm (ed6544f, 6494cf7, 4c0eb47) marked *.
 
-| Engine | Average | Worst average | Peak | 0.4.0 peak |
+| Engine | Average | Worst average | Peak | Peak before |
 |---|---|---|---|---|
 | FM-4 * | 64% | 68% | 71% (BASS) | 74% |
 | SHAPER * | 60% | 67% | 70% (GLASSY) | 81% |
@@ -180,11 +181,11 @@ chord and timing. Engines with one render per algorithm (ed6544f, 6494cf7) marke
 | WIRE | 54% | 59% | 63% (BOWED) | 59% |
 | KIT | 48% | 52% | 59% (METAL) | 58% |
 | ELECTRIC * | 44% | 48% | 50% (ORGAN, TAPE) | 52% |
-| CHIP * | 38% | 42% | 43% (LEAD, DUET) | |
+| CHIP | 38% | 42% | 43% (LEAD, DUET) | |
 | CYCLE (sprint 3) | 41% | 41% | 43% | |
 | WAVE | 41% | 41% | 42% | |
-| MONO * | 33% | 34% | 37% | 36% |
-| All 112 algorithms | 49% | | 74% (PERC GAMELAN) | 0.4.0: 48%, 73% (FM-4 BASS) |
+| MONO | 33% | 34% | 37% | 36% |
+| All 112 algorithms | 49% | | 74% (PERC GAMELAN) | 0.4.0's 96: 48%, 73% (FM-4 BASS) |
 
 PERC with RING and SPACE both at 100 (`--knob 3=100 --knob 4=100`, the strings in): average 64%, worst
 average 69% (HANDPAN), **peak 78% (HANDPAN)**, GAMELAN 77%, STEEL 76%: under 80%, the closest line in the
@@ -216,5 +217,8 @@ Planned after sprints 1–6, against the flash and audio time they leave.
 
 Measured at the end, by CI: `virtuosity` with the sprints (GRAIN in) was 513,260 B, 68,304 B free of the
 581,564 B slot. Merged with `main`'s one render per algorithm (53.5 KB, measured without them) and GRAIN
-out, it is 563,708 B (CI 45191550090): 17,856 B free, under the 45 KB this plan keeps. What the release
-keeps of those renders is decision D1 in `docs/PLAN-after-sprints.md`.
+out, it is 563,708 B (CI 45191550090): 17,856 B free, under the 45 KB this plan keeps. With phase B's fixes
+(52bd8db, CI 45195150042, the code 0.5.0 releases) 563,692 B: 17,872 B free. Decision D1 in
+`docs/PLAN-after-sprints.md`: the release keeps all five renders and that 17.9 KB; flash is won back when
+something new needs it (`-Os` on the core's UI files, renders only where C1 shows them needed, 8-bit
+wavetables), not before.

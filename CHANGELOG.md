@@ -3,7 +3,18 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.5.0
+
+Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's build of the same code,
+52bd8db). Settings and the tape saved by 0.1.0 to 0.4.0 load with everything kept.
+
+**Known issue**
+- Now and then the FM-1 does not come back after an update. On one FM-1, two of five installs between 0.4.0
+  and this release stumbled: once its USB went away at the switch to update mode, once it took about two and
+  a half minutes to come back. If the installer says the FM-1 did not come back, give it a couple of minutes;
+  if it still has not, unplug the USB cable and plug it in again (switch the FM-1 off and on if it still
+  does not show) and run the install again: the update loader is waiting and finishes the write. Nothing is
+  lost, and no crash was recorded. The cause is not found yet.
 
 **Sound**
 - A thirteenth engine, CYCLE: WAVE's player on four banks of fifteen single cycles of recorded instruments,
@@ -51,8 +62,8 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   a little:** a tape or snapshot on PERC plays the new modes too (as loud as before, within 0.2 dB).
   SPACE from 60 up brings in two sympathetic strings, an octave and a twelfth over the note, struck by the
   mallet and the modes and ringing on after them; at SPACE's default (52) and below 60 there are none. A
-  mode that has died away is not worked out until the next strike, so a held chord costs about 1.3 times
-  what it did (1.4 with the strings), measured on a computer.
+  mode that has died away is not worked out until the next strike. On the FM-1, eight-note chords under
+  PLATE peak at 74% of the audio time (GAMELAN; 51% before), 78% (HANDPAN) with RING and SPACE at 100.
   `tests/perc.c` checks that the new modes are heard on every algorithm, the strings, and every note
   sounding and ending.
 
@@ -71,6 +82,17 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   clip's memory (in 0.1.0 to 0.4.0): only notes checked for room, so a take with a lot of knob movement could
   overrun it. Every event now needs a place; what does not fit stays on the tape, as notes always did.
   Found by the crash hunt; `tests/tape.c` cuts and pastes a take of 1,200 knob moves.
+
+**Audio time**
+- FM-4, ANALOG, STACK, SHAPER and ELECTRIC each have a render of their own for every algorithm, so the
+  sample loop no longer asks which algorithm it is playing. The sound is the same to the bit
+  (`tests/cores.c`'s section hashes equal 0.4.0's). On the FM-1, eight-note chords under PLATE: ANALOG 5.1
+  points of the audio time lower, FM-4 3.2, STACK 3.0, SHAPER 2.2, ELECTRIC 2.1. About 53 KB of flash.
+  (CHIP and MONO gained nothing within the drift between runs and keep their one render.)
+- Measured on an FM-1 (eight-note chords held on all 112 algorithms with PLATE on, CC 119): average 49%,
+  peak 74% (PERC GAMELAN). 0.4.0's 96 were 48% and 73% (FM-4 BASS); FM-4 now peaks at 71%, SHAPER at 70%,
+  the new SKINS at 66% (HALL) and CYCLE at 43%. `tools/fm1_profile.py` times an engine,
+  or all of them, on an FM-1 and fails past a limit.
 
 **Inside**
 - The saved state is version 5: it has room for sixteen engines and twelve effects (there are fourteen and
