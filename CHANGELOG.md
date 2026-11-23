@@ -77,7 +77,22 @@ Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's
   sent as CC 20-23. `tests/dice.c` rolls every algorithm and checks the spans, the panel, and that a roll
   stays within 6 dB of how loud the algorithm is at its own setting (it measures -4.5 to +4.5 dB).
 
+**Picture**
+- Each engine's picture follows the track in hand: its share of the mix's level, its own sound before the
+  effect, its own notes. It followed the whole mix, so in a jam a silent FM-4 pulsed with another track's chord.
+  The top bar's meter and the FX page keep the mix. Played alone, a track looks as it did.
+- FM-4's operators glide to a new algorithm's places (about 170 ms, and on to the next if ALGO keeps turning)
+  instead of jumping. A new engine, or another track's, comes in over 140 ms as a page does; the engine's name
+  leaves in 0.2 s instead of 0.43. When a busy jam slows the screen, the pictures keep their pace (they ran up
+  to a fifth slow below 20 frames a second).
+
 **Fixes**
+- Keys and MIDI notes are read while the screen is drawn, at most a millisecond apart. They were read once a
+  frame, and a busy jam draws a frame in 60 to 175 ms: a note shorter than that could start and end between two
+  reads and never sound, nor go on the tape (in 0.1.0 to 0.4.0, and the takes of a dense jam came out lighter
+  than played). A key waited up to a frame to sound, too. Keys are left to the frame while a button is held
+  (SAVE and a key take a snapshot); MIDI from the first message that is not a note, with all after it, keeps its
+  order and waits for the frame.
 - CUT (EDIT + REC) of a track holding more than 512 events, knob moves included, wrote past the end of the
   clip's memory (in 0.1.0 to 0.4.0): only notes checked for room, so a take with a lot of knob movement could
   overrun it. Every event now needs a place; what does not fit stays on the tape, as notes always did.
@@ -93,14 +108,15 @@ Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's
   peak 74% (PERC GAMELAN). 0.4.0's 96 were 48% and 73% (FM-4 BASS); FM-4 now peaks at 71%, SHAPER at 70%,
   the new SKINS at 66% (HALL) and CYCLE at 43%. `tools/fm1_profile.py` times an engine,
   or all of them, on an FM-1 and fails past a limit.
-- Loop jams hold where 0.4.0 stuttered. A tester on 0.4.0 heard the audio stutter, and slow to half tempo, at
-  four layers of SHAPER CZ-SAW, ELECTRIC FELT and KIT WORLD. `tools/fm1_profile.py jam` builds that jam on an
-  FM-1, as full as it gets: four-note chords, three notes or three drums on every sixteenth on each of the four
-  tracks, two overdubs in other algorithms, and keys held on top, with PLATE. 0.4.0 missed 63 halves over it
-  (from the third layer on; 113% of the audio time at its peak with the fourth track) and let 8 voices go to
-  catch up; 0.5.0 missed 1 in each of two runs (the fourth track's chords), its highest peaks 87 and 91%. The
-  renders above are the likely reason: the jam plays three of their five engines. At that density 0.5.0 is still
-  near the limit, and the screen slows to 15 to 25 frames a second.
+- Loop jams hold far better than 0.4.0's, which a tester heard stutter, and slow to half tempo, at four layers
+  of SHAPER CZ-SAW, ELECTRIC FELT and KIT WORLD. `tools/fm1_profile.py jam` builds that jam on an FM-1, as full
+  as it gets: four-note chords, three notes or three drums on every sixteenth on each of the four tracks, two
+  overdubs in other algorithms, and keys held on top, with PLATE. 0.4.0 missed 63 halves over it (from the third
+  layer on; 113% of the audio time at its peak) and let 8 voices go to catch up, and as it read keys once a
+  frame, its takes may have lost some of their shortest notes (Fixes, above). This release, with every note
+  kept, missed 35 and 22 in two runs, from the overdubs on, peaking at 104 and 106%: at that density it is at
+  its limit, and the screen slows to 11 to 25 frames a second. The renders above are the likely reason for the
+  difference: the jam plays three of their five engines.
 
 **Inside**
 - The saved state is version 5: it has room for sixteen engines and twelve effects (there are fourteen and

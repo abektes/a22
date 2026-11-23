@@ -221,8 +221,10 @@ typedef struct Vis {
     f32 last_pitch;
     uint32_t hand;
     f32 hand_pitch;
-    const f32 *scope;
+    const f32 *scope;            /* the whole mix, after the effect (the top bar's meter, the FX page) */
     int scope_pos;
+    f32 own_level;               /* the track in hand alone, before the effect: what the HOME picture reacts to */
+    const f32 *own_scope;        /* (same scope_pos) */
     VBall balls[NSHAKE];       /* Shake visualization */
     f32 tomb_angle;
     uint32_t *rng;
