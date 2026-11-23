@@ -1,7 +1,7 @@
 # A22
 
 Custom firmware for the M-VAVE FM-1: an FM workstation. Fourteen synth and drum engines, each with eight
-algorithms and four live knobs, drawn in colour vector graphics. Nine selectable effects, a
+algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
 four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
 sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
 layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)), SKINS'
@@ -47,8 +47,8 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 
 ## Effects
 
-One effect at a time, chosen on the FX page with ALGORITHM. PLATE, DELAY, SHIFT, CHORUS, TANK and GRAIN are sends:
-each track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix, whatever the sends are.
+One effect at a time, chosen on the FX page with ALGORITHM. PLATE, DELAY, SHIFT, CHORUS and TANK are sends: each
+track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix, whatever the sends are.
 
 | Effect | Knobs |
 |---|---|
@@ -60,7 +60,6 @@ each track sets how much of it it sends. FILTER, LOFI and THUMP work on the whol
 | **TANK** (spring reverb) | MIX, DECAY, TWANG, TONE |
 | **LOFI** (lo-fi) | CRUSH, RATE, BAND, GRIT |
 | **THUMP** (drive and transient) | PUNCH, DRIVE, BASS, TONE |
-| **GRAIN** (a granular cloud of the last 0.74 s; hold FX on its page to FREEZE it) | POSITION, SIZE, DENSITY, PITCH |
 
 The master bus has its own three-band EQ and drive (the MIX page's last subpage).
 

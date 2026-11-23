@@ -14,7 +14,7 @@
 #define NALGO 8                  /* 8 curated algorithms/presets per engine */
 #define NTRACK 4                 /* 4-Track Virtual Tape (T1..T4) */
 #define NSNAP 8                  /* 8 instant user patch snapshots (SAVE + white keys 1..8) */
-#define NFX 9                    /* 9 selectable FX engines (new ones go at the end: a state names them by number) */
+#define NFX 8                    /* 8 selectable FX engines (new ones go at the end: a state names them by number) */
 #define NFXSLOT 12               /* state slots for effects: room for four more than NFX (state version 5) */
 #define NLEV 2048                /* tape events across all 4 tracks (notes + K1..K4 motion) */
 #define NRIFF 64              /* Riff sequencer max steps */
@@ -108,7 +108,7 @@ typedef struct Snap {
 /* Sequencer / Tape mode enums */
 enum { SEQ_TAPE = 0, SEQ_STEP = 1 };
 enum { ARP_OFF = 0, ARP_RIFF, ARP_SHAKE, ARP_UP, ARP_DOWN, ARP_UPDN, ARP_RAND, ARP_CHORD, NARPMODE };
-enum { FX_PLATE = 0, FX_DELAY, FX_FILTER, FX_SHIFT, FX_CHORUS, FX_TANK, FX_LOFI, FX_THUMP, FX_GRAIN };
+enum { FX_PLATE = 0, FX_DELAY, FX_FILTER, FX_SHIFT, FX_CHORUS, FX_TANK, FX_LOFI, FX_THUMP };
 enum { TAPE_SPD_HALF = 0, TAPE_SPD_1X, TAPE_SPD_2X, TAPE_SPD_REV };
 enum { TRICK_OFF = 0, TRICK_BRAKE, TRICK_STUT8, TRICK_STUT16, TRICK_STUT32 };
 enum { CLICK_REC = 0, CLICK_ON, CLICK_OFF };
@@ -348,9 +348,6 @@ extern const uint8_t FX_DEFAULTS[NFX][4];
 void fx_init(f32 sr);
 void fx_reset(void);
 void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, const uint8_t p[4], f32 bpm, int fx_on);
-void fx_grain_freeze(int on);                    /* GRAIN: 1 while FREEZE is held (not saved; off again when it resumes) */
-int fx_grain_frozen(void);
-int fx_grain_asleep(void);                 /* GRAIN: 1 after its whole buffer of silence (nothing worked out) */
 void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm);
 void fx_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 

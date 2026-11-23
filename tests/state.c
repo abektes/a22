@@ -2,14 +2,15 @@
  * repository's top, for tests/state_v4.bin).
  *
  *   version 4   tests/state_v4.bin (written by 0.4.0's own core: tests/state_v4_gen.c) loads, from any
- *               address, with every table as it was saved; CYCLE and SKINS (engines 13 and 14, after 0.4.0) and
- *               GRAIN (effect 9) at their defaults,
- *               the slots no engine or effect has yet empty
+ *               address, with every table as it was saved; CYCLE and SKINS (engines 13 and 14, after 0.4.0) at
+ *               their defaults, the slots no engine or effect has yet empty
  *   version 5   saved and loaded again, to the byte, from an odd address
  *   refused     a wrong size for its version, another version, another magic, a few bytes: nothing changes
  *   new slots   an engine or effect past what a state was saved with (ninst, nfx) comes up as new, the
  *               ones before it as saved: so adding an engine or effect needs no new version. Also a version 5
- *               state from before SKINS (13 engines, its slot empty) brings SKINS up as new, CYCLE as saved */
+ *               state from before SKINS (13 engines, its slot empty) brings SKINS up as new, CYCLE as saved;
+ *               and one saved with nine effects (GRAIN, in development builds only) and the ninth in hand
+ *               comes up on PLATE, the eight it keeps as saved */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -77,8 +78,7 @@ static void version4(void)
         CHECK(SAME(knob, offsetof(V4, knob), sizeof ((V4 *)0)->knob), "every algorithm's knobs, as saved");
         CHECK(SAME(trk, offsetof(V4, trk), sizeof(V4) - offsetof(V4, trk)),
               "the tracks, snapshots and steps, as saved");
-        CHECK(!memcmp(st.fx_p[FX_GRAIN], FX_DEFAULTS[FX_GRAIN], 4), "GRAIN (effect 9, after 0.4.0) at its defaults");
-        CHECK(zero(st.fx_p[NFX], sizeof st.fx_p - sizeof st.fx_p[0] * NFX), "the slots no effect has yet are empty");
+        CHECK(zero(st.fx_p[8], sizeof st.fx_p - sizeof st.fx_p[0] * 8), "the new effect slots are empty");
         CHECK(zero(&st.ip[NINST], sizeof st.ip[0] * (NSLOT - NINST)) &&
               zero(st.knob[NINST], sizeof st.knob[0] * (NSLOT - NINST)), "the slots no engine has yet are empty");
         CHECK(engines_new_from(12), "the engines version 4 did not have (CYCLE, SKINS) come up as new");
@@ -143,14 +143,6 @@ static void new_slots(void)
     }
     CHECK(st.ninst == NINST && st.nfx == NFX, "and it counts them all now");
 
-    /* version 5 as an 8-effect build saved it: GRAIN's slot empty */
-    memcpy(buf, v5, sizeof(H1State));
-    buf[offsetof(H1State, nfx)] = 8;
-    memset(buf + offsetof(H1State, fx_p) + FX_GRAIN * 4, 0, 4);
-    h1_init(44100);
-    CHECK(h1_state_load(buf, sizeof(H1State)) == 0, "a version 5 state from before GRAIN loads");
-    CHECK(!memcmp(st.fx_p[FX_GRAIN], FX_DEFAULTS[FX_GRAIN], 4), "GRAIN comes up at its defaults, not the slot's zeros");
-
     /* version 5 as a 13-engine build saved it: SKINS' slot empty (all zeros), CYCLE's moved off its defaults */
     memcpy(buf, v5, sizeof(H1State));
     buf[offsetof(H1State, ninst)] = 13;
@@ -162,6 +154,20 @@ static void new_slots(void)
     CHECK(engines_new_from(13), "SKINS comes up as new, not with the empty slot's zeros");
     CHECK(!memcmp(&st.ip[12], buf + offsetof(H1State, ip) + 12 * sizeof(InstParams), sizeof(InstParams)),
           "CYCLE keeps what was saved");
+
+    /* version 5 as a development build with a ninth effect (GRAIN, taken out) saved it, with that effect in hand */
+    memcpy(buf, v5, sizeof(H1State));
+    buf[offsetof(H1State, nfx)] = 9;
+    buf[offsetof(H1State, fx_type)] = 8;
+    memset(buf + offsetof(H1State, fx_p) + 8 * 4, 50, 4);
+    h1_init(44100);
+    CHECK(h1_state_load(buf, sizeof(H1State)) == 0, "a state saved with nine effects loads");
+    CHECK(st.fx_type == FX_PLATE && st.nfx == NFX, "the effect it had in hand, gone now, is PLATE");
+    for (i = NFX, kept = 1; i < NFXSLOT; i++)
+        for (k = 0; k < 4; k++)
+            kept &= st.fx_p[i][k] == 0;
+    CHECK(kept, "the slots past the effects there are now are empty");
+    CHECK(!memcmp(st.fx_p, v5 + offsetof(H1State, fx_p), NFX * 4), "the effects there are keep their knobs");
 }
 
 int main(void)

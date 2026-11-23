@@ -2,14 +2,14 @@
  * + 48 KB RAM Tape Performance FX (Tape Brake & Beat Stutter).
  *
  * Pool RAM budget:
- *   echo_buf:    32768 x int16 = 64 KB (shared by DELAY, SHIFT, CHORUS, TANK, GRAIN)
+ *   echo_buf:    32768 x int16 = 64 KB (shared by DELAY, SHIFT, CHORUS, TANK)
  *   rev_buf:     24576 x int16 = 48 KB (true Dattorro modulated stereo plate for PLATE)
  *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop) */
 #include "internal.h"
 #include "dsp.h"
 
 const char *const FX_NAMES[NFX] = {
-    "PLATE", "DELAY", "FILTER", "SHIFT", "CHORUS", "TANK", "LOFI", "THUMP", "GRAIN"
+    "PLATE", "DELAY", "FILTER", "SHIFT", "CHORUS", "TANK", "LOFI", "THUMP"
 };
 
 const char *const FX_KNOBS[NFX][4] = {
@@ -21,7 +21,6 @@ const char *const FX_KNOBS[NFX][4] = {
     {"MIX",   "DECAY", "TWANG",  "TONE"},     /* TANK: dispersive spring tank */
     {"CRUSH", "RATE",  "BAND",   "GRIT"},     /* LOFI: lo-fi speaker + crush */
     {"PUNCH", "DRIVE", "BASS",   "TONE"},     /* THUMP: transient + tape drive */
-    {"POSITION", "SIZE", "DENSITY", "PITCH"}, /* GRAIN: granular cloud on echo_buf */
 };
 
 const uint8_t FX_DEFAULTS[NFX][4] = {
@@ -33,7 +32,6 @@ const uint8_t FX_DEFAULTS[NFX][4] = {
     {40, 58, 60, 55},   /* TANK */
     {35, 30, 50, 25},   /* LOFI */
     {45, 35, 40, 55},   /* THUMP */
-    {35, 45, 50, 50},   /* GRAIN (p[2] DENSITY 0: off; p[3] PITCH 50: as it came in) */
 };
 
 /* ---- shared .pool delay buffers ------------------------------------------------------- */
@@ -68,21 +66,6 @@ static f32 echo_t = 4000.0f, echo_tr = 6000.0f, echo_lpl, echo_lpr, echo_ol, ech
 static f32 shf_ph, shf_i1[4], shf_q1[4], shf_fb_l, shf_fb_r;
 static f32 spr_ap[4], spr_lp;
 
-/* ---- GRAIN state: up to GR_N grains reading echo_buf, each d samples behind the write head ---- */
-#define GR_N 8
-typedef struct Grain {
-    f32 d;                       /* samples behind echo_w (kept in 4 .. ECHO_N - 8) */
-    f32 rate;                    /* samples read a sample: 0.5 .. 2 */
-    f32 ph, dph;                 /* the window's phase 0..1, and its step (0: the grain is free) */
-    f32 gl, gr;                  /* its place in the stereo field */
-} Grain;
-static Grain gr_g[GR_N];
-static f32 gr_acc;
-static uint32_t gr_rng = 0x6A09E667u;
-static volatile int gr_freeze;
-static uint32_t gr_quiet;                        /* samples of silence written since the last sound (asleep at ECHO_N) */
-#define GR_ASLEEP (ECHO_N + CTRL)
-
 /* ---- FILTER / LOFI / THUMP state ------------------------------------------------------ */
 static f32 filt_l[4], filt_r[4], filt_env;
 static f32 phone_s[2][2], phone_hl, phone_hr, phone_cnt;
@@ -107,19 +90,6 @@ static inline int16_t f_to_i16(f32 x)
     return (int16_t)(x * 32767.0f);
 }
 static inline f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
-
-static void grain_clear(void)
-{
-    int i;
-    for (i = 0; i < GR_N; i++) gr_g[i].dph = 0.0f;
-    gr_acc = 0.0f;
-    gr_rng = 0x6A09E667u;
-    gr_freeze = 0;
-    gr_quiet = GR_ASLEEP;                        /* (its buffer is all 0: it starts asleep, as PLATE does) */
-}
-void fx_grain_freeze(int on) { gr_freeze = on != 0; }
-int fx_grain_asleep(void) { return gr_quiet >= GR_ASLEEP; }
-int fx_grain_frozen(void) { return gr_freeze; }
 
 void fx_reset(void)
 {
@@ -148,7 +118,6 @@ void fx_reset(void)
     tfx_prev = TRICK_OFF;
     tfx_spd = 1.0f;
     tfx_w = 0;
-    grain_clear();
 }
 
 void fx_init(f32 sr)
@@ -644,98 +613,6 @@ static void fx_thump(f32 *dl, f32 *dr, const uint8_t p[4])
     }
 }
 
-/* ---- 8: GRAIN (a granular cloud on echo_buf, the whole of it mono: 0.74 s at 44.1 kHz) -----
- * What comes in is written to echo_buf as DELAY writes it; up to GR_N grains read it back, each from a place
- * POSITION sets behind the write head (with a little scatter), for a length SIZE sets, at the speed PITCH
- * sets (an octave down to one up), under a raised-cosine window, at a random place in the stereo field. They
- * start DENSITY times a second, give or take, checked once a block. A grain's whole read stays behind the
- * write head and inside the buffer, worked out when it starts, so its window closes before it could reach
- * new writing or the wrap. FREEZE (held) stops the writing: the grains go on reading what is there. After a
- * whole buffer of silence it sleeps, as PLATE does, until sound comes in.
- * Ideas from Mutable Instruments' Clouds (MIT, Emilie Gillet), written for this buffer, not ported. */
-static void fx_grain(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
-{
-    const f32 maxd = (f32)(ECHO_N - 8u), mind = 4.0f;
-    f32 pos = (f32)p[0] * 0.01f, size = (f32)p[1] * 0.01f, dens = (f32)p[2] * 0.01f;
-    f32 rate = exp2fx(((f32)p[3] - 50.0f) * 0.02f);              /* an octave down .. up */
-    f32 len = 0.015f * exp2fx(size * 4.6f) * SRf;               /* 15 .. 364 ms */
-    f32 per_s = 2.0f * exp2fx(dens * 4.9f);                     /* 2 .. 60 grains a second */
-    f32 overlap = minf(per_s * len * ISRf, (f32)GR_N);
-    f32 gain = minf(1.5f, rsqrtf(0.375f * maxf(overlap, 1.0f)));  /* (a raised cosine's mean square is 0.375;
-                                                                  * sparse grains peak at 1.5 times what came in) */
-    int frozen = gr_freeze, n, i, spawns = 0;
-
-    /* Asleep in silence, as PLATE: once a whole buffer of silence has been written, every grain can only read
-     * 0, so nothing is worked out until sound comes in again (it cost 25% of the block idling, PLATE 10%).
-     * Frozen, what the buffer holds is heard: never asleep. */
-    if (frozen) {
-        gr_quiet = 0;
-    } else {
-        for (n = 0; n < CTRL; n++)
-            if (f_to_i16((sl[n] + sr[n]) * 0.5f) != 0) break;
-        if (n < CTRL) gr_quiet = 0;
-        else if (gr_quiet < GR_ASLEEP) gr_quiet += CTRL;
-        if (gr_quiet >= GR_ASLEEP) {
-            for (i = 0; i < GR_N; i++) gr_g[i].dph = 0.0f;
-            gr_acc = 0.0f;
-            return;
-        }
-    }
-
-    gr_acc += per_s * (f32)CTRL * ISRf;
-    while (gr_acc >= 1.0f && spawns < 2) {
-        Grain *g = 0;
-        gr_acc -= 0.5f + rng_f(&gr_rng);            /* (a mean of one, with jitter) */
-        spawns++;
-        for (i = 0; i < GR_N; i++)
-            if (gr_g[i].dph == 0.0f) { g = &gr_g[i]; break; }
-        if (g) {
-            f32 L = len * (0.8f + 0.4f * rng_f(&gr_rng));
-            f32 step = (frozen ? 0.0f : 1.0f) - rate;           /* how d moves a sample */
-            f32 span = L * step, lo, hi, d;
-            if (absf(span) > maxd - mind - 8.0f) {              /* (too long for the buffer at this speed) */
-                L = (maxd - mind - 8.0f) / absf(step);
-                span = L * step;
-            }
-            lo = mind + maxf(0.0f, -span);
-            hi = maxd - maxf(0.0f, span);
-            d = mind + pos * (maxd - mind) + (rng_f(&gr_rng) - 0.5f) * 0.08f * maxd;
-            g->d = clampf(d, lo, hi);
-            g->rate = rate;
-            g->ph = 0.0f;
-            g->dph = 1.0f / maxf(L, 16.0f);
-            pan_gains((rng_f(&gr_rng) - 0.5f) * 1.4f, &g->gl, &g->gr);
-        }
-    }
-    if (gr_acc > 2.0f) gr_acc = 2.0f;
-
-    for (n = 0; n < CTRL; n++) {
-        f32 ol = 0.0f, orr = 0.0f, adv = frozen ? 0.0f : 1.0f;
-        if (!frozen) {
-            echo_buf[echo_w & (ECHO_N - 1u)] = f_to_i16((sl[n] + sr[n]) * 0.5f);
-            echo_w++;
-        }
-        for (i = 0; i < GR_N; i++) {
-            Grain *g = &gr_g[i];
-            if (g->dph != 0.0f) {
-                int32_t di = ifloor(g->d);
-                f32 fr = g->d - (f32)di;
-                uint32_t at = echo_w - 1u - (uint32_t)di;
-                f32 a = i16_to_f(echo_buf[at & (ECHO_N - 1u)]);
-                f32 b = i16_to_f(echo_buf[(at - 1u) & (ECHO_N - 1u)]);
-                f32 v = (a + (b - a) * fr) * (0.5f - 0.5f * tcos(g->ph));
-                ol += v * g->gl;
-                orr += v * g->gr;
-                g->d = clampf(g->d + adv - g->rate, mind, maxd);   /* (FREEZE pressed or let go mid-grain) */
-                g->ph += g->dph;
-                if (g->ph >= 1.0f) g->dph = 0.0f;
-            }
-        }
-        dl[n] += ol * gain;
-        dr[n] += orr * gain;
-    }
-}
-
 /* An effect that did not run in the block before (another was chosen, FX was bypassed, or its MIX was at 0) starts
  * from silence. Its state was frozen while it did not run, so it came back with whatever was in its buffers: PLATE
  * after six silent seconds on FILTER still gave -26 dBFS of the old tail. */
@@ -748,11 +625,10 @@ static void fx_resume(int t)
         d_inlp = d_dampa = d_dampb = 0.0f;
         pl_quiet = D_DL1A + CTRL;                /* (all 0: it starts asleep) */
         break;
-    case FX_DELAY: case FX_SHIFT: case FX_CHORUS: case FX_TANK: case FX_GRAIN:
+    case FX_DELAY: case FX_SHIFT: case FX_CHORUS: case FX_TANK:
         for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
         echo_lpl = echo_lpr = echo_ol = echo_or = spr_lp = shf_fb_l = shf_fb_r = 0.0f;
         for (i = 0; i < 4; i++) shf_i1[i] = shf_q1[i] = spr_ap[i] = 0.0f;
-        grain_clear();
         break;
     case FX_FILTER:
         for (i = 0; i < 4; i++) filt_l[i] = filt_r[i] = 0.0f;
@@ -774,9 +650,8 @@ void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, 
     if (!fx_on)
         return;
     fx_type = iclamp(fx_type, 0, NFX - 1);
-    if (fx_type != FX_FILTER && fx_type != FX_LOFI && fx_type != FX_THUMP &&
-        p[fx_type == FX_SHIFT ? 3 : fx_type == FX_GRAIN ? 2 : 0] == 0)
-        return;                                  /* (MIX at 0, GRAIN's DENSITY at 0: it does not run) */
+    if (fx_type != FX_FILTER && fx_type != FX_LOFI && fx_type != FX_THUMP && p[fx_type == FX_SHIFT ? 3 : 0] == 0)
+        return;                                  /* (MIX at 0: it does not run) */
     if (fx_ran_at[fx_type] != fx_n - 1u)
         fx_resume(fx_type);
     fx_ran_at[fx_type] = fx_n;
@@ -789,7 +664,6 @@ void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, 
     case FX_TANK: fx_tank(sl, sr, dl, dr, p); break;
     case FX_LOFI:  fx_lofi(dl, dr, p); break;
     case FX_THUMP:  fx_thump(dl, dr, p); break;
-    case FX_GRAIN: fx_grain(sl, sr, dl, dr, p); break;
     default: break;
     }
 }

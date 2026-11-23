@@ -14,8 +14,6 @@
 #              rolled stays within 6 dB of how loud it is at home
 #   skins      SKINS' two kits: every drum on every algorithm sounds and ends, the hat chokes, ROOM spreads,
 #              the treatments are shorter, longer and darker than the dry kits
-#   grain      GRAIN: bounded at every corner, at its pitch, no clicks, its level, FREEZE (FX held on its
-#              page) and DENSITY 0 off
 #   perc       PERC's eight modes heard on every algorithm, its sympathetic strings in SPACE's top, every
 #              note sounds and ends
 #   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
@@ -25,7 +23,7 @@
 #   tape       the tape's edges: SNAP keeps a note's length, mute, BARS turned down while playing, no REC in REV,
 #              CUT and clearing one track let go of the right notes, a take's first note on its first pass
 #   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
-#   echo       DELAY and GRAIN the same after 25 minutes on as at start
+#   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
 #   lines      g_line, g_poly and g_arc against a distance worked out in floats
 # The release workflow runs this after the build; a failure stops it. tests/run_fuzz.sh is the crash hunt;
@@ -68,8 +66,6 @@ $CC -std=c99 $SAN core/*.c tests/dice.c -o build/a22dice -lm
 build/a22dice
 $CC -std=c99 $SAN core/*.c tests/skins.c -o build/a22skins -lm
 build/a22skins
-$CC -std=c99 $SAN core/*.c tests/grain.c -o build/a22grain -lm
-build/a22grain
 $CC -std=c99 $SAN core/*.c tests/perc.c -o build/a22perc -lm
 build/a22perc
 $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm

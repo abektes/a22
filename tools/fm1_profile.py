@@ -7,7 +7,7 @@ under about 80% peak on the FM-1", docs/PLAN-expansion-sprints.md). Was profile.
     tools/fm1_profile.py idle
 
   ENGINE      an engine's name as the screen says it (PERC, SKINS, FM-4 ...), or "all" for every engine
-  --fx FX     the effect to have on (PLATE, DELAY, ... GRAIN); else the one in hand
+  --fx FX     the effect to have on (PLATE, DELAY, ... THUMP); else the one in hand
   --knob K=V  set knob K (1..4) to V (0..100) over MIDI (CC 20-23) on every algorithm, e.g. --knob 4=100.
               A knob set so is saved, and what it was cannot be read back: after each algorithm is timed,
               SAVE is held a second (the algorithm's knobs back to their factory settings)
@@ -30,8 +30,7 @@ import fm1_remote as R  # noqa: E402
 
 FXK = {"MIX. DECAY. DAMP. MOD": "PLATE", "MIX. TIME. FEEDBK. TAPE": "DELAY", "LPF. HPF. RESO. ENV": "FILTER",
        "FREQ. DELAY. FEEDBK. MIX": "SHIFT", "MIX. RATE. DEPTH. WIDTH": "CHORUS", "MIX. DECAY. TWANG. TONE": "TANK",
-       "CRUSH. RATE. BAND. GRIT": "LOFI", "PUNCH. DRIVE. BASS. TONE": "THUMP",
-       "POSITION. SIZE. DENSITY. PITCH": "GRAIN"}
+       "CRUSH. RATE. BAND. GRIT": "LOFI", "PUNCH. DRIVE. BASS. TONE": "THUMP"}
 CHORD = [0, 2, 4, 7, 9, 11, 14, 16]
 PERF = re.compile(r"FPS (\d+)\. DRAW (\d+) MAX (\d+).*AUDIO (\d+) MAX (\d+)")
 
