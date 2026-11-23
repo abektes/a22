@@ -1,0 +1,37 @@
+# DICE in fm1-base's host simulator: the device app, the platform simulated.
+#   ./build.sh --host, then app/build/host/a22_host tests/dice.txt app/build/host
+# ANALOG ACID's knobs are 32 24 42 74: CC 20-23 at 0x29 0x1E 0x35 0x5E
+wait 600
+turn PRESET 3
+wait 200
+turn ALGO 5
+wait 300
+out
+# EDIT + LFO rolls the knobs: they go out as CC 20-23, the screen says DICE ACID
+press EDIT
+wait 60
+tap LFO
+wait 60
+release EDIT
+wait 300
+expect midi_out >3
+shot dice_roll.png
+out
+# EDIT + ENV puts them back exactly
+press EDIT
+wait 60
+tap ENV
+wait 60
+release EDIT
+wait 300
+expect_out USB B0 14 29
+expect_out USB B0 15 1E
+expect_out USB B0 16 35
+expect_out USB B0 17 5E
+shot dice_back.png
+out
+# LFO alone still opens its page
+listen
+tap LFO
+wait 100
+said PAGE. SHAPE. RATE. DEPTH. TO

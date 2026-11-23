@@ -52,6 +52,14 @@ static const uint8_t ALGO_K0[][NALGO][4] = {
      *   PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET */
     {{50, 0, 40, 10}, {50, 12, 0, 6}, {20, 0, 0, 8}, {36, 0, 60, 10},
      {50, 0, 0, 12}, {36, 6, 56, 8}, {50, 46, 52, 6}, {50, 0, 30, 10}},
+    /* 12 CYCLE    (K1 WAVE, K2 SCAN, K3 SPREAD, K4 FILTER):
+     *   STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX (the STEP- ones scan further) */
+    {{50, 20, 30, 72}, {44, 16, 24, 74}, {36, 28, 30, 78}, {50, 30, 36, 70},
+     {14, 64, 30, 72}, {14, 60, 24, 74}, {14, 64, 30, 78}, {14, 70, 36, 70}},
+    /* 13 SKINS    (K1 TUNE, K2 DECAY, K3 TONE, K4 ROOM):
+     *   STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC (ROOM 0: the reflections off) */
+    {{50, 50, 60, 0}, {50, 60, 56, 58}, {52, 34, 66, 0}, {46, 50, 42, 14},
+     {50, 54, 56, 0}, {48, 66, 50, 66}, {54, 36, 64, 0}, {46, 52, 36, 22}},
 };
 typedef char a22_k0_rows[sizeof ALGO_K0 / sizeof ALGO_K0[0] == NINST ? 1 : -1];
 
@@ -64,6 +72,15 @@ void knobs_default(int inst, int algo)
         if (algo < 0 || a == algo)
             for (k = 0; k < 4; k++)
                 KNOBS(inst, a)[k] = ALGO_K0[inst][a][k];
+}
+
+void knobs_home(int inst, int algo, uint8_t out[4])
+{
+    int k;
+    if (inst < 0 || inst >= NINST) inst = 0;
+    if (algo < 0 || algo >= NALGO) algo = 0;
+    for (k = 0; k < 4; k++)
+        out[k] = ALGO_K0[inst][algo][k];
 }
 
 static void inst_default(int i)
@@ -148,6 +165,7 @@ static void defaults(void)
     st.chord_n = 3;                              /* is captured (EDIT + GLO with keys held) */
     st.chord_mem[0] = 0; st.chord_mem[1] = 4; st.chord_mem[2] = 7;
     st.ninst = NINST;
+    st.nfx = NFX;
     for (i = 0; i < NINST; i++)
         inst_default(i);
     for (i = 0; i < NTRACK; i++)
@@ -174,7 +192,31 @@ const void *h1_state(uint32_t *size)
 }
 
 typedef char a22_state_fits_store[sizeof(H1State) <= 3840u ? 1 : -1];
-typedef char a22_slots_valid[NINST <= NSLOT && NSLOT * NALGO < 255 ? 1 : -1];
+typedef char a22_slots_valid[NINST <= NSLOT && NFX <= NFXSLOT && NSLOT * NALGO < 255 ? 1 : -1];
+
+/* Version 4 (A22 0.1.0 to 0.4.0): twelve engine slots and eight effect slots, the rest as version 5. Only its
+ * offsets and size are used: a version 4 state is read from its bytes into st, a table at a time. */
+typedef struct H1StateV4 {
+    uint32_t magic;
+    uint8_t version, inst, track;
+    int8_t octave;
+    uint8_t hud, keys[4], glo[4], seq[8], tape[4], fx_type, fx_on;
+    uint8_t fx_p[8][4];
+    uint8_t master[4], shake[4], riff_len, riff_root, riff[NRIFF], chord[4], chord_n, chord_mem[CHORD_MAX];
+    uint8_t ninst, rsv[3];
+    InstParams ip[12];
+    uint8_t knob[12][NALGO][4];
+    Track trk[NTRACK];
+    Snap snap[NSNAP];
+    uint8_t steps[NSTEP][NSNOTE], step_trk[NSTEP][NSNOTE], step_vel[NSTEP][NSNOTE];
+} H1StateV4;
+#define V4_SPAN(a, b) (offsetof(H1StateV4, b) - offsetof(H1StateV4, a))
+#define V5_SPAN(a, b) (offsetof(H1State, b) - offsetof(H1State, a))
+typedef char a22_v4_size[sizeof(H1StateV4) == 2648u ? 1 : -1];   /* (what 0.1.0 to 0.4.0 save) */
+typedef char a22_v4_head[offsetof(H1StateV4, fx_p) == offsetof(H1State, fx_p) &&
+                         offsetof(H1StateV4, version) == offsetof(H1State, version) ? 1 : -1];
+typedef char a22_v4_mid[V4_SPAN(master, ip) == V5_SPAN(master, ip) ? 1 : -1];
+typedef char a22_v4_tail[sizeof(H1StateV4) - offsetof(H1StateV4, trk) == sizeof(H1State) - offsetof(H1State, trk) ? 1 : -1];
 
 static void bytes(void *to, const uint8_t *from, uint32_t n)
 {
@@ -188,13 +230,49 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
     const uint8_t *b = (const uint8_t *)blob;
     uint32_t magic = 0, n;
     int i, j, a;
-    if (!blob || size != sizeof st)
+    int ninst, nfx;
+    if (!blob || size < offsetof(H1State, version) + 1u)
         return -1;
     for (n = 0; n < 4u; n++)
         ((uint8_t *)&magic)[n] = b[n];
-    if (magic != H1_MAGIC || b[offsetof(H1State, version)] != H1_VERSION)
+    if (magic != H1_MAGIC)
         return -1;
-    bytes(&st, b, (uint32_t)sizeof st);
+    if (b[offsetof(H1State, version)] == H1_VERSION && size == sizeof st) {
+        bytes(&st, b, (uint32_t)sizeof st);
+    } else if (b[offsetof(H1State, version)] == 4u && size == sizeof(H1StateV4)) {
+        uint8_t *p = (uint8_t *)&st;
+        for (n = 0; n < (uint32_t)sizeof st; n++)
+            p[n] = 0;
+        bytes(&st, b, (uint32_t)offsetof(H1State, fx_p));
+        bytes(st.fx_p, b + offsetof(H1StateV4, fx_p), (uint32_t)sizeof ((H1StateV4 *)0)->fx_p);
+        bytes(st.master, b + offsetof(H1StateV4, master), (uint32_t)V4_SPAN(master, ip));
+        bytes(st.ip, b + offsetof(H1StateV4, ip), (uint32_t)sizeof ((H1StateV4 *)0)->ip);
+        bytes(st.knob, b + offsetof(H1StateV4, knob), (uint32_t)sizeof ((H1StateV4 *)0)->knob);
+        bytes(st.trk, b + offsetof(H1StateV4, trk), (uint32_t)(sizeof(H1StateV4) - offsetof(H1StateV4, trk)));
+        st.nfx = 8;                                /* (version 4's byte here was spare, and 0) */
+        st.rsv[0] = st.rsv[1] = 0;
+    } else {
+        return -1;
+    }
+    /* the engines and effects it was saved with: the slots from there on come up as new */
+    ninst = st.ninst <= NINST ? st.ninst : NINST;
+    nfx = st.nfx <= NFX ? st.nfx : NFX;
+    for (i = ninst; i < NINST; i++)
+        inst_default(i);
+    for (i = nfx; i < NFX; i++)
+        for (j = 0; j < 4; j++)
+            st.fx_p[i][j] = FX_DEFAULTS[i][j];
+    for (i = NINST; i < NSLOT; i++) {              /* (slots no engine has yet: empty) */
+        uint8_t *p = (uint8_t *)&st.ip[i];
+        for (n = 0; n < (uint32_t)sizeof st.ip[i]; n++)
+            p[n] = 0;
+        for (a = 0; a < NALGO; a++)
+            for (j = 0; j < 4; j++)
+                st.knob[i][a][j] = 0;
+    }
+    for (i = NFX; i < NFXSLOT; i++)
+        for (j = 0; j < 4; j++)
+            st.fx_p[i][j] = 0;
 
     /* clamp every loaded parameter safely */
     st.magic = H1_MAGIC;
@@ -309,6 +387,8 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
             if (st.step_vel[i][j] > 127) st.step_vel[i][j] = 127;
         }
     st.ninst = NINST;
+    st.nfx = NFX;
+    st.rsv[0] = st.rsv[1] = 0;
     eng_init(0);
     ui_init();
     return 0;

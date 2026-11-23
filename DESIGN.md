@@ -25,6 +25,8 @@ colors:
   bank-j-perc: "#ffc252"
   bank-k-wave: "#3b9eff"
   bank-l-chip: "#44e37e"
+  bank-m-cycle: "#ffaa40"
+  bank-n-skins: "#eef1f5"
 typography:
   display:
     fontFamily: "Barlow SC, Barlow Semi Condensed, Arial Narrow, sans-serif"
@@ -148,7 +150,7 @@ components:
 
 **Creative North Star: "The Voice-Bank Catalogue"**
 
-A22's site is printed matter for a synthesiser: a voice-ROM catalogue on cool coated paper. Twelve lettered bank tabs (A to L) run down the edge, each printed in its engine's screen ink. One bank is open at a time. Its ink fills the header band across the sheet, and below it the eight voices are listed in a ruled table with catalogue numbers (A1 to A8). Everything else is black print on grey-white paper, set in one condensed face, the FM-1's own Barlow lettering.
+A22's site is printed matter for a synthesiser: a voice-ROM catalogue on cool coated paper. Fourteen lettered bank tabs (A to N) run down the edge, each printed in its engine's screen ink. One bank is open at a time. Its ink fills the header band across the sheet, and below it the eight voices are listed in a ruled table with catalogue numbers (A1 to A8). Everything else is black print on grey-white paper, set in one condensed face, the FM-1's own Barlow lettering.
 
 The page is dense where a catalogue is dense (voice tables, the spec sheet, the manual's charts) and quiet in between. Wide paper margins separate the parts, and secondary facts sit in small print in a right-hand margin column. Colour belongs to the hardware. The bank inks are the engines' screen inks, the knob dots are the FM-1's knob colours, and the real 240×240 screen captures sit in black windows the way the screen sits in the device. The only motion is a short print-in when a bank is opened.
 
@@ -167,7 +169,7 @@ The site turns down the dark product page: no neon accents on black, no wall of 
 The palette is cool printed paper and black ink, with the FM-1's own screen and knob colours as the only chroma.
 
 ### Primary
-- **Bank Inks** (`bank-a-fm4` to `bank-l-chip`): each bank's flat fill on its tab, its header band and its manual swatch. They are the per-engine inks set in the site generator, matching each engine's screen. Twelve banks share nine distinct inks: FM-4 and WAVE share Signal Blue, ELECTRIC and CHIP share Phosphor Green, and MONO and KIT share Knob Orange. The bank letter, not the ink, is what identifies a bank. A bank's ink appears only where that bank is named.
+- **Bank Inks** (`bank-a-fm4` to `bank-n-skins`): each bank's flat fill on its tab, its header band and its manual swatch. They are the per-engine inks set in the site generator, matching each engine's screen. Fourteen banks share ten distinct inks: FM-4 and WAVE share Signal Blue, ELECTRIC and CHIP share Phosphor Green, MONO and KIT share Knob Orange, and ANALOG and SKINS share the same white. The bank letter, not the ink, is what identifies a bank. A bank's ink appears only where that bank is named.
 
 ### Secondary
 - **Knob Colours** (`knob-blue`, `knob-green`, `knob-white`, `knob-orange`): the FM-1's knob 1 to 4 colours, shown as 11px dots before each knob name in the knob legend and the manual's knob tables. The order is fixed (blue, green, white, orange) because the device's is. Knob Green is a separate value from the bank greens. Keep it separate.
@@ -254,7 +256,7 @@ Exactly one solid button: the download.
 - **Secondary (text link with arrow):** a Bold ink link followed by a 16px drawn arrow, with no underline at rest and an underline on hover. Used for "Play it in your browser" and "[engine] in the manual".
 
 ### Bank Tab Rail (signature)
-A vertical stack of twelve lettered tabs, each filled solid in its bank's ink. Each tab shows its letter in Bold 22px over the engine name at 11px, with translucent black hairlines between tabs. Unselected tabs are 66px wide and grow to 76px on hover. The selected tab is 92px wide, the rail's full width, so it meets the sheet's paper and reads as the tab of the open page. The rail is an ARIA tablist with arrow, Home and End keys. At ≤820px it becomes a horizontal snap strip with a 4px ink underline under the selected tab.
+A vertical stack of fourteen lettered tabs, each filled solid in its bank's ink. Each tab shows its letter in Bold 22px over the engine name at 11px, with translucent black hairlines between tabs. Unselected tabs are 66px wide and grow to 76px on hover. The selected tab is 92px wide, the rail's full width, so it meets the sheet's paper and reads as the tab of the open page. The rail is an ARIA tablist with arrow, Home and End keys. At ≤820px it becomes a horizontal snap strip with a 4px ink underline under the selected tab.
 
 ### Bank Header Band (signature, front page)
 The open bank's ink spans the full width of the sheet's top edge. On the left, the letter and engine name in Bold ("A · FM-4"). On the right, the catalogue code in Bold 15px tabular ("Bank A · A1–A8"). A translucent black rule runs along the bottom.

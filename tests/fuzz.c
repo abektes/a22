@@ -7,8 +7,8 @@
  * -fsanitize=address,undefined, every one of those stops this program too, with the line.
  * It does four things, each from a seed so a failure can be run again:
  *
- *   1. state: saved states that pass the magic and version check but hold any bytes at all, handed
- *      over from an odd address, then played. Whatever a store gives back, h1 has to start.
+ *   1. state: saved states that pass the magic and version check but hold any bytes at all (version 5,
+ *      and version 4, which is read a table at a time), handed over from an odd address, then played. Whatever a store gives back, h1 has to start.
  *   2. panel: every key, button (taps and holds), encoder and MIDI byte in any order and at any
  *      pace, on every instrument and page, with the sound rendered and every frame drawn.
  *   2b. long notes: every algorithm of every instrument with the knobs at their ends and a chord held
@@ -299,7 +299,12 @@ static void part_state(int rounds)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
-        if (n % 5 == 4) {                                    /* an h1 save (its magic, any version) is not a22's:
+        if (n % 7 == 3 && n % 5 != 4) {                      /* a version 4 state (0.1.0 to 0.4.0: 2648 bytes), any
+                                                              * bytes: taken, a table at a time (core/h1.c) */
+            odd[1 + 4] = 4;
+            if (h1_state_load(odd + 1, 2648u) != 0)
+                die("a version 4 state was refused", n, 0, 0, 0);
+        } else if (n % 5 == 4) {                             /* an h1 save (its magic, any version) is not a22's:
                                                               * refused, and the state in hand plays on */
             odd[1] = '1'; odd[1 + 1] = 'H'; odd[1 + 2] = 'S'; odd[1 + 3] = '1';
             if (h1_state_load(odd + 1, size) == 0)

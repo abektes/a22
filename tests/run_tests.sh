@@ -2,12 +2,20 @@
 # a22's tests. First the device app in fm1-base's host simulator (the platform simulated, the same app.c
 # and core as the firmware), with the second core and without. Then the core alone, most of it under the
 # compiler's address and undefined-behaviour checkers:
-#   a22_test   two cores bit-exact on all 96 presets, MONO mono, the tape saved and loaded from odd
+#   a22_test   two cores bit-exact on all 112 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
 #   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
+#   state      saved state version 5: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
+#              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
+#   dice       EDIT + LFO rolls the knobs near the algorithm's home, EDIT + ENV swaps back; every algorithm
+#              rolled stays within 6 dB of how loud it is at home
+#   skins      SKINS' two kits: every drum on every algorithm sounds and ends, the hat chokes, ROOM spreads,
+#              the treatments are shorter, longer and darker than the dry kits
+#   perc       PERC's eight modes heard on every algorithm, its sympathetic strings in SPACE's top, every
+#              note sounds and ends
 #   arpmode    the SEQ / ARP page reaches every mode and leaves SHAKE again (issue #1), on the panel and in
 #              the simulator's sliders; SHAKE's two subpages
 #   tracks     each track keeps its engine through EDIT + PRESETS, held keys let go across track and mode
@@ -33,6 +41,8 @@ out=app/build/host
 "$out/a22_host" tests/usbhost.txt "$out"
 # the tape kept through a power-off while it plays, and one cut off in the middle of its save
 "$out/a22_host" tests/looppower.txt "$out"
+# DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
+"$out/a22_host" tests/dice.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host
@@ -50,6 +60,14 @@ $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
 build/a22looper
 $CC -std=c99 $SAN core/*.c tests/chords.c -o build/a22chords -lm
 build/a22chords
+$CC -std=c99 $SAN core/*.c tests/state.c -o build/a22state -lm
+build/a22state
+$CC -std=c99 $SAN core/*.c tests/dice.c -o build/a22dice -lm
+build/a22dice
+$CC -std=c99 $SAN core/*.c tests/skins.c -o build/a22skins -lm
+build/a22skins
+$CC -std=c99 $SAN core/*.c tests/perc.c -o build/a22perc -lm
+build/a22perc
 $CC -std=c99 $SAN core/*.c tests/arpmode.c -o build/a22arpmode -lm
 build/a22arpmode
 $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm

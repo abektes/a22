@@ -3,6 +3,115 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## 0.5.0
+
+Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's build of the same code,
+52bd8db). Settings and the tape saved by 0.1.0 to 0.4.0 load with everything kept.
+
+**Known issue**
+- Now and then the FM-1 does not come back after an update. On one FM-1, two of five installs between 0.4.0
+  and this release stumbled: once its USB went away at the switch to update mode, once it took about two and
+  a half minutes to come back. If the installer says the FM-1 did not come back, give it a couple of minutes;
+  if it still has not, unplug the USB cable and plug it in again (switch the FM-1 off and on if it still
+  does not show) and run the install again: the update loader is waiting and finishes the write. Nothing is
+  lost, and no crash was recorded. The cause is not found yet.
+
+**Sound**
+- A thirteenth engine, CYCLE: WAVE's player on four banks of fifteen single cycles of recorded instruments,
+  from Adventure Kid Waveforms (AKWF, CC0 1.0, by Kristoffer Ekstrand; `docs/WAVETABLES.md`). STRING (cello,
+  violin), REED (clarinet, flute, alto sax, oboe), KEYS (piano, electric piano) and VOICE, each from dark to
+  bright, and the same four stepped (STEP-STR, STEP-RD, STEP-KEY, STEP-VOX): the place moves from whole wave
+  to whole wave, with a glide of a few milliseconds between so nothing clicks, and SCAN set further so a note
+  steps through the bank. The knobs are WAVE's. Each wave keeps its first 48 harmonics and its bank's
+  shared phases, so a morph is within about 1 dB of the waves either side (`tools/akwf.py` says how they
+  were picked). About 64 KB of flash. WAVE sounds the same to the bit: its tables are rewritten unchanged
+  and its renders were compared before and after. `tests/basics.c` checks SPREAD on every CYCLE bank and
+  that the STEP- algorithms step, on both sides alike (with SPREAD up the right side once jumped from wave to
+  wave while the left glided); the two-core and DICE tests cover CYCLE with the rest.
+- A fourteenth engine, SKINS: two drum kits made only of recordings, in KIT's layout (C kick, C# rim, D snare,
+  E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set: the house kit of
+  [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0, Versilian Studios and Karoryfer
+  Samples), close mics: a snares-off kick, a centre snare and its cross-stick, a hand-muted low tom and a high
+  tom played as three, closed and open hats, a ride; with VCSL's clap, tambourine and cowbell. (Picked by ear
+  on a minimal lo-fi beat over VCSL's, whose kick was a concert bass drum cut short.) ORCH a marching and
+  orchestral kit (concert bass drum, marching snare and rimshot, a rope snare, two tenor drums as three toms,
+  clash cymbals held short and let ring, triangle, timpani, suspended cymbal). Each kit four ways: dry
+  (STUDIO, ORCH), in a room (LIVE, HALL: a longer ring and two early reflections, read from the hit itself a
+  little later, so no delay line, with no low end, so a kick is not thinned by copies of itself), tight
+  (TIGHT, MARCH: gated, with a harder start) and vintage (VINTAGE, SHELLAC: fewer samples and steps, darker,
+  driven). The closed hat cuts the open one short, the short clash the long one. Knobs TUNE, DECAY, TONE,
+  ROOM; the ENV page's PUNCH (0 at the start) hardens the kick, snare and toms, as on KIT. Fourteen new hits
+  (Virtuosity Drums' eight, pinned to one commit, and VCSL's six for ORCH), cut by `tools/samples/drums.py`
+  into the pool KIT already uses (the rest are KIT's): 18,541 bytes of flash. KIT sounds the same to the bit:
+  its 33 hits are cut again unchanged. Level matched to KIT on a bar of beats below the limiter; at full track
+  volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher). `tests/skins.c` checks every drum on every
+  algorithm sounds and ends, the chokes, ROOM and the treatments; `tests/state.c` that a state from before
+  SKINS brings it up as new. STUDIO's picks are settled; the algorithm names and ORCH's picks wait to be
+  judged by ear. Its picture is a ghost in a shell, three layers: in the middle the ghost (the low end), a
+  glow that swells on the kick; round it the skin, a membrane the snare, rim, clap and toms dent where their
+  pan puts them, springing back; outside the shell, metal segments the hats and cymbals shimmer, pushed apart
+  by the open hat and snapped shut by the closed one. ORCH's layers are octagons, STUDIO's round; LIVE and
+  HALL send ghost shells drifting out, TIGHT and MARCH pull the layers in with short, sharp dents, VINTAGE and
+  SHELLAC are gold, coarse and a little broken. TUNE spaces the layers, DECAY sets how slowly a dent springs
+  back, TONE how bright the shell is, ROOM how many ghost shells.
+
+- PERC rings with eight modes a note where it had four: each algorithm keeps its four as they were and
+  gains four quieter, shorter ones (HANDPAN's and STEEL's beating doublets, MARIMBA's and KALIMBA's
+  upper bar and tine modes, TABLA's head on up its near-harmonic series, WOOD's higher block modes,
+  GAMELAN's split bronze, GLITCH's square roots), heard 13 to 25 dB under the whole. **Saved sounds change
+  a little:** a tape or snapshot on PERC plays the new modes too (as loud as before, within 0.2 dB).
+  SPACE from 60 up brings in two sympathetic strings, an octave and a twelfth over the note, struck by the
+  mallet and the modes and ringing on after them; at SPACE's default (52) and below 60 there are none. A
+  mode that has died away is not worked out until the next strike. On the FM-1, eight-note chords under
+  PLATE peak at 74% of the audio time (GAMELAN; 51% before), 78% (HANDPAN) with RING and SPACE at 100.
+  `tests/perc.c` checks that the new modes are heard on every algorithm, the strings, and every note
+  sounding and ending.
+
+**Playing**
+- DICE. **EDIT + LFO** rolls the four knobs of the algorithm in hand. Each knob moves only so far from that
+  algorithm's own setting, by a span chosen per engine knob: pitch-like and stepped knobs (KIT TUNE, FM-4
+  RATIO, STACK CHORD) barely move, a feature an algorithm has off (CHIP's SWEEP and ARP) stays off, filters
+  cannot close the sound and feedback, resonance, fold and grit stay below where they run away. For another
+  algorithm, turn ALGORITHM and roll again. **EDIT + ENV** goes back to the knobs from before the last roll,
+  and again to the roll, to compare them. A roll is a hand on the knobs: recorded while the tape records,
+  sent as CC 20-23. `tests/dice.c` rolls every algorithm and checks the spans, the panel, and that a roll
+  stays within 6 dB of how loud the algorithm is at its own setting (it measures -4.5 to +4.5 dB).
+
+**Fixes**
+- CUT (EDIT + REC) of a track holding more than 512 events, knob moves included, wrote past the end of the
+  clip's memory (in 0.1.0 to 0.4.0): only notes checked for room, so a take with a lot of knob movement could
+  overrun it. Every event now needs a place; what does not fit stays on the tape, as notes always did.
+  Found by the crash hunt; `tests/tape.c` cuts and pastes a take of 1,200 knob moves.
+
+**Audio time**
+- FM-4, ANALOG, STACK, SHAPER and ELECTRIC each have a render of their own for every algorithm, so the
+  sample loop no longer asks which algorithm it is playing. The sound is the same to the bit
+  (`tests/cores.c`'s section hashes equal 0.4.0's). On the FM-1, eight-note chords under PLATE: ANALOG 5.1
+  points of the audio time lower, FM-4 3.2, STACK 3.0, SHAPER 2.2, ELECTRIC 2.1. About 53 KB of flash.
+  (CHIP and MONO gained nothing within the drift between runs and keep their one render.)
+- Measured on an FM-1 (eight-note chords held on all 112 algorithms with PLATE on, CC 119): average 49%,
+  peak 74% (PERC GAMELAN). 0.4.0's 96 were 48% and 73% (FM-4 BASS); FM-4 now peaks at 71%, SHAPER at 70%,
+  the new SKINS at 66% (HALL) and CYCLE at 43%. `tools/fm1_profile.py` times an engine,
+  or all of them, on an FM-1 and fails past a limit.
+- Loop jams hold where 0.4.0 stuttered. A tester on 0.4.0 heard the audio stutter, and slow to half tempo, at
+  four layers of SHAPER CZ-SAW, ELECTRIC FELT and KIT WORLD. `tools/fm1_profile.py jam` builds that jam on an
+  FM-1, as full as it gets: four-note chords, three notes or three drums on every sixteenth on each of the four
+  tracks, two overdubs in other algorithms, and keys held on top, with PLATE. 0.4.0 missed 63 halves over it
+  (from the third layer on; 113% of the audio time at its peak with the fourth track) and let 8 voices go to
+  catch up; 0.5.0 missed 1 in each of two runs (the fourth track's chords), its highest peaks 87 and 91%. The
+  renders above are the likely reason: the jam plays three of their five engines. At that density 0.5.0 is still
+  near the limit, and the screen slows to 15 to 25 frames a second.
+
+**Inside**
+- The saved state is version 5: it has room for sixteen engines and twelve effects (there are fourteen and
+  eight), and records how many effects it was saved with, as it already did engines. An engine or effect
+  added later comes up as new in a state saved before it, without another version. Settings saved by
+  0.1.0 to 0.4.0 (version 4) load with everything kept: `tests/state.c` loads a state written by 0.4.0's
+  own core (`tests/state_v4.bin`, made by `tests/state_v4_gen.c`) and compares every table. Before, the
+  loader took only its own version, so any change to the state would have reset everyone's settings.
+  The state grows from 2,648 to 2,888 bytes of RAM. Going back to 0.4.0 or older afterwards starts with
+  settings as new (they refuse a version 5 state); the tape is kept, as it is saved apart.
+
 ## 0.4.0
 
 Identity `FM-1_4122000400`. Released 2026-11-22. Installed and run on one FM-1 (a development build of the

@@ -6,7 +6,8 @@
  * the time from run to wait is what the first core did meanwhile, so the first core's share is the block's
  * time less each job plus whatever of a job outlasted the first core's own work. The host is much faster than
  * the FM-1, so read the times against each other, not against the FM-1's 726 us. It also prints a hash of the
- * output, on one core and on two, so a change to the split can be checked against the one before it.
+ * output, on one core and on two, so a change to the split can be checked against the one before it. The screen's
+ * frame, drawn every 32 blocks here, is timed apart and left out: on the FM-1 it runs outside the audio.
  *
  * Fewer handshakes here is not a faster FM-1. Gathering all of a block's voices into one job list, alternated
  * over both cores with one handshake (tried 2026-11-22, not kept), took the tape scenario from 3 handshakes to 1
@@ -61,6 +62,7 @@ static uint32_t ms;
 static uint64_t hash;
 static int32_t out[2 * CTRL];
 
+static double t_frame;                           /* (the screen's frame, drawn in a block: not audio, taken out of its time) */
 static void blk1(void)
 {
     static int frames;
@@ -70,8 +72,11 @@ static void blk1(void)
         hash ^= (uint32_t)out[i];
         hash *= 1099511628211ull;
     }
-    if (++frames % 32 == 0)
+    if (++frames % 32 == 0) {
+        double t0 = now_us();
         h1_frame(ms += 23);
+        t_frame += now_us() - t0;
+    }
 }
 static void go(int msec)
 {
@@ -105,7 +110,7 @@ static void take(const int *k, int n)
     go(30);
 }
 
-enum { FM4 = 0, STACK = 2, HAZE = 6 };
+enum { FM4 = 0, ELECTRIC = 1, STACK = 2, SHAPER = 4, KIT = 8 , HAZE = 6 };
 static const int k2a[2] = {7, 11}, k2b[2] = {14, 18}, k4[4] = {2, 9, 16, 21}, k8[8] = {0, 3, 7, 10, 14, 17, 21, 24};
 
 static void sc_haze8(void) { engine(HAZE, 2); keys(k8, 8, 1); }
@@ -142,6 +147,31 @@ static void sc_onetrack_same(void)               /* FM-4 on the tape on T1, FM-4
     engine(FM4, 3); keys(k4, 4, 1);
 }
 
+/* a drum take on the track in hand: kick, closed hat and snare (KIT's C, F#, D) as sixteenth steps over the bar */
+static void take_beat(void)
+{
+    static const int pat[16] = {7, 13, 13, 7, 9, 13, 7, 13, 7, 13, 13, 7, 9, 13, 13, 13};
+    int i;
+    rec();
+    go(30);
+    for (i = 0; i < 16; i++) { h1_key(pat[i], 1); go(40); h1_key(pat[i], 0); go(72); }
+    go(60);
+    rec();
+    go(30);
+}
+static void sc_reddit3(void)                     /* a tester's jam (r/MVaveFM1, 0.4.0): SHAPER CZ-SAW, ELECTRIC FELT,
+                                                  * KIT WORLD on the tape; "any sound on T4" and it stuttered */
+{
+    engine(SHAPER, 6); take(k2a, 2);
+    track(1); go(30); engine(ELECTRIC, 5); take(k2b, 2);
+    track(1); go(30); engine(KIT, 7); take_beat();
+}
+static void sc_reddit4(void)                     /* the same, and three keys held live on T4 (STACK) */
+{
+    sc_reddit3();
+    track(1); go(30); engine(STACK, 1); keys(k4, 3, 1);
+}
+
 typedef struct { const char *name; void (*setup)(void); } Sc;
 static const Sc scs[] = {
     {"haze8      8 HAZE keys", sc_haze8},
@@ -151,6 +181,8 @@ static const Sc scs[] = {
     {"same       T1 HAZE x2 (tape), T2 HAZE x4 other algo", sc_same},
     {"onetrack   T1 FM-4 x2 (tape) + STACK x4 live on T1", sc_onetrack},
     {"onetrack=  T1 FM-4 x2 (tape) + FM-4 x4 other algo", sc_onetrack_same},
+    {"reddit3    T1 SHAPER CZ-SAW x2, T2 ELECTRIC FELT x2, T3 KIT WORLD beat (tape)", sc_reddit3},
+    {"reddit4    the same + T4 STACK x3 live", sc_reddit4},
 };
 #define NSC (int)(sizeof scs / sizeof scs[0])
 #define MEASURE 6000                             /* blocks, about 4.4 s */
@@ -177,9 +209,10 @@ static void scenario(const Sc *s, int two, uint64_t *h_out)
         for (i = 0; i < NVOICE; i++) age0[i] = voices[i].age;
         blk_calls = blk_c2 = 0;
         blk_jobs = blk_extra = 0.0;
+        t_frame = 0.0;
         t0 = now_us();
         blk1();
-        t = now_us() - t0;
+        t = now_us() - t0 - t_frame;
         for (i = 0; i < NVOICE; i++) {
             uint16_t k;
             if (voices[i].age == age0[i] && !voices[i].stage) continue;

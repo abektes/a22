@@ -8,13 +8,14 @@
 #define NVOICE 8
 #define NSTEP 64                 /* step sequencer max steps */
 #define NSNOTE 8                 /* polyphony per step */
-#define NINST 12                 /* 12 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC,
-                                  * WAVE, CHIP (new ones go at the end: a saved tape names engines by number) */
-#define NSLOT 12                 /* state slots for all 12 engines */
+#define NINST 14                 /* 14 engines: FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT, PERC,
+                                  * WAVE, CHIP, CYCLE, SKINS (new ones go at the end: a saved tape names engines by number) */
+#define NSLOT 16                 /* state slots for engines: room for four more than NINST (state version 5) */
 #define NALGO 8                  /* 8 curated algorithms/presets per engine */
 #define NTRACK 4                 /* 4-Track Virtual Tape (T1..T4) */
 #define NSNAP 8                  /* 8 instant user patch snapshots (SAVE + white keys 1..8) */
-#define NFX 8                    /* 8 selectable FX engines */
+#define NFX 8                    /* 8 selectable FX engines (new ones go at the end: a state names them by number) */
+#define NFXSLOT 12               /* state slots for effects: room for four more than NFX (state version 5) */
 #define NLEV 2048                /* tape events across all 4 tracks (notes + K1..K4 motion) */
 #define NRIFF 64              /* Riff sequencer max steps */
 #define NSHAKE 6               /* Shake max bouncing physics balls */
@@ -101,7 +102,8 @@ typedef struct Snap {
 } Snap;
 
 #define H1_MAGIC 0x32324132u     /* "2A22" - isolated from h1 saves */
-#define H1_VERSION 4u     /* 3: chord memory; 4: twelve engines (WAVE, CHIP) */
+#define H1_VERSION 5u     /* 3: chord memory; 4: twelve engines (WAVE, CHIP); 5: room for 16 engines and 12
+                           * effects (NSLOT, NFXSLOT), and how many effects it was saved with (nfx) */
 
 /* Sequencer / Tape mode enums */
 enum { SEQ_TAPE = 0, SEQ_STEP = 1 };
@@ -130,7 +132,7 @@ typedef struct H1State {
     uint8_t tape[4];             /* [0] speed (0.5x/1x/2x/REV), [1] loop_in bar, [2] loop_out bar (0=full), [3] trick */
     uint8_t fx_type;             /* 0..NFX-1 */
     uint8_t fx_on;               /* 1 = enabled */
-    uint8_t fx_p[NFX][4];        /* 4 parameters per FX engine */
+    uint8_t fx_p[NFXSLOT][4];    /* 4 parameters per FX engine (slots from NFX on: unused) */
     uint8_t master[4];           /* Master Bus: LOW (0..100), MID, HIGH, DRIVE */
     uint8_t shake[4];          /* Shake: GRAVITY, SPIN, BOUNCE, SCALE */
     uint8_t riff_len;         /* 0..NRIFF */
@@ -140,8 +142,9 @@ typedef struct H1State {
                                   * [2] voicing (CLOSE, OPEN, DROP2, +BASS), [3] strum (0..100: 0..60 ms) */
     uint8_t chord_n;             /* MEMORY's shape: 1..CHORD_MAX notes */
     uint8_t chord_mem[CHORD_MAX]; /* its notes as semitones above its lowest (chord_mem[0] = 0) */
-    uint8_t ninst;
-    uint8_t rsv[3];
+    uint8_t ninst;               /* engines it was saved with: slots from there on load as new */
+    uint8_t nfx;                 /* effects it was saved with (version 4: 8): the same for effects */
+    uint8_t rsv[2];
     InstParams ip[NSLOT];
     uint8_t knob[NSLOT][NALGO][4];
     Track trk[NTRACK];
@@ -154,6 +157,8 @@ typedef struct H1State {
 #define KNOBS(inst, algo) (st.knob[(uint32_t)(inst) < NSLOT ? (uint32_t)(inst) : 0u][(uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u])
 #define KNOBS_NOW(inst) KNOBS(inst, st.ip[inst].algo)
 void knobs_default(int inst, int algo);
+void knobs_home(int inst, int algo, uint8_t out[4]);   /* an algorithm's own K1..K4 (h1.c) */
+void dice_roll(int inst, int algo, uint32_t *rng, uint8_t out[4]);   /* DICE: K1..K4 near home (dice.c) */
 #define INST_VOL(inst) (100 - (st.ip[inst].mix[IP_CUT] <= 100 ? st.ip[inst].mix[IP_CUT] : 0))
 
 #define PART(inst, algo) ((uint8_t)(1u + (uint32_t)(inst) * NALGO + ((uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u)))
@@ -239,7 +244,12 @@ typedef struct InstDef {
 } InstDef;
 
 extern const InstDef inst_fm4, inst_electric, inst_stack, inst_analog, inst_shaper;
-extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip;
+extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip, inst_cycle;
+extern const InstDef inst_skins;
+f32 perc_mode_ratio(int algo, int m);    /* PERC's mode table (tests/perc.c) */
+#ifndef H1_DEVICE
+void perc_test_modes(int n);             /* tests/perc.c: PERC with only its first n modes */
+#endif
 extern const InstDef *const insts[];
 
 /* ---- pages ---------------------------------------------------------------------------- */

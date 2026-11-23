@@ -6,6 +6,7 @@
  *   rev       no recording in REV (a take in REV played back as held notes): REC says so
  *   lone off  a key held into a take and let go during it records nothing
  *   cut       CUT keeps a note begun before IN whole on the tape, and lets go of what it cut
+ *   full clip CUT of more than the clip holds (knob moves too) stays inside it; PASTE puts it back
  *   clear     clearing one track lets go of that track's notes alone
  *   first     a take's first note plays on the pass right after the take (it was skipped once)
  *   cc 123    MIDI's all notes off ends the notes MIDI plays, and the tape plays on (it stopped the tape)
@@ -295,6 +296,37 @@ int main(void)
         key(0, t0, 100);
         until(t0 + 2000 + 1000);                 /* playing, in the rest after the note */
         CHECK(h1_voices_active() == 0 && !h1_quiet(), "quiet: not in a rest of a playing tape");
+    }
+
+    /* ---- a full clip: CUT a take holding more knob moves than the clip's 512 places (they overran it until 0.4.0;
+     * the checkers catch a write past it), then PASTE it back ---- */
+    {
+        int i, before, after_cut, after_paste;
+        fresh(2);                                /* (four bars: room for the take) */
+        tap(H1_BTN_REC);
+        h1_key(12, 1);
+        until(now() + 20);
+        for (i = 0; i < 1200; i++) {             /* (each detent a knob move, recorded) */
+            h1_encoder(H1_ENC_K1, (i & 1) ? 1 : -1);
+            until(now() + 3);
+        }
+        h1_key(12, 0);
+        until(now() + 50);
+        tap(H1_BTN_REC);
+        until(now() + 100);
+        before = eng_loop_used();
+        h1_button(H1_BTN_EDIT, 1); until(now() + 30); tap(H1_BTN_REC); h1_button(H1_BTN_EDIT, 0);
+        until(now() + 200);
+        after_cut = eng_loop_used();
+        CHECK(before > 600, "full clip: the take holds more than the clip has room for");
+        CHECK(after_cut < before && before - after_cut <= 512, "full clip: CUT takes what fits, the rest stays on the tape");
+        h1_button(H1_BTN_EDIT, 1); until(now() + 30); tap(H1_BTN_PLAY); h1_button(H1_BTN_EDIT, 0);
+        until(now() + 200);
+        after_paste = eng_loop_used();
+        CHECK(after_paste == before, "full clip: PASTE puts back what CUT took");
+        tap(H1_BTN_PLAY);
+        until(now() + 9000);                     /* (a pass of the tape: the note plays and ends) */
+        CHECK(longest_ms < 8000, "full clip: the pasted note ends");
     }
 
     printf("tape: %d checks, %d failed\n", checks, fails);

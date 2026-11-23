@@ -49,12 +49,25 @@ LIBRARIES = {
         by="itsclipping / sfzinstruments",
         licence="CC0 1.0",
         url="https://github.com/sfzinstruments/ganjo"),
+    "virtuosity": dict(
+        name="Virtuosity Drums",
+        by="Versilian Studios and Karoryfer Samples (drummer Austin McMahon, at Virtuosity Musical Instruments, Boston)",
+        licence="CC0 1.0",
+        url="https://github.com/sfzinstruments/virtuosity_drums"),
     "gm": dict(
         name="Discord SFZ GM Bank: 105 Sitar and 112 Shanai",
         by="Dr. Narayan Bhagawan Raikar (the recordings), the Discord SFZ GM Bank contributors",
         licence="CC0 (stated in each instrument's .sfz)",
         url="https://github.com/sfzinstruments/Discord-SFZ-GM-Bank"),
 }
+
+
+VIRT = "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/"   # (pinned)
+
+
+def virt(path):
+    """a Virtuosity Drums sample, under Samples/ (mic/drum/file)"""
+    return ("virtuosity", VIRT + path)
 
 
 def vcsl(path):
@@ -213,4 +226,24 @@ DRUMS = [
     ("GLOCK", "a glockenspiel bar", dict(rate=22050, ms=40, loop_ms=15, ring=1.5, f0=1052.4), perc(_ID + "Glockenspiel", "glock_loud_C5_01")),
     ("MBIRA", "a kalimba tine", dict(rate=16000, ms=60, loop_ms=16, ring=1.0, f0=498.0), perc("Idiophones/Plucked Idiophones/Kalimba, Kenya", "Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2")),
     ("CHIME", "a hand chime", dict(rate=16000, ms=50, loop_ms=18, ring=2.0, f0=880.2), perc(_ID + "Hand Chimes", "sus_A4_r01_main")),
+    # SKINS' two kits (core/inst_skins.c) add these; they also play CLAP, TAMB, COWBELL, BASSDRUM, SNARE,
+    # TIMP, TRIANGLE and CYMBAL from above. (New ones go at the end: KIT names its hits by number.) STUDIO,
+    # an acoustic drum set: Virtuosity Drums' house kit, close mics (the kick and snare mics; mid for the
+    # rest), chosen by ear against VCSL's on a minimal lo-fi beat (2026-11-23):
+    ("KICK", "a kick drum, snares off (kick mic)", dict(rate=11025, ms=220), virt("kickmic/kick/kickmic_kick_snoff_vl3_rr1.flac")),
+    ("XSTICK", "a snare's cross-stick (snare mic)", dict(rate=22050, ms=70), virt("snaremic/snare/snaremic_snare_crossstick_vl11.flac")),
+    ("SNARE2", "a snare drum, centre (snare mic)", dict(rate=22050, ms=160), virt("snaremic/snare/snaremic_snare_center_vl22.flac")),
+    ("TOMLO", "a low tom, hand-muted", dict(rate=11025, ms=160), virt("mid/ltom/mid_ltom_muted_vl10.flac")),
+    ("TOMHI", "a high tom, centre", dict(rate=11025, ms=200), virt("mid/htom/mid_htom_center_vl10.flac")),
+    ("OHAT", "a hi-hat, open", dict(rate=22050, ms=60, loop_ms=80, ring=1.2), virt("mid/hh/mid_hh_open_vl3_rr1.flac")),
+    ("RIDE", "a ride cymbal", dict(rate=22050, ms=100, loop_ms=90, ring=2.0), virt("mid/ride/mid_ride_ride_vl2_rr1.flac")),
+    # ORCH, a marching and orchestral kit:
+    ("MSNARE", "a marching snare drum", dict(rate=22050, ms=130), perc(_ME + "Legacy Snares/drum3_marching", "snare3_f_rr1")),
+    ("MRIM", "the same drum, a rimshot", dict(rate=22050, ms=60), perc(_ME + "Legacy Snares/drum3_marching", "snare3_rimshot_f_rr1")),
+    ("TENOR", "a tenor drum, the lower", dict(rate=16000, ms=160), perc(_ME + "Legacy Toms/tenor_lower", "tenor_f_rr1")),
+    ("TENORH", "a tenor drum, the higher", dict(rate=16000, ms=160), perc(_ME + "Legacy Toms/tenor_higher", "tenorH_f_rr1")),
+    ("CLASHS", "clash cymbals, held short", dict(rate=22050, ms=160), perc(_ID + "Clash Cymbals 1", "cymbal_crash1_short1")),
+    ("CLASH", "clash cymbals, let ring", dict(rate=22050, ms=100, loop_ms=90, ring=2.6), perc(_ID + "Clash Cymbals 2", "cymbal_crash2_f1")),
+    # STUDIO's closed hat (Virtuosity's, with its open one; KIT keeps VCSL's HAT):
+    ("VHAT", "a hi-hat, closed", dict(rate=22050, ms=60), virt("mid/hh/mid_hh_closed_vl3_rr1.flac")),
 ]

@@ -24,8 +24,8 @@ or an engine's page in seconds.
 
 ## Positioning
 
-Lead with the sound engines: twelve synthesised engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE,
-MONO, KIT, PERC, WAVE, CHIP), eight algorithms each (96 in all), four live knobs each. The four-track tape,
+Lead with the sound engines: fourteen engines (FM-4, ELECTRIC, STACK, ANALOG, SHAPER, WIRE, HAZE, MONO, KIT,
+PERC, WAVE, CHIP, CYCLE, SKINS), eight algorithms each (112 in all), four live knobs each. The four-track tape,
 effects, mixer, sequencers and USB audio/MIDI support that, and the animated colour pictures show it.
 
 ## Operating Context
@@ -54,9 +54,9 @@ effects, mixer, sequencers and USB audio/MIDI support that, and the animated col
 
 ## Evidence on Hand
 
-- Real 240 × 240 screen captures of all twelve engines: `docs/img/a22/*.png`; page captures `fx.png`, `mix.png`,
+- Real 240 × 240 screen captures of all fourteen engines: `docs/img/a22/*.png`; page captures `fx.png`, `mix.png`,
   `tape.png`.
-- Measured on an FM-1 (2026-11-21): 41 FPS average over 96 algorithms with PLATE; a 30-minute soak with no
+- Measured on an FM-1 with 0.4.0 (2026-11-21): 41 FPS average over its 96 algorithms with PLATE; a 30-minute soak with no
   crash.
 - No testimonials, users counts, press or reviews exist: never invent them.
 

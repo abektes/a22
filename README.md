@@ -1,10 +1,12 @@
 # A22
 
-Custom firmware for the M-VAVE FM-1: an FM workstation. Twelve synth and drum engines, each with eight
+Custom firmware for the M-VAVE FM-1: an FM workstation. Fourteen synth and drum engines, each with eight
 algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
 four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
 sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
-layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)).
+layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)), SKINS'
+two kits are made of them, and CYCLE plays single cycles of recorded instruments from Adventure Kid Waveforms (CC0; see
+[docs/WAVETABLES.md](docs/WAVETABLES.md)).
 
 A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
 
@@ -14,7 +16,7 @@ A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and buil
 <p>
 <img src="docs/img/a22/fm4.png" width="120" alt="FM-4"> <img src="docs/img/a22/electric.png" width="120" alt="ELECTRIC"> <img src="docs/img/a22/stack.png" width="120" alt="STACK"> <img src="docs/img/a22/analog.png" width="120" alt="ANALOG"> <img src="docs/img/a22/shaper.png" width="120" alt="SHAPER">
 <img src="docs/img/a22/wire.png" width="120" alt="WIRE"> <img src="docs/img/a22/haze.png" width="120" alt="HAZE"> <img src="docs/img/a22/mono.png" width="120" alt="MONO"> <img src="docs/img/a22/kit.png" width="120" alt="KIT"> <img src="docs/img/a22/perc.png" width="120" alt="PERC">
-<img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP">
+<img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP"> <img src="docs/img/a22/cycle.png" width="120" alt="CYCLE"> <img src="docs/img/a22/skins.png" width="120" alt="SKINS">
 </p>
 
 > **A22 is early.** It has been installed and run on one FM-1 (every engine, effect and the tape driven over
@@ -37,9 +39,11 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 | **HAZE** | evolving ambient textures | AETHER, VOX, SOLAR, ICE, MIST, ABYSS, PRISM, GHOST | MORPH, FORMANT, DRIFT, SHIMMER |
 | **MONO** | monophonic leads and basses, with glide | ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER | FM-BITE, CUTOFF, GLIDE, SUB-DRV |
 | **KIT** | drum kits, a drum on every note of the octave | 808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD | TUNE, DECAY, PUNCH, FM-GRIT |
-| **PERC** | tuned percussion | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
+| **PERC** | tuned percussion: eight modes a note, and sympathetic strings in SPACE's top | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
 | **WAVE** | wavetables: eight banks of fifteen waves, morphing, band-limited per octave | HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL | WAVE, SCAN, SPREAD, FILTER |
 | **CHIP** | 8-bit console voices: pulses, stepped triangle, noise, arpeggios | PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET | DUTY, SWEEP, ARP, CRUSH |
+| **CYCLE** | WAVE's player on single cycles of recorded instruments ([AKWF](docs/WAVETABLES.md), CC0): four banks, each smooth and stepped | STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX | WAVE, SCAN, SPREAD, FILTER |
+| **SKINS** | two recorded drum kits ([Virtuosity Drums and VCSL](docs/SAMPLES.md), CC0), a drum on every note of the octave: an acoustic set and a marching and orchestral kit, each dry, in a room, tight and vintage | STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC | TUNE, DECAY, TONE, ROOM |
 
 ## Effects
 
@@ -145,6 +149,8 @@ MONO is monophonic and plays the chord's root alone. A chord takes a voice a not
 | EDIT + SEL | Mute the track in hand |
 | EDIT + ARP | Hold (latch) on and off |
 | EDIT + GLO | With keys held: store them as the chord. With none: chords off, or on again |
+| EDIT + LFO | DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits |
+| EDIT + ENV | Back to the knobs from before the last roll, and again to the roll (compare them) |
 | SAVE + white key 1–8 | Load that snapshot, or save to it if it is empty. **SAVE + EDIT + key** saves over it. The keys are the eight white keys from the lowest F |
 | hold SAVE | Reset the algorithm's knobs. Longer (about two seconds): reset the engine. Four seconds: reset every engine and the GLOBAL and KEYS pages |
 | hold SEQ | Swap TAPE and STEP |
@@ -288,5 +294,8 @@ Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come fr
 [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. Both are MPL-2.0,
 unchanged, and their source is the `base` submodule at the commit a release was built from. Their
 notices are in `base/LICENSING.md` and `base/bsp/NOTICE`.
+
+CYCLE's wavetables are made from [Adventure Kid Waveforms](https://github.com/KristofferKarlAxelEkstrand/AKWF-FREE)
+by Kristoffer Ekstrand, CC0 1.0 ([docs/WAVETABLES.md](docs/WAVETABLES.md)).
 
 M-VAVE and FM-1 are trademarks of their owners. A22 is not affiliated with M-VAVE.
