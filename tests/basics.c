@@ -10,7 +10,8 @@
  *                   it asks to be saved when it changed and not once it is
  *   WAVE's SPREAD   at 0 a note is centred (both sides the same), and it grows wider over the knob's
  *                   whole turn, on every bank of WAVE and of CYCLE
- *   CYCLE's STEP-   its STEP- algorithms read whole waves (nearby K1 sounds the same), the others morph
+ *   CYCLE's STEP-   its STEP- algorithms read whole waves (nearby K1 sounds the same), the others morph; with
+ *                   SPREAD up, the right side glides from wave to wave as smoothly as the left
  *   MIDI out        keys, the arpeggiator and the tape go out, CC 20-23 with the knobs, nothing that came in
  *                   is sent back, and HUSH tells the computer (CC 123)
  *
@@ -177,6 +178,45 @@ static Heard cycle_tone(int a, int k1)
     return heard;
 }
 
+/* ---- CYCLE's STEP- algorithms with SPREAD up: a note held while SCAN moves it through the bank, each side's
+ * largest kink (second difference) over its rms; heard.energy is the right side's over the left's ---- */
+static Heard cycle_sides(int a, int unused)
+{
+    static int32_t out[512];
+    double kink[2] = {0.0, 0.0}, e[2] = {0.0, 0.0}, p1[2] = {0.0, 0.0}, p2[2] = {0.0, 0.0};
+    int i, j, c, n = 0;
+    (void)unused;
+    h1_init(44100);
+    h1_control_set(H1_ENC_PRESET, 12);           /* (CYCLE) */
+    h1_control_set(H1_ENC_ALGO, a);
+    h1_control_set(H1_ENC_K1, 0);
+    h1_control_set(H1_ENC_K2, 100);
+    h1_control_set(H1_ENC_K3, 100);
+    h1_control_set(H1_ENC_K4, 100);
+    st.fx_on = 0;
+    go(300);
+    h1_key(7, 1);
+    for (i = 0; i < 2500 * 441 / 2560; i++) {
+        h1_render(out, 256);
+        if (i % 3 == 0)
+            h1_frame(ms += 17);
+        for (j = 0; j < 512; j += 2, n++)
+            for (c = 0; c < 2; c++) {
+                double x = out[j + c], k = fabs(x - 2.0 * p1[c] + p2[c]);
+                if (n > 2000) {                  /* (past the note's start) */
+                    if (k > kink[c]) kink[c] = k;
+                    e[c] += x * x;
+                }
+                p2[c] = p1[c];
+                p1[c] = x;
+            }
+    }
+    h1_key(7, 0);
+    memset(&heard, 0, sizeof heard);
+    heard.energy = e[0] > 0.0 && e[1] > 0.0 && kink[0] > 0.0 ? (kink[1] / sqrt(e[1])) / (kink[0] / sqrt(e[0])) : -1.0;
+    return heard;
+}
+
 /* ---- MIDI out ---- */
 static uint8_t mo[1024][3];
 static int nmo;
@@ -284,6 +324,14 @@ int main(void)
         Heard m29 = taken(cycle_tone, a, 29), m31 = taken(cycle_tone, a, 31);
         CHECK(s29.hash == s31.hash && s29.energy > 0.0, "a STEP- algorithm plays the same whole wave for nearby K1");
         CHECK(m29.hash != m31.hash, "a smooth algorithm morphs between them");
+    }
+    /* and with SPREAD up the right side glides from wave to wave as the left does: no sharper kinks */
+    for (a = 4; a < 8; a++) {
+        Heard s = taken(cycle_sides, a, 0);
+        if (s.energy < 0.0 || s.energy > 1.5)
+            printf("  CYCLE %s, SPREAD 100: the right side's largest kink %.2f times the left's\n",
+                   h1_algo_name(12, a), s.energy);
+        CHECK(s.energy > 0.0 && s.energy <= 1.5, "a STEP- algorithm's right side steps as smoothly as its left");
     }
 
     /* ---- the tape: a take, its notes and a knob out over MIDI, saved, a power cycle, loaded, played ---- */

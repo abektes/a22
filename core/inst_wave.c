@@ -65,6 +65,7 @@ static void wt_note(const WaveEng *e, Voice *v, const Blk *b)
         for (i = 0; i < 16; i++) v->s[i] = 0.0f;         /* (both sides start together: SPREAD sets them apart) */
     }
     v->s[4] = wave_place(e, v, b);
+    v->s[5] = (f32)(int)(minf((f32)(WT_WAVES - 1), v->s[4] + 2.2f * e->spread) + 0.5f);   /* (STEP-: the right side's place) */
 }
 
 /* a wave at x (0 <= x < its length), between samples */
@@ -97,7 +98,12 @@ static void wt_render(const WaveEng *e, Voice *v, const Blk *b, f32 *out_l, f32 
     v->s[4] += (wave_place(e, v, b) - v->s[4]) * 0.3f;
     pl = v->s[4];
     pr = minf((f32)(WT_WAVES - 1), pl + 2.2f * spread);
-    if (e->step) pr = (f32)(int)(pr + 0.5f);               /* (STEP-: the right side on a whole wave too) */
+    if (e->step) {                                         /* (STEP-: the right side on a whole wave too, gliding
+                                                            * there as the left does) */
+        f32 to = (f32)(int)(minf((f32)(WT_WAVES - 1), wave_place(e, v, b) + 2.2f * spread) + 0.5f);
+        v->s[5] += (to - v->s[5]) * 0.3f;
+        pr = v->s[5];
+    }
     ial = imin((int)pl, WT_WAVES - 2);
     iar = imin((int)pr, WT_WAVES - 2);
     ml = pl - (f32)ial;
