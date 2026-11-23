@@ -78,6 +78,7 @@ static volatile f32 hand_pitch, level_out, lfo_out, beat_out;
 static volatile uint32_t silent_blocks;          /* blocks the output has been silent (eng_quiet) */
 
 static f32 scope[SCOPE_N];
+static f32 own_scope[SCOPE_N];                   /* the track in hand alone, before the effect: the HOME picture's */
 static volatile uint32_t scope_w;
 
 /* ---- lock-free event queue (main loop -> audio IRQ) ----------------------------------- */
@@ -424,7 +425,7 @@ static void voice_on_ex(int note, int part, int trk, int seq, int vel)
     b = track_set(v->trk, part, seq);
     insts[inst]->note(v, b);
     v->serial++;
-    if (inst == cur_i) {
+    if (inst == cur_i && (v->trk & 3) == cur_trk) {   /* (the picture hears its own track's notes, not the jam's) */
         note_count++;
         if (!seq) {
             hand_pitch = (f32)note;
@@ -1891,6 +1892,8 @@ static void block(f32 *L, f32 *R)
         }
         if (!nk) {
             r->peak_out *= 0.88f;
+            if (t == cur_trk)
+                for (n = 0; n < CTRL; n++) own_scope[(scope_w + n) & (SCOPE_N - 1)] = 0.0f;
             continue;
         }
         for (n = 0; n < CTRL; n++) tl[n] = tr[n] = 0.0f;
@@ -1985,6 +1988,8 @@ static void block(f32 *L, f32 *R)
             sl[n] += xl * r->send_s;
             sr[n] += xr * r->send_s;
         }
+        if (t == cur_trk)                        /* (written where the master scope's next block goes: one scope_pos) */
+            for (n = 0; n < CTRL; n++) own_scope[(scope_w + n) & (SCOPE_N - 1)] = (tl[n] * p_l + tr[n] * p_r) * 0.5f;
         r->peak_out += (tpeak - r->peak_out) * (tpeak > r->peak_out ? 0.5f : 0.04f);
     }
 
@@ -2168,7 +2173,7 @@ void eng_snapshot(Vis *vis)
     int i;
     for (i = 0; i < NVOICE; i++) {
         const Voice *v = &voices[i];
-        vis->v[i].on     = (v->stage != 0) && (PART_INST(v->part) == cur_i);
+        vis->v[i].on     = (v->stage != 0) && (PART_INST(v->part) == cur_i) && (v->trk & 3) == cur_trk;
         vis->v[i].gate   = v->gate;
         vis->v[i].note   = v->note;
         vis->v[i].vel    = v->vel;
@@ -2185,6 +2190,12 @@ void eng_snapshot(Vis *vis)
         vis->trk_lvl[i] = minf(1.0f, trun[i].peak_out * 2.2f);
     }
     vis->level = level_out;
+    {   /* the track in hand's share of the mix's level: alone it is the mix's level exactly, as the pictures were
+         * made for (a track's own peak is taken before the limiter, up to 1.7 times hotter) */
+        f32 sum = trun[0].peak_out + trun[1].peak_out + trun[2].peak_out + trun[3].peak_out;
+        vis->own_level = sum > 1e-6f ? level_out * (trun[cur_trk & 3].peak_out / sum) : 0.0f;
+    }
+    vis->own_scope = own_scope;
     vis->lfo = lfo_out;
     vis->beat = beat_out;
     vis->notes = note_count;

@@ -416,6 +416,7 @@ static void set_track(int t)
      * changing st.inst here first had the outgoing track keep the incoming one's) */
     eng_post(EV_TRACK, t);
     vis.fresh = 1;
+    vis.enter = 0.0f;                            /* (the picture is the new track's: it comes in as a new engine's) */
     toast("TRACK ", t + 1, 1, 0, -1);
     mark_dirty();
 }
@@ -1732,11 +1733,11 @@ static void draw_name(void)
 {
     const char *name = insts[st.inst]->name;
     f32 t = name_t, size, w, a, y;
-    if (t > 0.95f) return;
+    if (t > 0.72f) return;
     size = 58.0f;
     w = g_text_w(name, size);
     if (w > 200.0f) size *= 200.0f / w;
-    a = t < 0.52f ? 1.0f : 1.0f - smooth01((t - 0.52f) / 0.43f);
+    a = t < 0.52f ? 1.0f : 1.0f - smooth01((t - 0.52f) / 0.2f);   /* (out in 0.2 s: browsing, the picture is the point) */
     y = 118.0f - size * 0.5f;
     g_mode(G_PAINT);
     g_rect(12.0f, y - 12.0f, 216.0f, size + 24.0f, 0.0f);
@@ -1836,7 +1837,8 @@ void ui_frame(uint32_t now_ms)
     f32 dt;
     int i;
     now = now_ms;
-    dt = clampf((f32)(now - last_ms) * 0.001f, 0.001f, 0.05f);
+    dt = clampf((f32)(now - last_ms) * 0.001f, 0.001f, 0.1f);   /* (to 100 ms: a busy jam draws at 15 to 20 frames
+                                                                  * a second, and at 50 the pictures ran slow) */
     if (!frame_n) dt = 0.016f;
     last_ms = now;
     frame_n++;
@@ -1885,7 +1887,18 @@ void ui_frame(uint32_t now_ms)
     if (page == PG_HOME) {
         char right[20];
         put_s(put_i(right, st.glo[0]), " BPM");
-        insts[st.inst]->draw(&vis);
+        {   /* the picture is the track in hand's: its level and its scope, not the whole jam's (the top bar's meter
+             * keeps the mix) */
+            f32 mix_level = vis.level;
+            const f32 *mix_scope = vis.scope;
+            vis.level = vis.own_level;
+            if (vis.own_scope) vis.scope = vis.own_scope;
+            g_dim(0.35f + 0.65f * ease_out(vis.enter / 0.14f));   /* (a new engine comes in as a page does) */
+            insts[st.inst]->draw(&vis);
+            g_dim(1.0f);
+            vis.level = mix_level;
+            vis.scope = mix_scope;
+        }
         g_dim(1.0f); g_mode(G_MAX); g_origin(0.0f, 0.0f);
         {
             char hdr[28];

@@ -64,8 +64,11 @@ static void band_send(void)              /* (waits for the panel if it is still 
     sq_full = 0;
 }
 
+static void input_drawing(void);
+
 static void send_some(void)
 {
+    input_drawing();
     if (!sq_full)
         band_fill();
     else if (panel_idle())
@@ -101,15 +104,54 @@ static uint32_t keys_was, btn_was;
 
 /* MIDI in (USB and the TRS jack): read here, in the main loop, because the core's event queue has one
  * writer and the panel is it */
+static uint32_t midi_held[32];          /* read while a frame was drawn, played at the frame's input (input_drawing) */
+static uint32_t n_midi_held;
+
+static void midi_one(uint32_t pkt)
+{
+    if (((pkt >> 8) & 0xF0u) == 0xB0u && ((pkt >> 16) & 0xFFu) == 119u)
+        pf_ask = 1;                                         /* (see "how long things take") */
+    else
+        h1_midi((uint8_t)(pkt >> 8), (uint8_t)(pkt >> 16), (uint8_t)(pkt >> 24));
+}
+
 static void midi_in(void)
 {
-    uint32_t pkt;
+    uint32_t pkt, i;
     int port;
-    while (plat_midi_in(&pkt, &port)) {
-        if (((pkt >> 8) & 0xF0u) == 0xB0u && ((pkt >> 16) & 0xFFu) == 119u)
-            pf_ask = 1;                                     /* (see "how long things take") */
-        else
+    for (i = 0; i < n_midi_held; i++)
+        midi_one(midi_held[i]);
+    n_midi_held = 0;
+    while (plat_midi_in(&pkt, &port))
+        midi_one(pkt);
+}
+
+/* Keys and MIDI notes while a frame is drawn (called from send_some, which the drawing calls many times a frame):
+ * a busy jam draws at 15 to 20 frames a second, and read once a frame a key waited up to 50 ms or more. A note only
+ * posts to the core's queue (the main loop stays its one writer). What could change what the frame is drawing is
+ * left to the frame's input: keys while a button is held (SAVE + a key is a snapshot), and MIDI from the first
+ * message that is not a note on, with all after it, kept in order and played there. At most once a millisecond. */
+static void input_drawing(void)
+{
+    static uint32_t at;
+    uint32_t now = plat_ms(), keys, k, pkt;
+    int port;
+    if (now == at)
+        return;
+    at = now;
+    if (!btn_was && !plat_buttons()) {
+        keys = plat_keys();
+        for (k = 0; k < NKEYS; k++)
+            if ((keys ^ keys_was) >> k & 1u)
+                h1_key((int)k, (int)(keys >> k & 1u));
+        keys_was = keys;
+    }
+    while (n_midi_held < sizeof midi_held / sizeof midi_held[0] && plat_midi_in(&pkt, &port)) {
+        uint32_t type = (pkt >> 8) & 0xF0u;
+        if (!n_midi_held && (type == 0x90u || type == 0x80u))
             h1_midi((uint8_t)(pkt >> 8), (uint8_t)(pkt >> 16), (uint8_t)(pkt >> 24));
+        else
+            midi_held[n_midi_held++] = pkt;
     }
 }
 

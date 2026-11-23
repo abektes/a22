@@ -244,6 +244,9 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
 /* ---- 4-Color Vector Picture: 4-Op Topology Matrix + Live FM Waveform Ring ------- */
 static f32 fm_rot, fm_kick, fm_kickv, fm_lev;
+static f32 fm_nx[4], fm_ny[4], fm_nvx[4], fm_nvy[4];   /* the operators where they are drawn: a new algorithm's layout
+                                                        * is reached by a spring (~150 ms), which turns to a newer one
+                                                        * mid-way without a jump when ALGO is turned on */
 static uint32_t fm_seen;
 
 /* operator node coordinates (4 nodes: Op4 Blue, Op3 Green, Op2 White, Op1 Orange) */
@@ -291,6 +294,15 @@ static void fm4_draw(const Vis *vis)
     if (vis->fresh) {
         fm_seen = vis->notes;
         fm_kick = fm_kickv = fm_lev = 0.0f;
+        for (i = 0; i < 4; i++) {
+            fm_nx[i] = NODE_XY[algo][i][0];
+            fm_ny[i] = NODE_XY[algo][i][1];
+            fm_nvx[i] = fm_nvy[i] = 0.0f;
+        }
+    }
+    for (i = 0; i < 4; i++) {                    /* (critically damped: no overshoot past the new place) */
+        spring_z(&fm_nx[i], &fm_nvx[i], NODE_XY[algo][i][0], 28.0f, 1.0f, dt);
+        spring_z(&fm_ny[i], &fm_nvy[i], NODE_XY[algo][i][1], 28.0f, 1.0f, dt);
     }
     if (vis->notes != fm_seen) {
         fm_seen = vis->notes;
@@ -342,8 +354,8 @@ static void fm4_draw(const Vis *vis)
         int a0 = EDGES[algo][i][0], a1 = EDGES[algo][i][1];
         f32 x0, y0, x1, y1, u;
         if (a0 < 0) continue;
-        x0 = NODE_XY[algo][a0][0]; y0 = NODE_XY[algo][a0][1];
-        x1 = NODE_XY[algo][a1][0]; y1 = NODE_XY[algo][a1][1];
+        x0 = fm_nx[a0]; y0 = fm_ny[a0];
+        x1 = fm_nx[a1]; y1 = fm_ny[a1];
         g_color(NC[a0]);
         g_line(x0, y0, x1, y1, 1.6f + 1.8f * depth, 0.55f + 0.4f * fm_lev);
         u = fractf(fm_rot * 3.0f + (f32)i * 0.25f);
@@ -354,13 +366,13 @@ static void fm4_draw(const Vis *vis)
     /* Feedback self-loop on Op4 (White = K3 FEEDBK) */
     if (fb > 0.02f) {
         g_color(GC_WHITE);
-        g_ring(NODE_XY[algo][0][0] - 11.0f, NODE_XY[algo][0][1] - 11.0f,
+        g_ring(fm_nx[0] - 11.0f, fm_ny[0] - 11.0f,
                7.0f + 5.0f * fb, 1.6f, 0.5f + 0.5f * fb);
     }
 
     /* Draw the 4 Operator Nodes (carriers get a double outer ring, modulators get single ring) */
     for (i = 0; i < 4; i++) {
-        f32 nx = NODE_XY[algo][i][0], ny = NODE_XY[algo][i][1];
+        f32 nx = fm_nx[i], ny = fm_ny[i];
         f32 nr = 10.5f + 4.0f * vis->k[i] + 3.0f * fm_lev + 2.0f * fm_kick;
         int is_car = (CAR_MASK[algo] >> i) & 1;
         g_mode(G_PAINT);
