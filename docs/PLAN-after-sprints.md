@@ -379,8 +379,11 @@ The effects are eight again, so what says "eight effects" is right as it stands.
       back by itself: `FM-1_4122000500`, USB name `A22 FM-1`, no crash saved; 0.4.0's settings (four tracks'
       engines and algorithms, PLATE) kept. Checklist sections 0 to 3 otherwise as for 0.4.0: what needs ears
       or hands is the owner's. A loop jam a tester reported stuttering on 0.4.0, measured on the FM-1 with
-      `tools/fm1_profile.py jam` (dense, four tracks): 0.4.0 63 late halves, 113% peak; 0.5.0 1 late half a run,
-      highest peaks 87 and 91% (two runs; peaks vary by run). In the CHANGELOG.*
+      `tools/fm1_profile.py jam` (dense, four tracks): 0.4.0 63 late halves, 113% peak; 0.5.0 as first built 1, 1
+      and 11 in three runs, but in the first two the tape had stopped by the end (its takes lost notes: keys
+      were read once a frame, and frames took up to 175 ms). With the branch `pictures` merged (keys read
+      while drawing, every note kept) 35 and 22, peaks 104 and 106%. Each engine alone costs what it did
+      (SHAPER, ELECTRIC, STACK within a point of C1). In the CHANGELOG.*
 - [ ] With the owner's word: merge to `main` (the website republishes from `dist/a22.rfm1` and
       `tools/build_site.py`), tag, and the Hub's submission as `SUBMIT-0.4.0.md` did it.
 
