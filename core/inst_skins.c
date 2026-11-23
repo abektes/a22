@@ -33,7 +33,7 @@ typedef struct Pad {
 static const Pad KITS[2][NDRUM] = {
     /* STUDIO: an acoustic drum set */
     {{VZ_KICK, 0, 0}, {VZ_XSTICK, 0, 6}, {VZ_SNARE2, 0, 4}, {VZ_CLAP, 0, -8},
-     {VZ_TOMLO, -2, 34}, {VZ_TOMHI, 0, 12}, {VZ_HAT, 0, -30}, {VZ_TOMHI, 4, -14},
+     {VZ_TOMLO, 0, 34}, {VZ_TOMHI, -3, 12}, {VZ_VHAT, 0, -30}, {VZ_TOMHI, 1, -14},
      {VZ_TAMB, 0, -42}, {VZ_COWBELL, 0, 22}, {VZ_OHAT, 0, -30}, {VZ_RIDE, 0, 36}},
     /* ORCH: a marching and orchestral kit */
     {{VZ_BASSDRUM, 0, -8}, {VZ_MRIM, 0, 0}, {VZ_MSNARE, 0, 0}, {VZ_SNARE, 0, 14},
@@ -135,7 +135,7 @@ static f32 rd_tick(Rd *r, const PlunkZone *z, const uint8_t *zd, uint32_t inc)
 /* Voice state: u[0..1] the hit's reader, u[2..3] and q[0..1] the two reflections' readers, q[2] the zone
  * | the hat's count << 8, q[3] samples since the note. s[0..5] the readers' last two samples, s[6] the
  * hit's level, s[7..8] TONE's filter, s[9] its presence, s[10..11] the reflections' filter, s[12..13] the
- * crush's held sample and count, s[14] which drum, s[15] its semitones. */
+ * crush's held sample and count, s[14] which drum, s[15] its semitones; ph[0..1] the reflections' high-pass. */
 static void sk_note(Voice *v, const Blk *b)
 {
     int type = v->note % 12, i;
@@ -143,6 +143,7 @@ static void sk_note(Voice *v, const Blk *b)
     uint32_t a0 = (uint32_t)plunk_zones[p->zone].idx0 << 16;
     (void)b;
     for (i = 0; i < 16; i++) v->s[i] = 0.0f;
+    v->ph[0] = v->ph[1] = 0.0f;
     v->u[0] = v->u[2] = v->q[0] = a0;
     v->u[1] = v->u[3] = v->q[1] = 0;
     if (type == HAT) sk_hat_gen++;
@@ -180,6 +181,8 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
     f32 pres = S.tone > 0.5f ? (S.tone - 0.5f) * 2.4f : 0.0f;
     f32 kp = onepole_k(1.0f / (2.0f * H1_PI * 2500.0f), b->sr);
     f32 kr = onepole_k(1.0f / (2.0f * H1_PI * 4200.0f), b->sr);
+    f32 kh = onepole_k(1.0f / (2.0f * H1_PI * 200.0f), b->sr);   /* (the reflections' low end taken out: a
+                                                                  * kick's 80 Hz would cancel against them) */
     f32 comp = 1.0f / (0.60f + 0.40f * tr->drive);
     f32 hstep = 1.0f - tr->crush * 0.85f, hold = v->s[12], hc = v->s[13];
     f32 env = v->s[6], gl, gr;
@@ -225,8 +228,11 @@ static void sk_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         if (room > 0.0004f) {
             f32 e1 = cnt >= d1 ? rd_tick(&r1, z, zd, inc) * gain * env * room : 0.0f;
             f32 e2 = cnt >= d2 ? rd_tick(&r2, z, zd, inc) * gain * env * room : 0.0f;
-            v->s[10] += (0.62f * e1 + 0.22f * e2 - v->s[10]) * kr;
-            v->s[11] += (0.22f * e1 + 0.50f * e2 - v->s[11]) * kr;
+            f32 rl = 0.62f * e1 + 0.22f * e2, rr = 0.22f * e1 + 0.50f * e2;
+            v->ph[0] += (rl - v->ph[0]) * kh;
+            v->ph[1] += (rr - v->ph[1]) * kh;
+            v->s[10] += (rl - v->ph[0] - v->s[10]) * kr;
+            v->s[11] += (rr - v->ph[1] - v->s[11]) * kr;
             out_l[i] += v->s[10];
             out_r[i] += v->s[11];
         }

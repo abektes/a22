@@ -202,9 +202,12 @@ def doc():
                     f"[{fn}]({urllib.parse.quote(src[1], safe=':/')}) |\n")
     return ("\n## PLUNK's hits\n\n"
             "PLUNK's kits are picked from one pool of recorded hits, each of them a single stroke from the Versilian\n"
-            "Community Sample Library (CC0 1.0, credited above). In A22, KIT's 909, CRISP, LOFI and WORLD layer\n"
-            "them under its synthesized drums, and SKINS' two kits, STUDIO and ORCH, are made of nothing else\n"
-            "(the hits from `VZ_KICK` on were added for them). `tools/samples/drums.py` cuts them from\n"
+            "Community Sample Library (CC0 1.0, credited above), or, for SKINS' STUDIO kit, from\n"
+            "[Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0 1.0, by Versilian Studios\n"
+            "and Karoryfer Samples: drummer Austin McMahon on the house kit of Virtuosity Musical Instruments,\n"
+            "Boston). In A22, KIT's 909, CRISP, LOFI and WORLD layer them under its synthesized drums, and SKINS'\n"
+            "two kits, STUDIO and ORCH, are made of nothing else (the hits from `VZ_KICK` on were added for them).\n"
+            "`tools/samples/drums.py` cuts them from\n"
             f"`sources.DRUMS` into `core/plunk_data.c`: {len(rows)} hits, about {total:,} bytes, 4-bit ADPCM at the rate\n"
             "each one's top allows. A ringing hit keeps its start and a short stretch that repeats.\n\n"
             "| Hit | What it is | Kept | Recording |\n|---|---|---|---|\n" + "".join(rows))

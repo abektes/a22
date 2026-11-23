@@ -76,6 +76,9 @@ Decided 2026-11-22: both kits from VCSL (CC0), in a new engine slot (engine 14),
   ORCH; its licence is unverified.
 - Device: a sampled kit is cheap to play; time it anyway with eight-note chords.
 
+2026-11-23, branch `virtuosity`: STUDIO's hits are now Virtuosity Drums' close mics (CC0, pinned commit),
+picked by ear over VCSL's on a minimal lo-fi beat; ORCH stays VCSL. KIT unchanged to the bit.
+
 Done as SKINS (engine 14), on branch `kits`: STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC, knobs
 TUNE, DECAY, TONE, ROOM. Thirteen new hits (17,879 bytes) appended to `sources.DRUMS`, so KIT's 33 are cut
 again unchanged and KIT renders the same to the bit; the kits reuse nine of KIT's hits too. LIVE and HALL's

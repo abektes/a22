@@ -17,16 +17,19 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   and its renders were compared before and after. `tests/basics.c` checks SPREAD on every CYCLE bank and
   that the STEP- algorithms step; the two-core and DICE tests cover CYCLE with the rest.
 - A fourteenth engine, SKINS: two drum kits made only of recordings, in KIT's layout (C kick, C# rim, D
-  snare, E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set (a short bass
-  drum as the kick, a modern snare and its cross-stick, two stick toms played as three, open and closed
-  hats, a stick-struck ride, clap, tambourine, cowbell); ORCH a marching and orchestral kit (concert bass
+  snare, E F G toms, F# hat, A# open hat, B ride or cymbal). STUDIO is an acoustic drum set: the house kit
+  of [Virtuosity Drums](https://github.com/sfzinstruments/virtuosity_drums) (CC0, Versilian Studios and
+  Karoryfer Samples), close mics: a snares-off kick, a centre snare and its cross-stick, a hand-muted low tom
+  and a high tom played as three, closed and open hats, a ride; with VCSL's clap, tambourine and cowbell.
+  (Picked by ear on a minimal lo-fi beat over VCSL's, whose kick was a concert bass drum cut short.) ORCH a marching and orchestral kit (concert bass
   drum, marching snare and rimshot, a rope snare, two tenor drums as three toms, clash cymbals held short and
   let ring, triangle, timpani, suspended cymbal). Each kit four ways: dry (STUDIO, ORCH), in a room (LIVE,
-  HALL: a longer ring and two early reflections, read from the hit itself a little later, so no delay line),
+  HALL: a longer ring and two early reflections, read from the hit itself a little later, so no delay line,
+  with no low end, so a kick is not thinned by copies of itself),
   tight (TIGHT, MARCH: gated, with a harder start) and vintage (VINTAGE, SHELLAC: fewer samples and steps,
   darker, driven). The closed hat cuts the open one short, the short clash the long one. Knobs TUNE, DECAY,
-  TONE, ROOM. Thirteen new hits from the Versilian Community Sample Library (CC0), cut by
-  `tools/samples/drums.py` into the pool KIT already uses (the rest are KIT's): 17,879 bytes of flash.
+  TONE, ROOM. Fourteen new hits (Virtuosity Drums' eight, pinned to one commit, and VCSL's six for ORCH),
+  cut by `tools/samples/drums.py` into the pool KIT already uses (the rest are KIT's): 18,541 bytes of flash.
   KIT sounds the same to the bit: its 33 hits are cut again unchanged. Level matched to KIT on a bar of beats
   below the limiter; at full track volume SKINS is 0.4 to 2 dB under KIT (its hits peak higher).
   `tests/skins.c` checks every drum on every algorithm sounds and ends, the chokes, ROOM and the
