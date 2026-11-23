@@ -52,9 +52,10 @@ static void pulse_note(Voice *v, const Blk *b)
     v->s[8] = 1.0f;   /* punch pitch scoop */
 }
 
-static void pulse_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+static inline __attribute__((always_inline)) void pulse_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
+                                                                 int n, const int algo)
 {
-    int algo = P.algo, i;
+    int i;
     f32 pitch = v->pitch + b->bend;
     f32 vel = lerpf(1.0f, 0.35f + 0.85f * v->vel_f, b->vel_sens);
     f32 f, d0, d1, d2, d3, d4, fc;
@@ -193,6 +194,22 @@ static void pulse_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = p2; v->ph[3] = p3; v->ph[4] = p4;
     v->s[8] *= 1.0f - onepole_k(0.030f, b->sr / (f32)n);
+}
+
+/* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
+ * fold away); the same code, bit-exact */
+static void pulse_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+{
+    switch (P.algo & 7) {
+    case 0: pulse_render_a(v, b, out_l, out_r, n, 0); break;
+    case 1: pulse_render_a(v, b, out_l, out_r, n, 1); break;
+    case 2: pulse_render_a(v, b, out_l, out_r, n, 2); break;
+    case 3: pulse_render_a(v, b, out_l, out_r, n, 3); break;
+    case 4: pulse_render_a(v, b, out_l, out_r, n, 4); break;
+    case 5: pulse_render_a(v, b, out_l, out_r, n, 5); break;
+    case 6: pulse_render_a(v, b, out_l, out_r, n, 6); break;
+    default: pulse_render_a(v, b, out_l, out_r, n, 7); break;
+    }
 }
 
 /* ---- 4-Color Analog Graphic: Dual Oscilloscope + Shaded 24 dB Ladder Curve ------- */

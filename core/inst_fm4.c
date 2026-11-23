@@ -73,41 +73,24 @@ static void fm4_note(Voice *v, const Blk *b)
     }
 }
 
-static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+/* The sample loop, one copy per topology (fm4_render calls it with topo a constant, and always_inline makes each its
+ * own loop: the switch on the topology was taken twice a sample, inside the 2x oversampling). Its state is in locals
+ * (the voice's mod envelope and filter state were read and written through the voice every sample). The same
+ * arithmetic in the same order: bit-exact. */
+typedef struct {
+    f32 p1, p1r, p2, p3, p4, fb0, fb1, idx, didx, amp, damp;
+    f32 sa[2], sb[2];
+} FmRun;
+
+static inline __attribute__((always_inline)) void fm4_loop(FmRun *R, const int topo, const Svf fl, f32 fb, f32 matt,
+                                                            f32 menv_v, f32 dc1, f32 dc2, f32 d2, f32 d3, f32 d4,
+                                                            f32 *out_l, f32 *out_r, int n)
 {
-    const FmAlgo *a = &FA[F.algo];
-    f32 pitch = v->pitch + b->bend;
-    f32 punch = b->punch * v->s[7];
-    f32 ks = clampf(exp2fx((60.0f - pitch) * (1.0f / 26.0f)), 0.28f, 1.55f);
-    f32 vel_mod = lerpf(1.0f, 0.35f + 0.85f * v->vel_f, b->vel_sens);
-    f32 menv = lerpf(1.0f, 0.15f + 1.35f * v->menv, b->menv_amt);
-    f32 matt = a->matt > 0.0f ? (0.22f + 0.78f * sat(v->age / a->matt)) : 1.0f;
-    f32 idx_tgt = F.depth * ks * vel_mod * menv * matt;
-    f32 idx = v->s[0], didx = (idx_tgt - idx) / (f32)n;
-    f32 f, dc1, dc2, d2, d3, d4, fc;
-    f32 p1 = v->ph[0], p1r = v->ph[1], p2 = v->ph[2], p3 = v->ph[3], p4 = v->ph[4];
-    f32 fb0 = v->s[1], fb1 = v->s[2], amp = v->s[6], amp1, damp;
-    f32 fb = F.fb;
-    Svf fl;
-    int i, topo = a->topo;
-
-    if (punch > 0.001f)
-        pitch += punch * 0.45f * (topo == 1 ? 3.5f : 1.0f);
-    f = mtof(pitch);
-    /* 2x oversampled increments (half step per sub-sample) */
-    dc1 = minf(f * a->crat * b->isr * 0.5f, 0.42f);
-    dc2 = minf(dc1 * (1.0f + F.det), 0.42f);
-    d2 = minf(f * F.r2 * b->isr * 0.5f, 0.42f);
-    d3 = minf(f * F.r3 * b->isr * 0.5f, 0.42f);
-    d4 = minf(f * F.r4 * b->isr * 0.5f, 0.42f);
-
-    /* per-voice post-FM filter modulated by Mod-Env and Velocity */
-    fc = clampf(F.cut * exp2fx((v->menv * b->menv_amt * 2.8f) + (v->vel_f - 0.5f) * b->vel_sens * 1.4f), 90.0f, 18500.0f);
-    svf_set(&fl, fc, F.q, b->isr);
-
-    amp1 = a->adec > 0.0f ? exp2fx(-v->age * a->adec * (0.65f + 0.35f / ks)) : 1.0f;
-    damp = (amp1 - amp) / (f32)n;
-
+    f32 p1 = R->p1, p1r = R->p1r, p2 = R->p2, p3 = R->p3, p4 = R->p4;
+    f32 fb0 = R->fb0, fb1 = R->fb1, idx = R->idx, didx = R->didx, amp = R->amp, damp = R->damp;
+    f32 sa[2], sb[2];
+    int i;
+    sa[0] = R->sa[0]; sa[1] = R->sa[1]; sb[0] = R->sb[0]; sb[1] = R->sb[1];
     for (i = 0; i < n; i++) {
         f32 sl = 0.0f, sr = 0.0f;
         int os;
@@ -120,10 +103,10 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 
             switch (topo) {
             case 0: /* KEYS: dual 2+2 parallel pairs with stereo carrier detune */
-                o3 = tsin(p3 + o4 * idx * 0.45f * v->menv);
+                o3 = tsin(p3 + o4 * idx * 0.45f * menv_v);
                 o2 = tsin(p2 + o4 * idx * 0.12f);
                 ol = 0.68f * tsin(p1 + o2 * idx) + 0.32f * o3;
-                or_ = 0.68f * tsin(p1r + o2 * idx * 0.96f) + 0.32f * tsin(p3 + 0.08f + o4 * idx * 0.45f * v->menv);
+                or_ = 0.68f * tsin(p1r + o2 * idx * 0.96f) + 0.32f * tsin(p3 + 0.08f + o4 * idx * 0.45f * menv_v);
                 break;
             case 1: /* BASS: 4-stack 4->3->2->1 + warm sub fundamental */
                 o3 = tsin(p3 + o4 * idx * 0.65f);
@@ -133,7 +116,7 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
                 break;
             case 2: /* BELL: Y-branch (4+3)->2->1 with faster decay on upper chime Op4 */
                 o3 = tsin(p3);
-                o2 = tsin(p2 + (o4 * (0.24f + 0.44f * v->menv) + o3 * 0.54f) * idx);
+                o2 = tsin(p2 + (o4 * (0.24f + 0.44f * menv_v) + o3 * 0.54f) * idx);
                 ol = tsin(p1 + o2 * idx * 0.85f);
                 or_ = tsin(p1r + o2 * idx * 0.85f + 0.15f * o3 * idx);
                 break;
@@ -153,7 +136,7 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
                 o3 = tsin(p3);
                 o2 = tsin(p2);
                 {
-                    f32 pm_env = 0.25f + 0.75f * v->menv;
+                    f32 pm_env = 0.25f + 0.75f * menv_v;
                     ol = tsin(p1 + (o2 * 0.52f + (o3 * 0.36f + o4 * 0.28f) * pm_env) * idx);
                     or_ = tsin(p1r + (o2 * 0.46f + (o3 * 0.40f + o4 * 0.28f) * pm_env) * idx);
                 }
@@ -183,13 +166,75 @@ static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         /* Post-FM warm stereo ZDF filter */
         {
             f32 lp, bp;
-            SVF_TICK(fl, &v->s[8],  sl, lp, bp); (void)bp; sl = lp;
-            SVF_TICK(fl, &v->s[10], sr, lp, bp); (void)bp; sr = lp;
+            SVF_TICK(fl, sa, sl, lp, bp); (void)bp; sl = lp;
+            SVF_TICK(fl, sb, sr, lp, bp); (void)bp; sr = lp;
         }
         out_l[i] = sl * amp;
         out_r[i] = sr * amp;
         idx += didx;
         amp += damp;
+    }
+
+    R->p1 = p1; R->p1r = p1r; R->p2 = p2; R->p3 = p3; R->p4 = p4;
+    R->fb0 = fb0; R->fb1 = fb1; R->idx = idx; R->amp = amp;
+    R->sa[0] = sa[0]; R->sa[1] = sa[1]; R->sb[0] = sb[0]; R->sb[1] = sb[1];
+}
+
+static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+{
+    const FmAlgo *a = &FA[F.algo];
+    f32 pitch = v->pitch + b->bend;
+    f32 punch = b->punch * v->s[7];
+    f32 ks = clampf(exp2fx((60.0f - pitch) * (1.0f / 26.0f)), 0.28f, 1.55f);
+    f32 vel_mod = lerpf(1.0f, 0.35f + 0.85f * v->vel_f, b->vel_sens);
+    f32 menv = lerpf(1.0f, 0.15f + 1.35f * v->menv, b->menv_amt);
+    f32 matt = a->matt > 0.0f ? (0.22f + 0.78f * sat(v->age / a->matt)) : 1.0f;
+    f32 idx_tgt = F.depth * ks * vel_mod * menv * matt;
+    f32 idx = v->s[0], didx = (idx_tgt - idx) / (f32)n;
+    f32 f, dc1, dc2, d2, d3, d4, fc;
+    f32 p1 = v->ph[0], p1r = v->ph[1], p2 = v->ph[2], p3 = v->ph[3], p4 = v->ph[4];
+    f32 fb0 = v->s[1], fb1 = v->s[2], amp = v->s[6], amp1, damp;
+    f32 fb = F.fb;
+    Svf fl;
+    int topo = a->topo;
+
+    if (punch > 0.001f)
+        pitch += punch * 0.45f * (topo == 1 ? 3.5f : 1.0f);
+    f = mtof(pitch);
+    /* 2x oversampled increments (half step per sub-sample) */
+    dc1 = minf(f * a->crat * b->isr * 0.5f, 0.42f);
+    dc2 = minf(dc1 * (1.0f + F.det), 0.42f);
+    d2 = minf(f * F.r2 * b->isr * 0.5f, 0.42f);
+    d3 = minf(f * F.r3 * b->isr * 0.5f, 0.42f);
+    d4 = minf(f * F.r4 * b->isr * 0.5f, 0.42f);
+
+    /* per-voice post-FM filter modulated by Mod-Env and Velocity */
+    fc = clampf(F.cut * exp2fx((v->menv * b->menv_amt * 2.8f) + (v->vel_f - 0.5f) * b->vel_sens * 1.4f), 90.0f, 18500.0f);
+    svf_set(&fl, fc, F.q, b->isr);
+
+    amp1 = a->adec > 0.0f ? exp2fx(-v->age * a->adec * (0.65f + 0.35f / ks)) : 1.0f;
+    damp = (amp1 - amp) / (f32)n;
+
+    {
+        FmRun R;
+        R.p1 = p1; R.p1r = p1r; R.p2 = p2; R.p3 = p3; R.p4 = p4;
+        R.fb0 = fb0; R.fb1 = fb1; R.idx = idx; R.didx = didx; R.amp = amp; R.damp = damp;
+        R.sa[0] = v->s[8]; R.sa[1] = v->s[9]; R.sb[0] = v->s[10]; R.sb[1] = v->s[11];
+#define FM4_LOOP(t) fm4_loop(&R, t, fl, fb, matt, v->menv, dc1, dc2, d2, d3, d4, out_l, out_r, n)
+        switch (topo) {
+        case 0: FM4_LOOP(0); break;
+        case 1: FM4_LOOP(1); break;
+        case 2: FM4_LOOP(2); break;
+        case 3: FM4_LOOP(3); break;
+        case 4: FM4_LOOP(4); break;
+        case 5: FM4_LOOP(5); break;
+        case 6: FM4_LOOP(6); break;
+        default: FM4_LOOP(7); break;
+        }
+#undef FM4_LOOP
+        p1 = R.p1; p1r = R.p1r; p2 = R.p2; p3 = R.p3; p4 = R.p4;
+        fb0 = R.fb0; fb1 = R.fb1; idx = R.idx; amp = R.amp;
+        v->s[8] = R.sa[0]; v->s[9] = R.sa[1]; v->s[10] = R.sb[0]; v->s[11] = R.sb[1];
     }
 
     v->ph[0] = p1; v->ph[1] = p1r; v->ph[2] = p2; v->ph[3] = p3; v->ph[4] = p4;

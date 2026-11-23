@@ -77,9 +77,10 @@ static void digital_note(Voice *v, const Blk *b)
     v->s[7] = 1.0f;  /* transient punch */
 }
 
-static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+static inline __attribute__((always_inline)) void digital_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
+                                                                   int n, const int algo)
 {
-    int algo = DG.algo, i;
+    int i;
     f32 pitch = v->pitch + b->bend;
     f32 vel = lerpf(1.0f, 0.32f + 0.88f * v->vel_f, b->vel_sens);
     f32 menv = lerpf(1.0f, 0.18f + 1.25f * v->menv, b->menv_amt);
@@ -203,6 +204,22 @@ static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n
 
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = pm;
     v->s[7] *= 1.0f - onepole_k(0.020f, b->sr / (f32)n);
+}
+
+/* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
+ * fold away); the same code, bit-exact */
+static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+{
+    switch (DG.algo & 7) {
+    case 0: digital_render_a(v, b, out_l, out_r, n, 0); break;
+    case 1: digital_render_a(v, b, out_l, out_r, n, 1); break;
+    case 2: digital_render_a(v, b, out_l, out_r, n, 2); break;
+    case 3: digital_render_a(v, b, out_l, out_r, n, 3); break;
+    case 4: digital_render_a(v, b, out_l, out_r, n, 4); break;
+    case 5: digital_render_a(v, b, out_l, out_r, n, 5); break;
+    case 6: digital_render_a(v, b, out_l, out_r, n, 6); break;
+    default: digital_render_a(v, b, out_l, out_r, n, 7); break;
+    }
 }
 
 /* ---- 4-Color Vector Picture: Sculpted Transfer Monitor ------------------ */
