@@ -160,6 +160,41 @@ about -90 dB) and timed again on the FM-1 the same day:
 Idle: GRAIN 10% (was 25%), as PLATE. Every PERC algorithm under 80% with either effect, so sprint 6 stays,
 with GAMELAN against GRAIN the closest (79%).
 
+## On the FM-1 at the end: the merged build (task C1)
+
+CI's build of `virtuosity` at 52bd8db (sprints 1–6, `main`'s one render per algorithm, GRAIN out, phase B's
+fixes; image 563,692 B), timed on the FM-1 on 2026-11-23 with `tools/fm1_profile.py all --fx PLATE`
+(ELECTRIC on its own: the `all` listing then skipped an engine when a PRESET turn did not land; fixed since).
+Eight-note chords, 2.2 s each, every algorithm. Before: 0.4.0's numbers from `HANDOFF-perf-audio.md`, same
+chord and timing. Engines with one render per algorithm (ed6544f, 6494cf7) marked *.
+
+| Engine | Average | Worst average | Peak | 0.4.0 peak |
+|---|---|---|---|---|
+| FM-4 * | 64% | 68% | 71% (BASS) | 74% |
+| SHAPER * | 60% | 67% | 70% (GLASSY) | 81% |
+| HAZE | 65% | 65% | 67% (all) | 66% |
+| SKINS (new) | 36% | 50% (HALL) | 66% (HALL) | |
+| STACK * | 52% | 62% | 65% (CHOIR) | 66% |
+| PERC (sprint 6) | 57% | 64% | **74% (GAMELAN)** | 51% |
+| ANALOG * | 53% | 60% | 63% (SUPER) | 66% |
+| WIRE | 54% | 59% | 63% (BOWED) | 59% |
+| KIT | 48% | 52% | 59% (METAL) | 58% |
+| ELECTRIC * | 44% | 48% | 50% (ORGAN, TAPE) | 52% |
+| CHIP * | 38% | 42% | 43% (LEAD, DUET) | |
+| CYCLE (sprint 3) | 41% | 41% | 43% | |
+| WAVE | 41% | 41% | 42% | |
+| MONO * | 33% | 34% | 37% | 36% |
+| All 112 algorithms | 49% | | 74% (PERC GAMELAN) | 0.4.0: 48%, 73% (FM-4 BASS) |
+
+PERC with RING and SPACE both at 100 (`--knob 3=100 --knob 4=100`, the strings in): average 64%, worst
+average 69% (HANDPAN), **peak 78% (HANDPAN)**, GAMELAN 77%, STEEL 76%: under 80%, the closest line in the
+release. Idle, each effect alone: PLATE 10% (max 12), DELAY 13, FILTER 13, SHIFT 15, CHORUS 15, TANK 14,
+LOFI 14, THUMP 13.
+
+Every line is under 80%. The engines with their own renders are lower than before or level; WIRE's BOWED is
+4 points over the earlier table though nothing in WIRE changed (the others of WIRE are at 56%, as before);
+HAZE, KIT and MONO within a point.
+
 ## Later: a multi-model engine
 
 A Plaits-style engine (chord-in-one-voice, wave terrain, vowel, phase distortion variants) in slot 15 (the

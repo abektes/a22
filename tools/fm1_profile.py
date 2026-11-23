@@ -157,9 +157,13 @@ def main():
             print(f"no effect {a.fx}")
             return 2
         engines = []
-        if a.engine == "all":
-            for _ in range(14):
-                engines.append(u.where().split(". ")[0])
+        if a.engine == "all":                        # (round the engines once: a turn that does not land,
+            for _ in range(24):                       # or a read that comes back "?", is not counted twice)
+                e = u.where().split(". ")[0]
+                if e != "?" and e not in engines:
+                    engines.append(e)
+                elif e == (engines[0] if engines else None) and len(engines) >= 14:
+                    break
                 u.run("turn", "PRESET", 1, "wait", 400)
         else:
             engines = [a.engine]
@@ -178,7 +182,7 @@ def main():
                 print(f"  {e}: average {sum(avg) / len(avg):.0f}%, worst average {max(avg)}%, peak {max(mx)}%", flush=True)
     finally:
         u.run("release-all")
-        if a.fx and fx0:
+        if (a.fx or a.engine == "idle") and fx0:   # (idle goes round every effect)
             u.fx_select(fx0)
         if start != "?":
             u.engine_select(start.split(". ")[0])

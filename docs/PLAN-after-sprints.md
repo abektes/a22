@@ -117,6 +117,7 @@ The owner's, still open:
   beside GRAIN. Under PLATE the longer ones peaked at 78%, so they could come back; it costs two points of
   the room PERC has.
 - **D3. The version number**, and whether the two later features go in this release or the next.
+  The owner, 2026-11-23: **0.5.0**. (The two later features: not decided.)
 
 ## Rules for every task
 
@@ -262,15 +263,21 @@ Files: `core/inst_perc.c`, `core/internal.h`.
 
 ### C1. Time the merged build
 
-- [ ] Install CI's build of `virtuosity` after phases A and B. Note whether the FM-1 comes back by itself
-      (for C2).
-- [ ] `tools/fm1_profile.py all --fx PLATE`: every engine, the table for the release notes and for D1.
+- [x] Install CI's build of `virtuosity` after phases A and B. Note whether the FM-1 comes back by itself
+      (for C2). 52bd8db (CI 45195150042, image 563,692 B); see C2.
+- [x] `tools/fm1_profile.py all --fx PLATE`: every engine, the table for the release notes and for D1.
       The five specialised engines should be lower than the sprint plan's numbers, the rest within a point.
-- [ ] `tools/fm1_profile.py PERC --fx PLATE --knob 3=100 --knob 4=100`: RING and SPACE at their tops
+      2026-11-23: every algorithm under 80%; all 112 average 49%, peak 74% (PERC GAMELAN). With their
+      renders FM-4 peaks 71% (was 75% without), SHAPER 70% (was 77%). WIRE BOWED 63% against 59% in
+      0.4.0's table, nothing in WIRE changed; the rest within a point. (`all` skipped ELECTRIC, timed
+      alone at 50%: its listing counted an engine twice when a PRESET turn did not land; fixed.)
+- [x] `tools/fm1_profile.py PERC --fx PLATE --knob 3=100 --knob 4=100`: RING and SPACE at their tops
       together (the sprint plan timed SPACE 100 alone). `--max 80` is the pass mark.
-- [ ] `tools/fm1_profile.py idle`: the eight effects.
-- [ ] Write the tables into `PLAN-expansion-sprints.md` with the build's commit. If any line is past 80%,
-      stop and take it to the owner.
+      PASS: peak 78% (HANDPAN), GAMELAN 77%, STEEL 76%; average 64%.
+- [x] `tools/fm1_profile.py idle`: the eight effects. PLATE 10%, DELAY 13, FILTER 13, SHIFT 15, CHORUS 15,
+      TANK 14, LOFI 14, THUMP 13. (`idle` left the effect on THUMP; it now puts back the one it found.)
+- [x] Write the tables into `PLAN-expansion-sprints.md` with the build's commit. If any line is past 80%,
+      stop and take it to the owner. ("On the FM-1 at the end"; nothing past 80%.)
 
 ### C2. The restart after an install
 
@@ -278,11 +285,22 @@ Files: `core/inst_perc.c`, `core/internal.h`.
       ("the FM-1 did not come back: power-cycle it" is its own message after 40 s without the app).
 - [ ] `python3 base/tools/fm1_remote.py crashes` after such an install and a power cycle: a crash record
       means the app started and fell over; none means it never started or never reached USB.
-- [ ] The guess to test: image size. Install 0.4.0's package (410,720 B), then CI's merged build, then
+- [x] The guess to test: image size. Install 0.4.0's package (410,720 B), then CI's merged build, then
       0.4.0's again, twice round, noting each time whether it came back. If only the large image fails,
       look at what `base` does between the loader's restart and USB coming up for an image this size.
+      2026-11-23, five installs (`fm1_install.py <pkg> --yes`), `crashes` after each: none saved, ever.
+      1. 0.4.0 → merged: back by itself, ~19 s.
+      2. merged → 0.4.0: USB gone at the switch to update mode, no loader, nothing for 199 s; after a
+         replug the loader was there ("update not finished") and the install run again finished it.
+      3. 0.4.0 → merged: written, then "did not come back"; it came back by itself ~2.5 min after the restart.
+      4. merged → 0.4.0: back by itself, ~25 s.
+      5. 0.4.0 → merged: back by itself, ~30 s.
+      Both stumbles had the merged build on one side, but it also went through cleanly three times out of
+      five, once each way: size not shown, not ruled out. Intermittent; a replug always recovers it.
 - [ ] This blocks the release: The Firmware Hub's checklist needs an install that ends in the firmware
-      running (`docs/RELEASE-CHECKLIST.md`, sections 1 and 3).
+      running (`docs/RELEASE-CHECKLIST.md`, sections 1 and 3). Installs 1 and 5 did (0.4.0 → merged, the
+      way a user updates). For the owner: release with a known issue in the notes ("if the FM-1 does not
+      come back after an update, unplug and replug it: the update finishes"), or look into `base` first.
 
 ## Phase D: by ear (the owner; an agent prepares, does not decide)
 
