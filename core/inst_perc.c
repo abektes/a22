@@ -42,8 +42,8 @@ static const ModalAlgo MA[NALGO] = {
     {{1.00f, 2.58f, 4.16f, 6.32f, 8.60f, 1.60f, 3.40f, 11.0f}, {1.00f, 0.52f, 0.28f, 0.15f, 0.12f, 0.22f, 0.16f, 0.08f},
      {0.26f, 0.12f, 0.06f, 0.04f, 0.04f, 0.12f, 0.07f, 0.03f}, 0.00f, 0.00f,  0.0f, 3.7f},
     /* 5 GAMELAN: the bronze's split modes */
-    {{1.00f, 1.007f, 2.756f, 5.40f, 2.77f, 4.10f, 8.90f, 1.52f}, {0.90f, 0.86f, 0.45f, 0.25f, 0.25f, 0.15f, 0.08f, 0.12f},
-     {3.20f, 3.10f, 1.35f, 0.55f, 1.20f, 0.70f, 0.30f, 1.40f}, 0.00f, 0.00f,  0.0f, 2.7f},
+    {{1.00f, 1.007f, 2.756f, 5.40f, 2.77f, 4.10f, 8.90f, 1.52f}, {0.90f, 0.86f, 0.45f, 0.25f, 0.32f, 0.20f, 0.10f, 0.16f},
+     {3.20f, 3.10f, 1.35f, 0.55f, 0.55f, 0.35f, 0.18f, 0.60f}, 0.00f, 0.00f,  0.0f, 2.7f},   /* (its new four shorter: on the FM-1 they ran it to 81%) */
     /* 6 STEEL: the note's harmonics and its doublets */
     {{1.00f, 2.00f, 2.99f, 5.04f, 4.00f, 1.004f, 6.03f, 2.008f}, {0.92f, 0.72f, 0.48f, 0.26f, 0.18f, 0.16f, 0.10f, 0.12f},
      {1.80f, 1.40f, 0.88f, 0.38f, 0.50f, 1.60f, 0.25f, 1.20f}, 0.00f, 0.00f,  0.0f, 4.0f},
@@ -147,7 +147,7 @@ static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
         }
         /* a mode that has died away, with no strike left to wake it, is not worked out this block (the new
          * short ones are gone in a fraction of a second: most of a held chord's time, most modes are) */
-        if (mal_env <= 0.0005f && absf(v->s[2 * m]) + absf(v->s[2 * m + 1]) < 1e-6f) {
+        if (mal_env <= 0.0005f && absf(v->s[2 * m]) + absf(v->s[2 * m + 1]) < 3e-5f) {   /* (about -90 dB) */
             v->s[2 * m] = v->s[2 * m + 1] = 0.0f;
             mc[m] = ms[m] = ma[m] = 0.0f;
         }

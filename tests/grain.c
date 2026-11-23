@@ -12,6 +12,8 @@
  *   freeze       held: the cloud goes on with nothing coming in, and what comes in is not heard; let go:
  *                silent again within a second once nothing comes in
  *   DENSITY 0    the effect does not run (as MIX at 0 for the others)
+ *   asleep       0.74 s and more of silence in (its whole buffer zeros), it stops working, as PLATE does, and
+ *                gives silence; sound coming in wakes it at once; frozen, it never sleeps
  *   the panel    FX held on the FX page with GRAIN freezes while it is held and keeps the page; a tap of FX
  *                still closes the page (on its release); with another effect FX closes it as it is pressed */
 #include <math.h>
@@ -225,6 +227,27 @@ int main(void)
         fresh();
         n = run(p, IN_NOISE, 0, 0.5f, 1.0f, 0);
         CHECK(peak(0, n) == 0.0, "DENSITY 0: nothing comes out");
+    }
+
+    {   /* asleep in silence */
+        uint8_t p[4] = {40, 50, 70, 50};
+        int a, b2;
+        fresh();
+        a = run(p, IN_SINE, 440.0f, 0.5f, 1.0f, 0);
+        CHECK(!fx_grain_asleep(), "awake while sound comes in");
+        b2 = run(p, IN_SILENCE, 0, 0, 0.6f, a);
+        CHECK(!fx_grain_asleep(), "awake 0.6 s into silence (its buffer still holds sound)");
+        b2 += run(p, IN_SILENCE, 0, 0, 0.4f, a + b2);
+        CHECK(fx_grain_asleep(), "asleep after a second of silence");
+        CHECK(peak(a + b2 - SR / 4, SR / 4) == 0.0, "and silent");
+        n = run(p, IN_SINE, 440.0f, 0.5f, 0.5f, a + b2);
+        CHECK(!fx_grain_asleep() && peak(a + b2, n) > 0.01, "sound coming in wakes it");
+        fresh();
+        run(p, IN_SINE, 440.0f, 0.5f, 1.0f, 0);
+        fx_grain_freeze(1);
+        n = run(p, IN_SILENCE, 0, 0, 2.0f, 0);
+        CHECK(!fx_grain_asleep() && peak(SR, n - SR) > 0.01, "frozen, it never sleeps");
+        fx_grain_freeze(0);
     }
 
     {   /* the panel */

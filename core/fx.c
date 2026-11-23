@@ -80,6 +80,8 @@ static Grain gr_g[GR_N];
 static f32 gr_acc;
 static uint32_t gr_rng = 0x6A09E667u;
 static volatile int gr_freeze;
+static uint32_t gr_quiet;                        /* samples of silence written since the last sound (asleep at ECHO_N) */
+#define GR_ASLEEP (ECHO_N + CTRL)
 
 /* ---- FILTER / LOFI / THUMP state ------------------------------------------------------ */
 static f32 filt_l[4], filt_r[4], filt_env;
@@ -113,8 +115,10 @@ static void grain_clear(void)
     gr_acc = 0.0f;
     gr_rng = 0x6A09E667u;
     gr_freeze = 0;
+    gr_quiet = GR_ASLEEP;                        /* (its buffer is all 0: it starts asleep, as PLATE does) */
 }
 void fx_grain_freeze(int on) { gr_freeze = on != 0; }
+int fx_grain_asleep(void) { return gr_quiet >= GR_ASLEEP; }
 int fx_grain_frozen(void) { return gr_freeze; }
 
 void fx_reset(void)
@@ -646,7 +650,8 @@ static void fx_thump(f32 *dl, f32 *dr, const uint8_t p[4])
  * sets (an octave down to one up), under a raised-cosine window, at a random place in the stereo field. They
  * start DENSITY times a second, give or take, checked once a block. A grain's whole read stays behind the
  * write head and inside the buffer, worked out when it starts, so its window closes before it could reach
- * new writing or the wrap. FREEZE (held) stops the writing: the grains go on reading what is there.
+ * new writing or the wrap. FREEZE (held) stops the writing: the grains go on reading what is there. After a
+ * whole buffer of silence it sleeps, as PLATE does, until sound comes in.
  * Ideas from Mutable Instruments' Clouds (MIT, Emilie Gillet), written for this buffer, not ported. */
 static void fx_grain(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_t p[4])
 {
@@ -659,6 +664,23 @@ static void fx_grain(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     f32 gain = minf(1.5f, rsqrtf(0.375f * maxf(overlap, 1.0f)));  /* (a raised cosine's mean square is 0.375;
                                                                   * sparse grains peak at 1.5 times what came in) */
     int frozen = gr_freeze, n, i, spawns = 0;
+
+    /* Asleep in silence, as PLATE: once a whole buffer of silence has been written, every grain can only read
+     * 0, so nothing is worked out until sound comes in again (it cost 25% of the block idling, PLATE 10%).
+     * Frozen, what the buffer holds is heard: never asleep. */
+    if (frozen) {
+        gr_quiet = 0;
+    } else {
+        for (n = 0; n < CTRL; n++)
+            if (f_to_i16((sl[n] + sr[n]) * 0.5f) != 0) break;
+        if (n < CTRL) gr_quiet = 0;
+        else if (gr_quiet < GR_ASLEEP) gr_quiet += CTRL;
+        if (gr_quiet >= GR_ASLEEP) {
+            for (i = 0; i < GR_N; i++) gr_g[i].dph = 0.0f;
+            gr_acc = 0.0f;
+            return;
+        }
+    }
 
     gr_acc += per_s * (f32)CTRL * ISRf;
     while (gr_acc >= 1.0f && spawns < 2) {
