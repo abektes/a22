@@ -57,12 +57,16 @@ static struct {
     f32 stretch, mallet, ring, space;
 } PR;
 
-static int perc_nmode = NMODE;
 f32 perc_mode_ratio(int algo, int m)            /* (for tests/perc.c) */
 {
     return MA[algo & 7].rat[m & (NMODE - 1)];
 }
+#ifdef H1_DEVICE
+#define perc_nmode NMODE
+#else
+static int perc_nmode = NMODE;
 void perc_test_modes(int n) { perc_nmode = n >= 1 && n <= NMODE ? n : NMODE; }   /* (tests/perc.c: 4 as h1's) */
+#endif
 
 /* Voice state: s[0..15] the eight modes (x, y), ph[0..1] the mallet's FM phases, ph[2..3] the cavity, ph[4]
  * the mallet's envelope, ph[5] the bend's, ph[6] the mallet's low-pass, u[0] noise, u[1] samples since the

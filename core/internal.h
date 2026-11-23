@@ -247,7 +247,9 @@ extern const InstDef inst_fm4, inst_electric, inst_stack, inst_analog, inst_shap
 extern const InstDef inst_wire, inst_haze, inst_mono, inst_kit, inst_perc, inst_wave, inst_chip, inst_cycle;
 extern const InstDef inst_skins;
 f32 perc_mode_ratio(int algo, int m);    /* PERC's mode table (tests/perc.c) */
+#ifndef H1_DEVICE
 void perc_test_modes(int n);             /* tests/perc.c: PERC with only its first n modes */
+#endif
 extern const InstDef *const insts[];
 
 /* ---- pages ---------------------------------------------------------------------------- */
