@@ -167,6 +167,11 @@ At the end of the mix a limiter with one control block of look-ahead keeps every
 ceiling, with a soft knee above 0.6 (`limit` in `synth.c`). `tests/basics.c` runs every algorithm
 through it.
 
+DELAY, SHIFT, CHORUS and TANK sleep the way PLATE does: once the line has gone round with only zeros written,
+nothing comes in and the effect's filters hold exactly 0, an effect only moves its clocks (`echo_asleep` in
+`fx.c`). The sound is the same to the bit; `tests/sleep.c` plays each into its sleep and out with the sleep on and
+off and compares.
+
 When the audio runs late (`h1_late`: two late halves in a row), a voice lets go fast, one at a time, a
 note the player is not holding first, so the sound gets back in time instead of starving the main loop.
 `tests/overload.c` holds it.
@@ -230,13 +235,12 @@ code, `.data`/`.bss` and the pool share one budget. `app/app.h` also cuts fm1-ba
 48-row strip, since A22 draws with its own framebuffer and the platform only needs the strip for its
 update and safe-mode text.
 
-What goes in the pool, from the sources (not from a build), about 334 KB:
+What goes in the pool, from the sources (not from a build), about 286 KB:
 
 | Buffer | KB | Where |
 |---|---|---|
 | Framebuffer and the copy of what the panel shows | 115 | `g_fb_w` (gfx.c), `prev_w` (ui.c) |
-| DELAY's, SHIFT's, CHORUS's and TANK's line | 64 | `echo_buf` (fx.c) |
-| PLATE's tank | 48 | `rev_buf` (fx.c) |
+| The effect in hand's buffer: DELAY's, SHIFT's, CHORUS's or TANK's line, or PLATE's tank | 64 | `fx_arena` (fx.c) |
 | The tape tricks' buffer | 48 | `tfx_buf` (fx.c) |
 | WIRE's string delay lines (8 voices) | 32 | `ks_buf` (inst_wire.c) |
 | Two RGB565 bands for the panel | 19 | `band` (app.c) |
@@ -247,9 +251,21 @@ to the FM-1 while a screen reader is listening (`base/tools/fm1_remote.py listen
 FPS n. DRAW avg MAX max. SEND avg MAX max. AUDIO avg MAX max. KB n RECTS n. STACK main interrupt`: the
 times in milliseconds a frame, the audio as a percentage of each block, the kilobytes and rectangles
 sent to the panel a frame, all since it was last asked, and the bytes of each stack never used since
-the start. A build with the second core (the default) adds `CORES 2 n` or `CORES 1 why`.
+the start. A build with the second core (the default) adds `CORES 2 n` or `CORES 1 why`. Since 0.6.0 it ends with
+`STAGE seq voices wait mix fx master`, the slowest render since the last PERF split by stage (`h1_stages`, in percent
+of the block), and `FLASH n max`, the tape's flash writes and the longest in microseconds.
 `tools/fm1_profile.py` drives every algorithm over USB and collects these. If RAM gets tight, the first
 things to shrink are the tape tricks' buffer and the path mask (no A22 engine draws with it).
+
+PLATE and the echo effects share `fx_arena` because one effect runs in a block and an effect that starts again
+clears its own buffer first (`fx_resume`). `tests/echo.c` holds each to sounding as from a cold start after the
+other has filled the memory.
+
+Code that runs in every block whatever plays is kept in RAM on the device (`H1_HOT` in `core/mathx.h`, fm1-base's
+`.app_ram`), out of the way of the instruction cache both cores share: PLATE's halves, the master bus's EQ and
+drive, `voice_out` and `eng_out`. Such a function may call only other `H1_HOT` functions and always-inlined helpers
+(`H1_AI`), nothing through a pointer; code in flash calls it through `H1_FAR`. fm1-base's build checks the
+disassembly. On the host, the simulator and the tests these are plain functions.
 
 ## What the FM-1 does not forgive
 

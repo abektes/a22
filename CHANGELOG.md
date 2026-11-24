@@ -3,6 +3,37 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## 0.6.0
+
+Identity `FM-1_4122000600`. Not released yet: built on the branch `cpu-headroom`, not yet timed on an FM-1. More
+room for the audio in a dense loop jam (`docs/PLAN-cpu-headroom.md`), and the sound otherwise the same to the bit
+(the two-core and corestat hashes are unchanged from 0.5.0, and `tests/sleep.c` holds the two savings below that
+could have changed it). Settings and the tape saved by 0.1.0 to 0.5.0 load as before: the state is still version 5.
+
+**Audio time**
+- PLATE's two halves, the master bus's EQ and drive, each voice's gain, pan and declick, and the output now run from
+  RAM on the FM-1, out of the way of the instruction cache both cores share, which the drawing keeps pushing the sound
+  out of. About 5 KB. The engines' own renders stay in flash for now.
+- The second core renders the larger half of an odd number of a part's voices, and each core does its own voices'
+  gain, pan and declick, so the first core only adds them up.
+- DELAY, SHIFT, CHORUS and TANK sleep once their line has run out, as PLATE does: with nothing playing they no longer
+  walk their whole line every sample.
+- A WIRE note clears only the part of its string it can read before it writes there itself, not all 2,048 samples
+  (eight times over on a chord's attack, right when the audio is busiest).
+- The tape's flash writes, a page a frame while a take is saved, wait while the renders are heavy and then go just
+  after one, since each page holds the interrupts (the audio's too) off while it is written.
+- The input scan runs at 5 kHz instead of 10, which frees about 4% of the first core. A key is counted within 2.2 to
+  4.4 ms instead of 1.1 to 2.2, a knob spun past about 110 clicks a second loses steps, and the unlit buttons' glow
+  is dimmer.
+
+**Inside**
+- PLATE and the echo effects share one 64 KB buffer (one effect runs at a time, and each clears its own on the way
+  in): 48 KB of SRAM back, which the RAM code above uses part of.
+- The PERF line (MIDI CC 119 to a listening screen reader) ends with `STAGE seq voices wait mix fx master`, the
+  slowest render since the last PERF split by stage in percent of its block, and `FLASH n max`, the tape's flash
+  writes and the longest in microseconds. `tools/fm1_profile.py` prints both.
+- The tape's picture and white keys read the recorded events only when the tape has changed, not twice a frame.
+
 ## 0.5.0
 
 Identity `FM-1_4122000500`. Released 2026-11-23. Timed and run on one FM-1 (CI's build of the same code,

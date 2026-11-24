@@ -1,7 +1,20 @@
 # Plan: CPU headroom for loop jams
 
-Written 2026-11-24, after 0.5.0. Nothing in it has been built yet. It takes up `docs/PLAN-after-sprints.md`'s
-Phase G and the tactics in `docs/RESEARCH-cpu-ram.md`, put in order for the case that drops audio.
+Written 2026-11-24, after 0.5.0. It takes up `docs/PLAN-after-sprints.md`'s Phase G and the tactics in
+`docs/RESEARCH-cpu-ram.md`, put in order for the case that drops audio. The release that carries it is 0.6.0.
+
+## Status (2026-11-24, branch `cpu-headroom`)
+
+Built and held on the host: J0 to J5, J6's first step, and J7. Every hash is unchanged from 0.5.0; `tests/sleep.c`
+holds J2 and J7 against the code switched back, `tests/echo.c` holds J5. Not done yet:
+
+- [ ] A CI build of the branch, which also runs fm1-base's check that the RAM code (J6) calls nothing in the flash.
+- [ ] J0's baseline on the FM-1: two jam runs on 0.5.0 as released, then two on the 0.6.0 test package, with the
+      chords table (`tools/fm1_profile.py all --fx PLATE`) and `idle` for J7.
+- [ ] J1's comparison with the saves held off, if the jam still runs late while FLASH counts writes.
+- [ ] J4's input scan at 5 kHz checked by hand: keys, a fast knob, the glow.
+- [ ] J6's second step (the engines' renders in RAM), only if STAGE shows the voices as the peak. About 70 KB of
+      SRAM should be free after J5 and J6's first step (0.5.0's 29 KB, 48 back, 5 used); the build's line says for sure.
 
 ## The case to fix
 
