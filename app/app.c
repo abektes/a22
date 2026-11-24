@@ -100,6 +100,9 @@ static void send_rest(void)
 #define US(t) ((t) / PLAT_TICKS_PER_US)
 static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max; } pf;
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
+/* the renders as the tape's flash writes see them (ring_go): one more each render, and the slowest of the last few
+ * (each render takes an eighth off it), in microseconds */
+static volatile uint32_t au_seq, au_recent;
 static uint8_t pf_ask;
 
 /* ---- the panel ------------------------------------------------------------------------------ */
@@ -315,9 +318,10 @@ static struct {
     uint32_t to_at;                      /* where in it the record begins */
     uint32_t len, at, crc;               /* what is being written: its length, how far, its CRC */
     uint32_t wait;                       /* frames the loop has been dirty: a save begins a moment after */
+    uint32_t defer;                      /* frames the next write has waited for lighter renders (ring_go) */
     uint32_t gen;                        /* h1_loop_gen when it began: h1_loop is the engine's own memory, so a
                                           * take recorded meanwhile moves its events, and that save is dropped */
-} ring = {-1, 0, 0, {RING_FULL, RING_FULL, RING_FULL, RING_FULL}, -1, 0, 0, 0, 0, 0, 0};
+} ring = {-1, 0, 0, {RING_FULL, RING_FULL, RING_FULL, RING_FULL}, -1, 0, 0, 0, 0, 0, 0, 0};
 /* After a failed start the ring is not read (its record might be what crashed it), so nothing is known of its
  * slots. The saved tape is then left alone until a new tape is saved over it: every slot erased first, since an
  * old record's higher number would otherwise win at the next start. (Once ring_step erased all four at once.) */
@@ -332,6 +336,8 @@ static void ring_boot_state(void)
 }
 #endif
 #define RING_WAIT 20u                    /* (a third of a second: the save keeps clear of the take's own close) */
+#define RING_HEAVY 75u                   /* renders this % of their time and over: a write waits (ring_go) */
+#define RING_DEFER 8u                    /* frames a write may wait for lighter renders, then goes anyway */
 static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
                                           * records again (then the loop is dirty again, and saved anew) */
 #define RING_MAX (RING_SLOT_BYTES - RING_BODY)
@@ -450,6 +456,28 @@ static void ring_drop(void)
     ring.to = -1;
 }
 
+/* Whether a write into the ring may go now. A page program holds the interrupts off while it runs (FLASH on the PERF
+ * line), the audio's too: one that lands as a render is due delays that render, and a render near its limit then
+ * goes out late. So a write is put off while the renders are heavy (RING_HEAVY), for at most RING_DEFER frames, and
+ * then waits for a render to have just finished, which leaves it the most time before the next. (Not on the host:
+ * its renders do not come by themselves while the main loop waits.) */
+static int ring_go(void)
+{
+    if (au_recent * 100u >= RING_HEAVY * pf_block_us && ring.defer < RING_DEFER) {
+        ring.defer++;
+        return 0;
+    }
+    ring.defer = 0;
+#ifndef PLAT_HOST
+    {
+        uint32_t seen = au_seq, t0 = plat_ticks24();
+        while (au_seq == seen && US(plat_ticks24() - t0) < pf_block_us + 1000u)
+            ;                                    /* (a render a block: at most one block's wait) */
+    }
+#endif
+    return 1;
+}
+
 /* every frame: a page of a save under way, or a save begun, or (stopped and silent) a slot erased */
 static void ring_step(void)
 {
@@ -468,6 +496,8 @@ static void ring_step(void)
     }
     if (ring.to >= 0) {
         uint32_t off = ring_off(ring.to) + ring.to_at, n = ring.len - ring.at;
+        if (!ring_go())
+            return;                              /* (the renders are heavy: this frame's page waits) */
         if (n) {
             static uint8_t page[RING_PAGE];      /* (a page copied out first: what is written is what the CRC
                                                   * covers, even where the engine's bytes move meanwhile) */
@@ -601,6 +631,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         lr[2 * i + 1] = (int32_t)((float)lr[2 * i + 1] * gain_now);
     }
     us = US(plat_ticks24() - t0);
+    au_recent = us > au_recent - au_recent / 8u ? us : au_recent - au_recent / 8u;
+    au_seq++;
     pf_audio += us;
     pf_blocks++;
     if (us > pf_audio_max)
