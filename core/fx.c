@@ -2,9 +2,9 @@
  * + 48 KB RAM Tape Performance FX (Tape Brake & Beat Stutter).
  *
  * Pool RAM budget:
- *   echo_buf:    32768 x int16 = 64 KB (shared by DELAY, SHIFT, CHORUS, TANK)
- *   rev_buf:     24576 x int16 = 48 KB (true Dattorro modulated stereo plate for PLATE)
- *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop) */
+ *   fx_arena:    64 KB, the effect in hand's: echo_buf, 32768 x int16 (DELAY, SHIFT, CHORUS, TANK), or rev_buf, the
+ *                first 24576 of the same memory (the Dattorro plate for PLATE). One effect runs at a time
+ *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop), apart: it runs under any effect */
 #include "internal.h"
 #include "dsp.h"
 
@@ -38,8 +38,12 @@ const uint8_t FX_DEFAULTS[NFX][4] = {
 #define ECHO_N 32768u
 #define REV_N  24576u
 #define TFX_FRAMES 12288u
-static int16_t echo_buf[ECHO_N] H1_POOL;
-static int16_t rev_buf[REV_N] H1_POOL;
+/* One effect runs in a block (fx_send_block), and one that starts again after a block without it clears its own
+ * buffer first (fx_resume), so PLATE's tank and the echo line share one arena: 64 KB instead of 112 (0.6.0). Whatever
+ * the other effect left there is never read. */
+static union { int16_t echo[ECHO_N]; int16_t rev[REV_N]; } fx_arena H1_POOL;
+#define echo_buf fx_arena.echo
+#define rev_buf fx_arena.rev
 static int16_t tfx_buf[TFX_FRAMES * 2u] H1_POOL;
 
 /* ---- Dattorro Plate Reverb layout inside rev_buf (22,534 <= 24,576 int16 samples) ----- */

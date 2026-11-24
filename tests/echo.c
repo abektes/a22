@@ -109,6 +109,54 @@ static int tails(void)
     return bad;
 }
 
+/* Since 0.6.0 PLATE and the echo effects share one buffer (fx_arena). After the other has filled it with noise, an
+ * effect must sound exactly as from a cold start: the same input, the same output to the bit. (A silent return
+ * proves nothing here: PLATE comes back asleep.) */
+static uint64_t played(int type, const uint8_t *p, uint32_t seed, int blocks, int burst)
+{
+    f32 in[CTRL], l[CTRL], rr[CTRL];
+    uint64_t hh = 1469598103934665603ull;
+    int b, n;
+    for (b = 0; b < blocks; b++) {
+        for (n = 0; n < CTRL; n++) {
+            seed = seed * 1664525u + 1013904223u;
+            in[n] = b < burst ? ((f32)(seed >> 9) / 4194304.0f - 1.0f) * 0.5f : 0.0f;   /* a burst, then its tail */
+        }
+        memset(l, 0, sizeof l); memset(rr, 0, sizeof rr);
+        fx_send_block(in, in, l, rr, type, p, 120.0f, 1);
+        for (n = 0; n < CTRL; n++) {
+            uint32_t a, c;
+            memcpy(&a, &l[n], 4); memcpy(&c, &rr[n], 4);
+            hh = (hh ^ a) * 1099511628211ull;
+            hh = (hh ^ c) * 1099511628211ull;
+        }
+    }
+    return hh;
+}
+
+static int shared(void)
+{
+    static const int T[4] = {FX_PLATE, FX_DELAY, FX_TANK, FX_CHORUS};
+    static const char *const NAME[4] = {"PLATE", "DELAY", "TANK", "CHORUS"};
+    uint8_t p[4] = {70, 3, 70, 30};
+    int t, bad = 0;
+    for (t = 0; t < 4; t++) {
+        uint64_t cold, after;
+        int other = T[t] == FX_PLATE ? FX_DELAY : FX_PLATE;
+        fx_reset();
+        cold = played(T[t], p, 99u, HEAR, HEAR / 4);
+        fx_reset();
+        played(other, p, 7u, 2 * HEAR, 2 * HEAR);          /* the other one, noise to the last block: all through the arena */
+        after = played(T[t], p, 99u, HEAR, HEAR / 4);
+        if (after != cold) {
+            bad++;
+            printf("FAIL echo: %s after %s does not sound as from cold\n", NAME[t], other == FX_PLATE ? "PLATE" : "DELAY");
+        }
+    }
+    if (!bad) printf("echo: PLATE, DELAY, TANK and CHORUS sound as from cold after the effect they share memory with\n");
+    return bad;
+}
+
 static void block(const f32 *in, f32 *out)
 {
     f32 r[CTRL];
@@ -144,8 +192,9 @@ int main(void)
     double diff = 0.0, loud = 0.0;
     int i;
     fx_init(44100.0f);
-    if (taps() | tails())
+    if (taps() | tails() | shared())
         return 1;
+    fx_test_no_sleep(1);                         /* (25 minutes awake: DELAY's own reading, not its sleep) */
     fx_reset();
     silence(4 * HEAR);                           /* the delay settles on its time */
     listen(take[0]);
