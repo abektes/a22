@@ -2290,6 +2290,12 @@ void eng_snapshot(Vis *vis)
     vis->tomb_angle = tomb_angle;
 }
 
+/* The tape's picture and its white keys read every event, twice a frame, on the main loop. What they read only
+ * changes with what is recorded (loop_gen and the count) and the tape's length, so each keeps its last answer and
+ * reads the events again only when one of those has moved. */
+static struct { uint32_t gen; int n; f32 len; uint8_t dens[NTRACK][32]; } seq_dens = {0xFFFFFFFFu, -1, -1.0f, {{0}}};
+static struct { uint32_t gen; int n; f32 len; uint32_t m; } seq_keys = {0xFFFFFFFFu, -1, -1.0f, 0};
+
 void eng_seq_info(SeqInfo *si)
 {
     f32 in_t, out_t;
@@ -2331,13 +2337,25 @@ void eng_seq_info(SeqInfo *si)
                     if (*d < 15) (*d)++;
                 }
     } else if (loop_len > 0.0f) {
-        for (i = 0; i < ne && i < NLEV; i++) {
-            if ((lev[i].flags & 7) == LEV_ON) {
-                int col = iclamp((int)((f32)lev[i].tick * 32.0f / loop_len), 0, 31);
-                uint8_t *d = &si->trk_dens[lev[i].trk & 3][col];
-                if (*d < 15) (*d)++;
+        uint32_t gen = loop_gen;
+        if (gen != seq_dens.gen || ne != seq_dens.n || loop_len != seq_dens.len) {
+            for (t = 0; t < NTRACK; t++)
+                for (c = 0; c < 32; c++)
+                    seq_dens.dens[t][c] = 0;
+            for (i = 0; i < ne && i < NLEV; i++) {
+                if ((lev[i].flags & 7) == LEV_ON) {
+                    int col = iclamp((int)((f32)lev[i].tick * 32.0f / loop_len), 0, 31);
+                    uint8_t *d = &seq_dens.dens[lev[i].trk & 3][col];
+                    if (*d < 15) (*d)++;
+                }
             }
+            seq_dens.gen = gen;
+            seq_dens.n = ne;
+            seq_dens.len = loop_len;
         }
+        for (t = 0; t < NTRACK; t++)
+            for (c = 0; c < 32; c++)
+                si->trk_dens[t][c] = seq_dens.dens[t][c];
     }
 }
 
@@ -2378,9 +2396,17 @@ int eng_seq_leds(uint32_t *out, int page_open, int blink)
             return 0;
         n = imax(1, (int)loop_len / 24);
         per = (n + 15) / 16;
-        for (i = 0; i < ne; i++)
-            if ((lev[i].flags & 7u) == LEV_ON)
-                m |= 1u << WKEY[imin(lev[i].tick / 24, n - 1) / per];
+        if (loop_gen != seq_keys.gen || ne != seq_keys.n || loop_len != seq_keys.len) {   /* (seq_dens) */
+            uint32_t gen = loop_gen;
+            for (i = 0; i < ne; i++)
+                if ((lev[i].flags & 7u) == LEV_ON)
+                    m |= 1u << WKEY[imin(lev[i].tick / 24, n - 1) / per];
+            seq_keys.gen = gen;
+            seq_keys.n = ne;
+            seq_keys.len = loop_len;
+            seq_keys.m = m;
+        }
+        m = seq_keys.m;
         if (s != LOOP_IDLE)
             at = imin((int)loop_pos / 24, n - 1) / per;
     }
