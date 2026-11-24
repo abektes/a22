@@ -16,6 +16,8 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 REPO = "https://github.com/abektes/a22"
+SOUNDTRACK = "https://github.com/abektes/a22-soundtrack"           # A22's engines as an agent skill for video
+SOUNDTRACK_DEMOS = "https://abektes.github.io/a22-soundtrack/"
 RELEASE = REPO + "/releases/latest"
 
 
@@ -452,6 +454,7 @@ def footer():
   <span>A22 · free and open source, <a href="{REPO}/blob/main/LICENSE">MIT</a></span>
   <span class="sep"></span>
   <a href="{REPO}">GitHub</a>
+  <a href="{SOUNDTRACK}">Soundtrack skill</a>
   <a href="{COFFEE}">Buy me a coffee</a>
   <span>M-VAVE and FM-1 are trademarks of their owners; A22 is not affiliated with M-VAVE.</span>
 </footer>
@@ -544,6 +547,17 @@ def front():
     </div>
     <aside class="note"><p>A22 is early: installed and run on one FM-1 so far.</p>
       <p>Measured there with 0.5.0: 42 frames a second on average over its 112 algorithms with a chord held, and no crash over a 30-minute run with a two-track loop playing.</p></aside>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="soundtrack">
+  <div class="inner">
+    <div><h2 id="soundtrack">Soundtracks</h2>
+      <p class="aside">A22's sound engines also make music for video, on a computer, without an FM-1.</p></div>
+    <div class="prose">
+      <p><a href="{SOUNDTRACK}">a22-soundtrack</a> is an agent skill for Claude Code and compatible agents. It writes original, royalty-free background music and sound effects synced to the picture, offline: no DAW, no samples, no network.</p>
+      <p><a href="{SOUNDTRACK_DEMOS}">Listen to the demos</a>, or clone it into your agent's skills folder to try it.</p>
+    </div>
   </div>
 </section>
 </main>
