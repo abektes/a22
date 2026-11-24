@@ -1759,7 +1759,7 @@ void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(v
 /* A voice's output as it goes into its track: its envelope ramped across the block, its gain (velocity) and pan, the
  * declick of a voice taken over, written back over vt_l / vt_r. Run by the core that rendered the voice, so the first
  * core only adds the voices up, in voice order (block): the sum is the same to the bit as when it did all of it. */
-static void voice_out(Voice *v, int i)
+H1_HOT static void voice_out(Voice *v, int i)
 {
     f32 e0 = v->env_prev, e1 = v->env, de, g, gl, gr, pan, pl, pr, tail_l, tail_r, sll = 0.0f, srr = 0.0f;
     f32 *ol = vt_l[i], *or_ = vt_r[i];
@@ -1827,7 +1827,7 @@ static void voice_block(int i)
     v->pitch += (v->target - v->pitch) * vj.kg;
     vj.def->render(v, vj.b, vt_l[i], vt_r[i], CTRL);
     v->age += vj.dt;
-    voice_out(v, i);
+    H1_FAR(voice_out)(v, i);                     /* (from RAM: H1_HOT) */
 }
 
 /* Whether the port's last audio half went out late (rendered after the DMA had moved on), told once a render from where
@@ -2100,7 +2100,7 @@ static void block(f32 *L, f32 *R)
 }
 
 /* ---- Look-Ahead Brickwall Limiter (0.7 ms look-ahead) --------------------------------- */
-static inline f32 limit(f32 x)
+static H1_AI f32 limit(f32 x)
 {
     f32 a = absf(x);
     if (!(a > 0.6f)) return a <= 0.6f ? x : 0.0f;
@@ -2151,6 +2151,21 @@ static void lim_block(f32 *L, f32 *R)
 uint32_t h1_fuzz_nan;
 #endif
 
+/* the limited mix out as 24-bit samples (eng_render): from RAM */
+H1_HOT static void eng_out(int32_t *lr, const f32 *L, const f32 *R, uint32_t take)
+{
+    uint32_t i;
+    for (i = 0; i < take; i++) {
+#ifdef H1_FUZZ
+        if (L[i] != L[i] || R[i] != R[i])
+            h1_fuzz_nan++;                       /* (tests/fuzz.c: a sound that stopped being numbers) */
+#endif
+        lr[0] = (int32_t)(limit(L[i]) * 7549747.0f);
+        lr[1] = (int32_t)(limit(R[i]) * 7549747.0f);
+        lr += 2;
+    }
+}
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
@@ -2160,18 +2175,11 @@ void eng_render(int32_t *lr, uint32_t n)
         for (k = 0; k < H1_NSTG; k++) stg_acc[k] = 0;
     }
     while (n) {
-        uint32_t take, i;
+        uint32_t take;
         if (!eng_have) { lim_block(L, R); eng_have = CTRL; eng_pos = 0; }
         take = eng_have < n ? eng_have : n;
-        for (i = 0; i < take; i++) {
-#ifdef H1_FUZZ
-            if (L[eng_pos + i] != L[eng_pos + i] || R[eng_pos + i] != R[eng_pos + i])
-                h1_fuzz_nan++;                   /* (tests/fuzz.c: a sound that stopped being numbers) */
-#endif
-            lr[0] = (int32_t)(limit(L[eng_pos + i]) * 7549747.0f);
-            lr[1] = (int32_t)(limit(R[eng_pos + i]) * 7549747.0f);
-            lr += 2;
-        }
+        H1_FAR(eng_out)(lr, L + eng_pos, R + eng_pos, take);
+        lr += 2u * take;
         eng_pos += take;
         eng_have -= take;
         n -= take;

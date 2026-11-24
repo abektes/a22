@@ -10,7 +10,7 @@ void dsp_init(void);
  * scaling by SIN_N is exact and the mask drops the whole turns, with one float-to-int conversion where there were
  * two. For t >= 0 that is the same to the bit as taking it off; for t < 0 it is a little more exact (t + 1 rounded
  * away some of a small negative t's bits). */
-static inline f32 tsin(f32 t)
+static H1_AI f32 tsin(f32 t)
 {
     f32 x = t * (f32)SIN_N;
     int32_t i = ifloor(x);
@@ -19,7 +19,7 @@ static inline f32 tsin(f32 t)
     return sin_tab[i] + (sin_tab[i + 1] - sin_tab[i]) * x;
 }
 
-static inline f32 tcos(f32 t) { return tsin(t + 0.25f); }
+static H1_AI f32 tcos(f32 t) { return tsin(t + 0.25f); }
 
 /* MIDI note to Hz (fractional notes fine) */
 static inline f32 mtof(f32 n) { return 440.0f * exp2fx((n - 69.0f) * (1.0f / 12.0f)); }
@@ -60,7 +60,7 @@ static inline f32 tape_sat(f32 x)
 static inline f32 fold_sin(f32 x) { return tsin(x * 0.25f); }
 
 /* equal-power stereo pan law, pan in [-1, 1] */
-static inline void pan_gains(f32 pan, f32 *gl, f32 *gr)
+static H1_AI void pan_gains(f32 pan, f32 *gl, f32 *gr)
 {
     f32 t = clampf(pan, -1.0f, 1.0f) * 0.125f + 0.125f;   /* 0 .. 0.25 turns */
     *gl = tcos(t);
@@ -69,7 +69,7 @@ static inline void pan_gains(f32 pan, f32 *gl, f32 *gr)
 
 /* ZDF Trapezoidal State-Variable Filter (12 dB/oct LP/BP/HP/Notch) */
 typedef struct Svf { f32 g, k, a1, a2, a3; } Svf;
-static inline void svf_set(Svf *f, f32 fc, f32 q, f32 isr)
+static H1_AI void svf_set(Svf *f, f32 fc, f32 q, f32 isr)
 {
     f32 x = fc * isr;
     if (x > 0.42f) x = 0.42f;
@@ -117,7 +117,7 @@ static inline f32 ladder_tick(const Ladder *f, f32 *s, f32 x)
 static inline f32 noise_s(uint32_t *s) { return (f32)(int32_t)rng_next(s) * (1.0f / 2147483648.0f); }
 
 /* one-pole smoothing coefficient for a time constant in seconds */
-static inline f32 onepole_k(f32 seconds, f32 rate)
+static H1_AI f32 onepole_k(f32 seconds, f32 rate)
 {
     if (seconds <= 0.0f) return 1.0f;
     return 1.0f - exp2fx(-1.442695f / (seconds * rate));

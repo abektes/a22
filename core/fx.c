@@ -121,12 +121,12 @@ static uint32_t fx_n;                            /* fx_send_block's calls, one a
 static uint32_t fx_ran_at[NFX];                  /* the call an effect last ran in (fx_resume) */
 
 /* helpers for int16 delay lines */
-static inline int16_t f_to_i16(f32 x)
+static H1_AI int16_t f_to_i16(f32 x)
 {
     x = clampf(x, -0.9999f, 0.9999f);
     return (int16_t)(x * 32767.0f);
 }
-static inline f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
+static H1_AI f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
 
 void fx_reset(void)
 {
@@ -175,7 +175,7 @@ void fx_init(f32 sr)
  * here is shorter than its segment, so one wrap is enough. */
 #define D_AT(o, len, pos, delay) rev_buf[(o) + ((pos) >= (delay) ? (pos) - (delay) : (pos) + (len) - (delay))]
 
-static inline f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
+static H1_AI f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
 {
     int d = ifloor(delay);
     f32 fr = delay - (f32)d;
@@ -192,7 +192,7 @@ static inline f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
 }
 
 /* write x at pos and step on; *nz gathers the bits written (all zero: the tank is silent) */
-static inline uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint32_t *nz)
+static H1_AI uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint32_t *nz)
 {
     int16_t v = f_to_i16(x);
     rev_buf[o + pos] = v;
@@ -201,7 +201,7 @@ static inline uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint
 }
 
 /* the allpass: its oldest sample (at pos) out, the new one in */
-static inline f32 d_allpass(uint32_t o, uint32_t len, uint32_t *pos, f32 x, f32 g, uint32_t *nz)
+static H1_AI f32 d_allpass(uint32_t o, uint32_t len, uint32_t *pos, f32 x, f32 g, uint32_t *nz)
 {
     f32 buf = i16_to_f(rev_buf[o + *pos]);
     f32 v = x + buf * g;
@@ -236,7 +236,7 @@ static uint32_t pl_nz_a, pl_nz_b;
 #define PL_TAP(seg, len, q, delay) i16_to_f(D_AT(D_O##seg, len, q, delay))
 #define PL_STEP(q, len) ((q) = (q) + 1u >= (len) ? 0u : (q) + 1u)
 
-static void plate_half_a(uint32_t arg)
+H1_HOT static void plate_half_a(uint32_t arg)
 {
     uint32_t p4 = pl_p0[4], p5 = pl_p0[5], p6 = pl_p0[6], p7 = pl_p0[7], nz = 0;
     uint32_t q9 = pl_p0[9], q10 = pl_p0[10], q11 = pl_p0[11];
@@ -269,7 +269,7 @@ static void plate_half_a(uint32_t arg)
     pl_nz_a = nz;
 }
 
-static void plate_half_b(void)
+H1_HOT static void plate_half_b(void)
 {
     uint32_t p8 = pl_p0[8], p9 = pl_p0[9], p10 = pl_p0[10], p11 = pl_p0[11], nz = 0;
     uint32_t q5 = pl_p0[5], q6 = pl_p0[6], q7 = pl_p0[7];
@@ -349,13 +349,13 @@ static void fx_plate(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
         pl_x11[n] = i16_to_f(rev_buf[D_O11 + x11]);
     }
 
-    if (fx_c2_run && fx_c2_run(plate_half_a, 0)) {
-        plate_half_b();
+    if (fx_c2_run && fx_c2_run(H1_FAR(plate_half_a), 0)) {   /* (both halves run from RAM: H1_HOT) */
+        H1_FAR(plate_half_b)();
         if (fx_c2_wait() != 0)
-            plate_half_a(0);                 /* (the second core gave up: the job was dropped) */
+            H1_FAR(plate_half_a)(0);         /* (the second core gave up: the job was dropped) */
     } else {
-        plate_half_a(0);
-        plate_half_b();
+        H1_FAR(plate_half_a)(0);
+        H1_FAR(plate_half_b)();
     }
     if (heard || nz || pl_nz_a || pl_nz_b)
         pl_quiet = 0;
@@ -746,23 +746,13 @@ void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, 
 }
 
 /* ---- Master Bus: 3-Band Master EQ + Tape Drive/Glue + RAM Tape Performance FX ---- */
-void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
+/* the master bus's EQ and drive, every sample of every block (fx_master_block): from RAM */
+H1_HOT static void master_eq(f32 *l, f32 *r, const Svf *fm, int eq_on, f32 klo, f32 khi, f32 lo_g, f32 md_g,
+                             f32 hi_g, f32 drv, f32 drive, f32 comp_g)
 {
-    f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
-    f32 md_g = ((f32)master[1] - 50.0f) * 0.02f;
-    f32 hi_g = ((f32)master[2] - 50.0f) * 0.02f;
-    f32 drv  = (f32)master[3] * 0.01f;
-    f32 klo = onepole_k(1.0f / (H1_TAU * 130.0f), SRf);
-    f32 khi = onepole_k(1.0f / (H1_TAU * 4800.0f), SRf);
-    f32 drive = 1.0f + 2.8f * drv * drv;
-    f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
     Svf fmid;
-    int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
     int n;
-
-    if (eq_on)
-        svf_set(&fmid, 1100.0f, 0.9f, ISRf);
-
+    fmid.g = fm->g; fmid.k = fm->k; fmid.a1 = fm->a1; fmid.a2 = fm->a2; fmid.a3 = fm->a3;   /* (no struct copy: memcpy) */
     for (n = 0; n < CTRL; n++) {
         f32 xl = l[n], xr = r[n];
         /* 3-band EQ */
@@ -789,6 +779,28 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
         l[n] = xl;
         r[n] = xr;
     }
+}
+
+void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
+{
+    f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
+    f32 md_g = ((f32)master[1] - 50.0f) * 0.02f;
+    f32 hi_g = ((f32)master[2] - 50.0f) * 0.02f;
+    f32 drv  = (f32)master[3] * 0.01f;
+    f32 klo = onepole_k(1.0f / (H1_TAU * 130.0f), SRf);
+    f32 khi = onepole_k(1.0f / (H1_TAU * 4800.0f), SRf);
+    f32 drive = 1.0f + 2.8f * drv * drv;
+    f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
+    Svf fmid;
+    int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
+    int n;
+
+    if (eq_on)
+        svf_set(&fmid, 1100.0f, 0.9f, ISRf);
+    else
+        fmid.g = fmid.k = fmid.a1 = fmid.a2 = fmid.a3 = 0.0f;   /* (not read: the EQ is off) */
+    if (eq_on || drv > 0.01f)
+        H1_FAR(master_eq)(l, r, &fmid, eq_on, klo, khi, lo_g, md_g, hi_g, drv, drive, comp_g);
 
     /* Live RAM Tape Performance FX: Brake & Beat Stutter (48 KB stereo ring) */
     if (trick != tfx_prev) {
