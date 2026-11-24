@@ -1744,6 +1744,7 @@ static struct {
     const InstDef *def;
     const Blk *b;
     f32 att, kd, sus, kr, mkd, kg, dt;
+    f32 gain, panmod;                            /* the part's gain (engine, track LFO, algorithm) and pan LFO */
 } vj;
 static int (*c2_run)(void (*fn)(uint32_t), uint32_t arg);
 static int (*c2_wait)(void);
@@ -1753,6 +1754,49 @@ void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(v
     c2_run = run;
     c2_wait = wait;
     fx_two_cores(run, wait);                    /* (PLATE's two halves: fx.c) */
+}
+
+/* A voice's output as it goes into its track: its envelope ramped across the block, its gain (velocity) and pan, the
+ * declick of a voice taken over, written back over vt_l / vt_r. Run by the core that rendered the voice, so the first
+ * core only adds the voices up, in voice order (block): the sum is the same to the bit as when it did all of it. */
+static void voice_out(Voice *v, int i)
+{
+    f32 e0 = v->env_prev, e1 = v->env, de, g, gl, gr, pan, pl, pr, tail_l, tail_r, sll = 0.0f, srr = 0.0f;
+    f32 *ol = vt_l[i], *or_ = vt_r[i];
+    int n;
+    de = (e1 - e0) * (1.0f / (f32)CTRL);
+    /* velocity dynamics curve: expressive but retains low-velocity presence */
+    g = vj.gain * (0.22f + 0.78f * v->vel_f * v->vel_f);
+    pan = clampf(v->pan + vj.panmod, -1.0f, 1.0f);
+    pan_gains(pan, &pl, &pr);
+    gl = g * pl;
+    gr = g * pr;
+    if (v->declick) {
+        v->tail_l = v->last_l - ol[0] * e0 * gl;
+        v->tail_r = v->last_r - or_[0] * e0 * gr;
+        v->declick = 0;
+    }
+    tail_l = v->tail_l;
+    tail_r = v->tail_r;
+    for (n = 0; n < CTRL; n++) {
+        sll = ol[n] * e0 * gl + tail_l;
+        srr = or_[n] * e0 * gr + tail_r;
+        e0 += de;
+        tail_l *= 0.984f;
+        tail_r *= 0.984f;
+        ol[n] = sll;
+        or_[n] = srr;
+    }
+    if (absf(tail_l) < 1e-6f) tail_l = 0.0f;
+    if (absf(tail_r) < 1e-6f) tail_r = 0.0f;
+    v->tail_l = tail_l;
+    v->tail_r = tail_r;
+    v->last_l = sll;
+    v->last_r = srr;
+    if (v->stage == 4 && v->env <= 0.0f) {
+        v->stage = 0;
+        v->last_l = v->last_r = v->tail_l = v->tail_r = 0.0f;
+    }
 }
 
 static void voice_block(int i)
@@ -1783,6 +1827,7 @@ static void voice_block(int i)
     v->pitch += (v->target - v->pitch) * vj.kg;
     vj.def->render(v, vj.b, vt_l[i], vt_r[i], CTRL);
     v->age += vj.dt;
+    voice_out(v, i);
 }
 
 /* Whether the port's last audio half went out late (rendered after the DMA had moved on), told once a render from where
@@ -1934,13 +1979,21 @@ static void block(f32 *L, f32 *R)
             int inst = PART_INST(part), algo = PART_ALGO(part);
             const InstDef *def = insts[inst];
             const Blk *b = track_set(t, part, is_seq);
-            uint32_t mine = 0, other = 0;
-            int nv = 0;
+            uint32_t mine = 0, other = 0, all = 0;
+            int nv = 0, odd;
 
             for (i = 0; i < NVOICE; i++)
                 if (voices[i].stage && voices[i].trk == t &&
                     voices[i].part == part && voices[i].seq == is_seq) {
-                    if (c2_run && (nv & 1)) other |= 1u << i;
+                    all |= 1u << i;
+                    nv++;
+                }
+            /* every other voice to the second core, and of an odd number the larger half (this core also hands out
+             * the job, waits for it and adds everything up); a voice alone stays here */
+            odd = nv & 1;
+            for (i = 0, nv = 0; i < NVOICE; i++)
+                if (all >> i & 1u) {
+                    if (c2_run && all != (1u << i) && (nv & 1) != odd) other |= 1u << i;
                     else mine |= 1u << i;
                     nv++;
                 }
@@ -1954,6 +2007,8 @@ static void block(f32 *L, f32 *R)
             vj.mkd = r->m.mkd;
             vj.kg  = kg;
             vj.dt  = dt;
+            vj.gain = def->gain * r->m.vol * algo_gain[inst][algo];
+            vj.panmod = r->m.panmod;
 
             stg_mark(H1_STG_MIX);
             if (other) {
@@ -1967,44 +2022,12 @@ static void block(f32 *L, f32 *R)
                 stg_mark(H1_STG_VOICES);
             }
 
-            for (i = 0; i < NVOICE; i++) {
-                Voice *v = &voices[i];
-                f32 e0, e1, de, g, gl, gr, pan, pl, pr, tail_l, tail_r, sll = 0.0f, srr = 0.0f;
-                if (!((mine | other) >> i & 1u)) continue;
-                e0 = v->env_prev;
-                e1 = v->env;
-                de = (e1 - e0) * (1.0f / (f32)CTRL);
-                /* velocity dynamics curve: expressive but retains low-velocity presence */
-                g = def->gain * r->m.vol * algo_gain[inst][algo] * (0.22f + 0.78f * v->vel_f * v->vel_f);
-                pan = clampf(v->pan + r->m.panmod, -1.0f, 1.0f);
-                pan_gains(pan, &pl, &pr);
-                gl = g * pl;
-                gr = g * pr;
-                if (v->declick) {
-                    v->tail_l = v->last_l - vt_l[i][0] * e0 * gl;
-                    v->tail_r = v->last_r - vt_r[i][0] * e0 * gr;
-                    v->declick = 0;
-                }
-                tail_l = v->tail_l;
-                tail_r = v->tail_r;
+            for (i = 0; i < NVOICE; i++) {           /* the voices into the track, in voice order (voice_out) */
+                const f32 *vl = vt_l[i], *vr = vt_r[i];
+                if (!(all >> i & 1u)) continue;
                 for (n = 0; n < CTRL; n++) {
-                    sll = vt_l[i][n] * e0 * gl + tail_l;
-                    srr = vt_r[i][n] * e0 * gr + tail_r;
-                    e0 += de;
-                    tail_l *= 0.984f;
-                    tail_r *= 0.984f;
-                    tl[n] += sll;
-                    tr[n] += srr;
-                }
-                if (absf(tail_l) < 1e-6f) tail_l = 0.0f;
-                if (absf(tail_r) < 1e-6f) tail_r = 0.0f;
-                v->tail_l = tail_l;
-                v->tail_r = tail_r;
-                v->last_l = sll;
-                v->last_r = srr;
-                if (v->stage == 4 && v->env <= 0.0f) {
-                    v->stage = 0;
-                    v->last_l = v->last_r = v->tail_l = v->tail_r = 0.0f;
+                    tl[n] += vl[n];
+                    tr[n] += vr[n];
                 }
             }
         }
