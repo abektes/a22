@@ -121,12 +121,12 @@ static uint32_t fx_n;                            /* fx_send_block's calls, one a
 static uint32_t fx_ran_at[NFX];                  /* the call an effect last ran in (fx_resume) */
 
 /* helpers for int16 delay lines */
-static H1_AI int16_t f_to_i16(f32 x)
+static inline int16_t f_to_i16(f32 x)
 {
     x = clampf(x, -0.9999f, 0.9999f);
     return (int16_t)(x * 32767.0f);
 }
-static H1_AI f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
+static inline f32 i16_to_f(int16_t v) { return (f32)v * (1.0f / 32768.0f); }
 
 void fx_reset(void)
 {
@@ -175,7 +175,7 @@ void fx_init(f32 sr)
  * here is shorter than its segment, so one wrap is enough. */
 #define D_AT(o, len, pos, delay) rev_buf[(o) + ((pos) >= (delay) ? (pos) - (delay) : (pos) + (len) - (delay))]
 
-static H1_AI f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
+static inline f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
 {
     int d = ifloor(delay);
     f32 fr = delay - (f32)d;
@@ -192,7 +192,7 @@ static H1_AI f32 d_read_frac(uint32_t o, uint32_t len, uint32_t pos, f32 delay)
 }
 
 /* write x at pos and step on; *nz gathers the bits written (all zero: the tank is silent) */
-static H1_AI uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint32_t *nz)
+static inline uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint32_t *nz)
 {
     int16_t v = f_to_i16(x);
     rev_buf[o + pos] = v;
@@ -201,7 +201,7 @@ static H1_AI uint32_t d_put(uint32_t o, uint32_t len, uint32_t pos, f32 x, uint3
 }
 
 /* the allpass: its oldest sample (at pos) out, the new one in */
-static H1_AI f32 d_allpass(uint32_t o, uint32_t len, uint32_t *pos, f32 x, f32 g, uint32_t *nz)
+static inline f32 d_allpass(uint32_t o, uint32_t len, uint32_t *pos, f32 x, f32 g, uint32_t *nz)
 {
     f32 buf = i16_to_f(rev_buf[o + *pos]);
     f32 v = x + buf * g;

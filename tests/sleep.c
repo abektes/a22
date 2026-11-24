@@ -9,6 +9,7 @@
  * moved while it sleeps, then woken; WIRE on every algorithm with glide, the LFO on pitch at full depth, quick
  * re-plucks (legato), and a take on the tape played at 0.5X, 2X and 1X with the pitch following. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../core/internal.h"
 #ifdef __SSE2__
@@ -86,7 +87,14 @@ static void wire(void)
 {
     int a, r, i, t;
     char name[16];
-    while (h1_instrument() != 5) { h1_encoder(H1_ENC_PRESET, 1); run(2); }   /* WIRE */
+    for (i = 0; i < NINST && strcmp(h1_instrument_name(h1_instrument()), "WIRE"); i++) {   /* WIRE */
+        h1_encoder(H1_ENC_PRESET, 1);
+        run(2);
+    }
+    if (strcmp(h1_instrument_name(h1_instrument()), "WIRE")) {
+        fprintf(stderr, "FAIL sleep: PRESETS never reached WIRE\n");
+        exit(1);
+    }
     for (a = 0; a < 8; a++) {
         for (t = 0; t < NTRACK; t++) { st.trk[t].lfo[0] = 0; st.trk[t].lfo[1] = 80; st.trk[t].lfo[2] = 100; st.trk[t].lfo[3] = 0; }
         for (i = 0; i < NSLOT; i++) { st.ip[i].lfo[0] = 0; st.ip[i].lfo[1] = 80; st.ip[i].lfo[2] = 100; st.ip[i].lfo[3] = 0; }

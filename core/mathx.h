@@ -11,12 +11,13 @@ typedef float f32;
 /* ---- code the device keeps in RAM (0.6.0) -------------------------------------------------------------------------
  * H1_HOT: a function that runs in every audio block whatever plays, placed in RAM out of the way of the flash's
  * instruction cache, which both cores share and the main loop's drawing keeps pushing the sound out of (fm1-base's
- * PLAT_RAM_CODE: section .app_ram, copied at boot). It may call only other H1_HOT functions and helpers that are always
- * inlined (H1_AI), nothing through a pointer and nothing the compiler would call in the flash (fm1-base's build checks
- * the disassembly: tools/ramcode.py). Code in the flash calls it through H1_FAR, since a direct call does not reach
- * that far. In the host simulator, the browser's and the tests: plain functions and plain calls. */
+ * PLAT_RAM_CODE: section .app_ram, copied at boot). It may call nothing in the flash and nothing through a pointer
+ * (fm1-base's build checks the disassembly: tools/ramcode.py), so it is flattened: every helper it calls is inlined
+ * into it, there and only there (the helpers themselves stay plain static inline, so the engines in the flash are
+ * built as before). Code in the flash calls it through H1_FAR, since a direct call does not reach that far. In the
+ * host simulator, the browser's and the tests: plain functions and plain calls. */
 #if defined(H1_DEVICE) && !defined(PLAT_HOST)
-#define H1_HOT __attribute__((section(".app_ram"), noinline))
+#define H1_HOT __attribute__((section(".app_ram"), noinline, flatten))
 static inline __attribute__((always_inline)) void *h1_far_ptr(void *fn)
 {
     void *volatile held = fn;                    /* (read back: the compiler no longer knows the target) */
@@ -27,24 +28,23 @@ static inline __attribute__((always_inline)) void *h1_far_ptr(void *fn)
 #define H1_HOT
 #define H1_FAR(fn) (&(fn))
 #endif
-#define H1_AI inline __attribute__((always_inline))
 
-static H1_AI f32 clampf(f32 x, f32 lo, f32 hi) { return x < lo ? lo : (x > hi ? hi : x); }
-static H1_AI f32 sat(f32 x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
-static H1_AI f32 lerpf(f32 a, f32 b, f32 t) { return a + (b - a) * t; }
-static H1_AI f32 absf(f32 x) { return x < 0.0f ? -x : x; }
-static H1_AI f32 minf(f32 a, f32 b) { return a < b ? a : b; }
-static H1_AI f32 maxf(f32 a, f32 b) { return a > b ? a : b; }
+static inline f32 clampf(f32 x, f32 lo, f32 hi) { return x < lo ? lo : (x > hi ? hi : x); }
+static inline f32 sat(f32 x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
+static inline f32 lerpf(f32 a, f32 b, f32 t) { return a + (b - a) * t; }
+static inline f32 absf(f32 x) { return x < 0.0f ? -x : x; }
+static inline f32 minf(f32 a, f32 b) { return a < b ? a : b; }
+static inline f32 maxf(f32 a, f32 b) { return a > b ? a : b; }
 static inline int32_t imin(int32_t a, int32_t b) { return a < b ? a : b; }
 static inline int32_t imax(int32_t a, int32_t b) { return a > b ? a : b; }
 static inline int32_t iclamp(int32_t x, int32_t lo, int32_t hi) { return x < lo ? lo : (x > hi ? hi : x); }
 
-static H1_AI int32_t ifloor(f32 x)
+static inline int32_t ifloor(f32 x)
 {
     int32_t i = (int32_t)x;
     return (f32)i > x ? i - 1 : i;
 }
-static H1_AI f32 fractf(f32 x) { return x - (f32)ifloor(x); }
+static inline f32 fractf(f32 x) { return x - (f32)ifloor(x); }
 
 /* 1/sqrt(x), x > 0: the bit trick and two Newton steps (rel. error ~5e-6) */
 static inline f32 rsqrtf(f32 x)
@@ -83,7 +83,7 @@ static inline f32 cos_turns(f32 t) { return sin_turns(t + 0.25f); }
  * Any x: below 2^-126 it is 0, above 2^126 it stays there, and not-a-number is 0. (It used to
  * trust x to be small: a decay written as exp2fx(-age * 30) wrapped the exponent bits four
  * seconds into a held note and came back as an enormous number.) */
-static H1_AI f32 exp2fx(f32 x)
+static inline f32 exp2fx(f32 x)
 {
     union { f32 f; int32_t i; } v;
     int32_t n;
@@ -104,14 +104,14 @@ static H1_AI f32 exp2fx(f32 x)
 }
 
 /* tan(x) for 0 <= x < ~1.3 (filter prewarp): Pade [3/2] */
-static H1_AI f32 tanfx(f32 x)
+static inline f32 tanfx(f32 x)
 {
     f32 x2 = x * x;
     return x * (15.0f - x2) / (15.0f - 6.0f * x2);
 }
 
 /* soft clip, monotone, |y| < 1 */
-static H1_AI f32 softclip(f32 x)
+static inline f32 softclip(f32 x)
 {
     if (x > 3.0f) return 1.0f;
     if (x < -3.0f) return -1.0f;

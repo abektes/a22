@@ -52,7 +52,8 @@ uint32_t h1_voices_shed(void);
 /* Where an audio half's time goes, for a port's timing readout. clock is a free-running count the port has (the FM-1's
  * 24 MHz timer); with it set, each h1_render adds up the counts spent in each stage below. h1_stages gives, since the
  * last call, the stages of the render that took longest in all (the one closest to running late), and its total;
- * then starts again. Call it from the main loop with the audio held off for the moment it reads. NULL (the default):
+ * then starts again. Call it from the main loop with the audio held off for the moment it reads; the clock may be set
+ * at any time from the main loop (A22's port sets it at the first CC 119). NULL (the default):
  * nothing is timed and h1_stages gives zeros.
  *   SEQ     events from the UI, the tape, the step sequencer, the arpeggiator
  *   VOICES  the voices this core renders

@@ -263,8 +263,8 @@ other has filled the memory.
 
 Code that runs in every block whatever plays is kept in RAM on the device (`H1_HOT` in `core/mathx.h`, fm1-base's
 `.app_ram`), out of the way of the instruction cache both cores share: PLATE's halves, the master bus's EQ and
-drive, `voice_out` and `eng_out`. Such a function may call only other `H1_HOT` functions and always-inlined helpers
-(`H1_AI`), nothing through a pointer; code in flash calls it through `H1_FAR`. fm1-base's build checks the
+drive, `voice_out` and `eng_out`. Such a function may call nothing in flash and nothing through a pointer, so it is
+flattened (every helper inlined into it); code in flash calls it through `H1_FAR`. fm1-base's build checks the
 disassembly. On the host, the simulator and the tests these are plain functions.
 
 ## What the FM-1 does not forgive

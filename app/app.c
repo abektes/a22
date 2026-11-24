@@ -95,15 +95,17 @@ static void send_rest(void)
  * AUDIO is the share of each block's time the sound took, in percent; STACK is the bytes of the main
  * loop's and the interrupts' stacks that have never been used since the start.
  * Then STAGE seq voices wait mix fx master: the slowest render since the last PERF, split by h1_stages, each in
- * percent of the block's time (they add up to that render's AUDIO); and FLASH n max: the tape's flash writes in that
- * time and the longest in microseconds (each holds the interrupts off, the audio's included: ring_write). */
+ * percent of the block's time (they add up to that render's time in h1_render; AUDIO also counts the port's own
+ * MASTER gain after it, so it reads a little higher); and FLASH n max: the tape's flash writes in that time and the
+ * longest in microseconds (each holds the interrupts off, the audio's included: ring_write). The stages are timed only
+ * from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in its render. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
 static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max; } pf;
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
 /* the renders as the tape's flash writes see them (ring_go): one more each render, and the slowest of the last few
  * (each render takes an eighth off it), in microseconds */
 static volatile uint32_t au_seq, au_recent;
-static uint8_t pf_ask;
+static uint8_t pf_ask, stage_clock_on;
 
 /* ---- the panel ------------------------------------------------------------------------------ */
 static uint32_t keys_was, btn_was;
@@ -115,9 +117,13 @@ static uint32_t n_midi_held;
 
 static void midi_one(uint32_t pkt)
 {
-    if (((pkt >> 8) & 0xF0u) == 0xB0u && ((pkt >> 16) & 0xFFu) == 119u)
+    if (((pkt >> 8) & 0xF0u) == 0xB0u && ((pkt >> 16) & 0xFFu) == 119u) {
         pf_ask = 1;                                         /* (see "how long things take") */
-    else
+        if (!stage_clock_on) {                              /* the stages timed from now on (STAGE) */
+            h1_stage_clock(plat_ticks24);
+            stage_clock_on = 1;
+        }
+    } else
         h1_midi((uint8_t)(pkt >> 8), (uint8_t)(pkt >> 16), (uint8_t)(pkt >> 24));
 }
 
@@ -318,7 +324,7 @@ static struct {
     uint32_t to_at;                      /* where in it the record begins */
     uint32_t len, at, crc;               /* what is being written: its length, how far, its CRC */
     uint32_t wait;                       /* frames the loop has been dirty: a save begins a moment after */
-    uint32_t defer;                      /* frames the next write has waited for lighter renders (ring_go) */
+    uint32_t defer;                      /* frames this save has waited for lighter renders, in all (ring_go) */
     uint32_t gen;                        /* h1_loop_gen when it began: h1_loop is the engine's own memory, so a
                                           * take recorded meanwhile moves its events, and that save is dropped */
 } ring = {-1, 0, 0, {RING_FULL, RING_FULL, RING_FULL, RING_FULL}, -1, 0, 0, 0, 0, 0, 0, 0};
@@ -337,7 +343,7 @@ static void ring_boot_state(void)
 #endif
 #define RING_WAIT 20u                    /* (a third of a second: the save keeps clear of the take's own close) */
 #define RING_HEAVY 75u                   /* renders this % of their time and over: a write waits (ring_go) */
-#define RING_DEFER 8u                    /* frames a write may wait for lighter renders, then goes anyway */
+#define RING_DEFER 24u                   /* frames one save may wait in all for lighter renders (about a second) */
 static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
                                           * records again (then the loop is dirty again, and saved anew) */
 #define RING_MAX (RING_SLOT_BYTES - RING_BODY)
@@ -458,21 +464,22 @@ static void ring_drop(void)
 
 /* Whether a write into the ring may go now. A page program holds the interrupts off while it runs (FLASH on the PERF
  * line), the audio's too: one that lands as a render is due delays that render, and a render near its limit then
- * goes out late. So a write is put off while the renders are heavy (RING_HEAVY), for at most RING_DEFER frames, and
- * then waits for a render to have just finished, which leaves it the most time before the next. (Not on the host:
- * its renders do not come by themselves while the main loop waits.) */
+ * goes out late. So a write is put off while the renders are heavy (RING_HEAVY), but a save waits RING_DEFER frames
+ * in all, not a page: a jam is heavy all the time, and a save stretched over many seconds would be dropped by every
+ * take meanwhile (h1_loop_gen) and leave the last one off the flash at a power-off. Then a write waits for a render to
+ * have just finished, which leaves it the most time before the next, sending the panel's rectangles meanwhile.
+ * (Not on the host: its renders do not come by themselves while the main loop waits.) */
 static int ring_go(void)
 {
     if (au_recent * 100u >= RING_HEAVY * pf_block_us && ring.defer < RING_DEFER) {
         ring.defer++;
         return 0;
     }
-    ring.defer = 0;
 #ifndef PLAT_HOST
     {
         uint32_t seen = au_seq, t0 = plat_ticks24();
         while (au_seq == seen && US(plat_ticks24() - t0) < pf_block_us + 1000u)
-            ;                                    /* (a render a block: at most one block's wait) */
+            send_some();                         /* (a render a block: at most one block's wait) */
     }
 #endif
     return 1;
@@ -549,6 +556,7 @@ static void ring_step(void)
             if (ring.fill[sl] + RING_BODY + ring_pages(size) <= RING_SLOT_BYTES) {
                 ring_src = p;
                 ring.to = sl;
+                ring.defer = 0;                  /* (a new save: its own RING_DEFER) */
                 ring.to_at = ring.fill[sl];
                 ring.len = size;
                 ring.gen = gen;
@@ -581,7 +589,6 @@ void app_init(void)
     uint32_t size;
     int n;
     h1_init(44100);
-    h1_stage_clock(plat_ticks24);                           /* (the PERF line's STAGE) */
     h1_while_drawing(send_some);
     h1_midi_out(midi_send);
     h1_usb_host_fn(usb_host);

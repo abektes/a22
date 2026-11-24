@@ -2100,7 +2100,7 @@ static void block(f32 *L, f32 *R)
 }
 
 /* ---- Look-Ahead Brickwall Limiter (0.7 ms look-ahead) --------------------------------- */
-static H1_AI f32 limit(f32 x)
+static inline f32 limit(f32 x)
 {
     f32 a = absf(x);
     if (!(a > 0.6f)) return a <= 0.6f ? x : 0.0f;

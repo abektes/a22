@@ -20,12 +20,13 @@ RELEASE = REPO + "/releases/latest"
 
 
 def released_version():
-    """The CHANGELOG's newest released heading (## X.Y.Z): what the download buttons name, so it can't fall behind"""
+    """The CHANGELOG's newest released heading (## X.Y.Z): what the download buttons name, so it can't fall behind.
+    A section that says "Not released yet" (the next version, written while it is built) is skipped."""
     with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
-        for line in f:
-            m = re.match(r"## (\d+\.\d+\.\d+)\b", line)
-            if m:
-                return m.group(1)
+        text = f.read()
+    for m in re.finditer(r"^## (\d+\.\d+\.\d+)\b(.*?)(?=^## |\Z)", text, re.M | re.S):
+        if "Not released yet" not in m.group(2):
+            return m.group(1)
     sys.exit("build_site: no released version in CHANGELOG.md")
 
 
