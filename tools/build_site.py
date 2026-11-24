@@ -543,7 +543,7 @@ def front():
       <p>The <a href="manual.html">manual</a> has every engine, control and page.</p>
     </div>
     <aside class="note"><p>A22 is early: installed and run on one FM-1 so far.</p>
-      <p>Measured there with 0.4.0: 41 frames a second on average over its 96 algorithms, and no crash over a 30-minute run.</p></aside>
+      <p>Measured there with 0.5.0: 42 frames a second on average over its 112 algorithms with a chord held, and no crash over a 30-minute run with a two-track loop playing.</p></aside>
   </div>
 </section>
 </main>
