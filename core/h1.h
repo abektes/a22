@@ -1,9 +1,10 @@
-/* h1 - a firmware for the M-VAVE FM-1. The public face of the portable core.
+/* A22 - a firmware for the M-VAVE FM-1, derived from h1 (whose names the calls keep). The public face of the
+ * portable core.
  *
  * The core knows nothing about hardware. A port feeds it the panel (keys, buttons, encoder
  * detents), asks it for audio in the audio interrupt and for a frame in the main loop, and
  * sends the dirty parts of the framebuffer to the panel. Three ports share it unchanged:
- * port/rfm1 (the build the browser simulator runs: github.com/jakehandy/fm1-browser-simulator),
+ * port/rfm1 (the build the site's simulator, web/, and github.com/jakehandy/fm1-browser-simulator run),
  * port/host (tests: WAV and image dumps) and app/ (the device, on fm1-base). */
 #pragma once
 #include <stdint.h>
@@ -112,18 +113,18 @@ void h1_toast(const char *text);                 /* a word from the port, shown 
 
 /* introspection for the simulator and tests */
 int h1_instrument(void);
-int h1_algorithm(void);                          /* of the current instrument, 0..7 (LAVA 0..8) */
+int h1_algorithm(void);                          /* of the current engine, 0..7 */
 int h1_page(void);                               /* 0 = home, else a settings page */
 const char *h1_toast_now(void);                  /* the toast showing, "" when none */
 int h1_clear_all_asked(void);                    /* 1 while CLEAR ALL? waits for its answer */
 int h1_clear_all_answer(void);                   /* its answer, once: 1 kept, 2 cleared, else 0 */
-int h1_layers(void);                             /* 1 while LAYERS is on: recorded notes keep their instrument */
-int h1_instrument_volume(int inst);              /* 0..100: the instrument's own volume (EDIT held, and SELECT) */
+int h1_layers(void);                             /* always 1 in A22: recorded notes keep their engine (h1's LAYERS) */
+int h1_instrument_volume(int inst);              /* 0..100: the volume of the track in hand (inst is not used) */
 int h1_volume_ring(void);                        /* the volume ring: 0 not up, 1 GLOBAL (MASTER), 2 INSTRUMENT */
 int h1_instrument_count(void);
 const char *h1_instrument_name(int i);
 const char *h1_knob_name(int inst, int k);       /* the four home-screen modulations */
-const char *h1_algo_name(int inst, int a);       /* eight per instrument, LAVA nine; "" past the last */
+const char *h1_algo_name(int inst, int a);       /* eight per engine; "" past the last */
 void h1_ink(int inst, uint8_t rgb[3]);
 void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b);
 uint32_t h1_voices_active(void);

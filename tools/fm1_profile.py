@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Times A22's audio on a real FM-1, with an eight-note chord held on each algorithm of an engine, and fails
 if any of them runs past a limit. The device side of the plan's rule ("kept only if eight-note chords stay
-under about 80% peak on the FM-1", docs/PLAN-expansion-sprints.md). Was profile.py in HANDOFF-perf-audio.md.
+under about 80% peak on the FM-1", docs/PLAN-expansion-sprints.md). Was profile.py in docs/notes/HANDOFF-perf-audio.md.
 
     tools/fm1_profile.py ENGINE [--fx FX] [--knob K=V ...] [--max PCT] [--secs S]
     tools/fm1_profile.py idle

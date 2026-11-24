@@ -42,7 +42,8 @@ effects, mixer, sequencers and USB audio/MIDI support that, and the animated col
   existing `web/index.html`, served at `sim/`.
 - Facts live in the README and the engine sources (`core/inst_*.c`); the site must not claim more than they do.
 - HAZE's algorithms have no per-algorithm descriptions in the code; list them by name only.
-- Not listed on The Firmware Hub yet; A22 is early (installed and run on one FM-1).
+- Listed on The Firmware Hub since 0.4.0, which offers each new release a few hours after it is out. A22 is
+  still early (installed and run on one FM-1).
 
 ## Brand Commitments
 
