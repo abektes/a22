@@ -281,6 +281,13 @@ tests/   the device app in fm1-base's host simulator, the core alone, and the cr
 `docs/ARCHITECTURE.md` and `docs/RESEARCH.md` come from h1 and describe its instruments, but the
 platform, the two cores and the hardware notes still apply.
 
+## On a computer
+
+A22's synth core also runs without the FM-1, in
+[a22-soundtrack](https://github.com/abektes/a22-soundtrack): an agent skill that scores videos offline,
+with music from A22's engines and sound effects timed to the frame. Its demos play at
+[abektes.github.io/a22-soundtrack](https://abektes.github.io/a22-soundtrack/).
+
 ## Support
 
 A22 is free and stays free. If it gave you a good evening, you can

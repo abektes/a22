@@ -31,6 +31,7 @@ def released_version():
 
 VERSION = released_version()
 COFFEE = "https://buymeacoffee.com/abektes"
+SOUNDTRACK = "https://abektes.github.io/a22-soundtrack/"
 HUB = "https://thefirmwarehub.com"
 SIM = "sim/"
 BANKS = "ABCDEFGHIJKLMN"
@@ -452,6 +453,7 @@ def footer():
   <span>A22 · free and open source, <a href="{REPO}/blob/main/LICENSE">MIT</a></span>
   <span class="sep"></span>
   <a href="{REPO}">GitHub</a>
+  <a href="{SOUNDTRACK}">a22-soundtrack</a>
   <a href="{COFFEE}">Buy me a coffee</a>
   <span>M-VAVE and FM-1 are trademarks of their owners; A22 is not affiliated with M-VAVE.</span>
 </footer>
@@ -544,6 +546,17 @@ def front():
     </div>
     <aside class="note"><p>A22 is early: installed and run on one FM-1 so far.</p>
       <p>Measured there with 0.5.0: 42 frames a second on average over its 112 algorithms with a chord held, and no crash over a 30-minute run with a two-track loop playing.</p></aside>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="computer">
+  <div class="inner">
+    <div><h2 id="computer">On a computer</h2></div>
+    <div class="prose">
+      <p>A22's synth core also runs without the FM-1, in <a href="https://github.com/abektes/a22-soundtrack">a22-soundtrack</a>: an agent skill that scores videos offline, with music from A22's engines and sound effects timed to the frame.</p>
+      <p><a class="more" href="{SOUNDTRACK}">Listen to its demos {ARROW}</a></p>
+    </div>
+    <aside class="note"><p>Its ten demo tracks list the A22 engines each one plays, in this catalogue's bank colours.</p></aside>
   </div>
 </section>
 </main>
