@@ -1833,12 +1833,42 @@ static void voices_job(uint32_t mask)
 static f32 sub_l, sub_r;
 #define SUB_K (H1_TAU * 18.0f * ISR)
 
+/* ---- where a render's time goes (h1_stages) -------------------------------------------------------------------
+ * stg_mark(k) gives the time since the last mark to stage k. A render's stages add up in stg_acc; the render with the
+ * largest total keeps its stages in stg_worst until h1_stages takes them. Nothing is read without a clock. */
+static uint32_t (*stg_clock)(void);
+static uint32_t stg_t0, stg_acc[H1_NSTG], stg_worst[H1_NSTG], stg_worst_total;
+
+static inline void stg_mark(int k)
+{
+    if (stg_clock) {
+        uint32_t t = stg_clock();
+        stg_acc[k] += t - stg_t0;
+        stg_t0 = t;
+    }
+}
+
+void eng_stage_clock(uint32_t (*clock)(void)) { stg_clock = clock; }
+
+uint32_t eng_stages(uint32_t out[H1_NSTG])
+{
+    uint32_t total = stg_worst_total;
+    int k;
+    for (k = 0; k < H1_NSTG; k++) {
+        out[k] = stg_worst[k];
+        stg_worst[k] = 0;
+    }
+    stg_worst_total = 0;
+    return total;
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 sl[CTRL], sr[CTRL], tl[CTRL], tr[CTRL];
     f32 dt = (f32)CTRL * ISR, bpm, dticks, kg, peak = 0.0f;
     int i, n, t, live;
 
+    stg_mark(H1_STG_MASTER);                    /* (the limiter and output since the last block) */
     blkno++;
     bpm = (f32)iclamp(st.glo[0], 40, 240);
     dticks = bpm * (96.0f / 60.0f) * dt;
@@ -1862,6 +1892,7 @@ static void block(f32 *L, f32 *R)
     free_tick(dticks);
     arp_tick(&st.ip[cur_i], dticks, dt);
 
+    stg_mark(H1_STG_SEQ);
     kg = st.keys[2] ? onepole_k(0.004f * exp2fx((f32)st.keys[2] * 0.08f), SR / (f32)CTRL) : 1.0f;
 
     for (n = 0; n < CTRL; n++)
@@ -1924,12 +1955,16 @@ static void block(f32 *L, f32 *R)
             vj.kg  = kg;
             vj.dt  = dt;
 
+            stg_mark(H1_STG_MIX);
             if (other) {
                 int on2 = c2_run(voices_job, other);
                 voices_job(mine);
+                stg_mark(H1_STG_VOICES);
                 if (!on2 || c2_wait() != 0) voices_job(other);
+                stg_mark(H1_STG_WAIT);
             } else {
                 voices_job(mine);
+                stg_mark(H1_STG_VOICES);
             }
 
             for (i = 0; i < NVOICE; i++) {
@@ -2004,8 +2039,10 @@ static void block(f32 *L, f32 *R)
         R[n] = y - sub_r;
     }
 
+    stg_mark(H1_STG_MIX);
     /* 8-Engine Selectable FX Rack + Master Bus (EQ + Tape Drive + Tape Brake/Stutter) */
     fx_send_block(sl, sr, L, R, st.fx_type, st.fx_p[st.fx_type < NFX ? st.fx_type : 0], bpm, st.fx_on);
+    stg_mark(H1_STG_FX);
     fx_master_block(L, R, st.master, st.tape[3], bpm);
 
     /* Scope & master meter */
@@ -2094,6 +2131,11 @@ uint32_t h1_fuzz_nan;
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
+    int k;
+    if (stg_clock) {
+        stg_t0 = stg_clock();
+        for (k = 0; k < H1_NSTG; k++) stg_acc[k] = 0;
+    }
     while (n) {
         uint32_t take, i;
         if (!eng_have) { lim_block(L, R); eng_have = CTRL; eng_pos = 0; }
@@ -2110,6 +2152,15 @@ void eng_render(int32_t *lr, uint32_t n)
         eng_pos += take;
         eng_have -= take;
         n -= take;
+    }
+    if (stg_clock) {
+        uint32_t total = 0;
+        stg_mark(H1_STG_MASTER);
+        for (k = 0; k < H1_NSTG; k++) total += stg_acc[k];
+        if (total > stg_worst_total) {
+            stg_worst_total = total;
+            for (k = 0; k < H1_NSTG; k++) stg_worst[k] = stg_acc[k];
+        }
     }
 }
 

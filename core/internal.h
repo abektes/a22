@@ -332,6 +332,8 @@ void eng_late(int late);
 uint32_t eng_saved_n(void);
 uint32_t eng_clock_steps(int inst);       /* blocks an engine's own clocks have moved (tests) */
 uint32_t eng_shed_count(void);
+void eng_stage_clock(uint32_t (*clock)(void));
+uint32_t eng_stages(uint32_t out[H1_NSTG]);
 void eng_snapshot(Vis *vis);
 uint32_t eng_sounding_lo(void);
 int eng_seq_leds(uint32_t *out, int page_open, int blink);

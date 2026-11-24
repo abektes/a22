@@ -49,6 +49,21 @@ void h1_render(int32_t *lr, uint32_t n);
 void h1_late(int late);
 uint32_t h1_voices_shed(void);
 
+/* Where an audio half's time goes, for a port's timing readout. clock is a free-running count the port has (the FM-1's
+ * 24 MHz timer); with it set, each h1_render adds up the counts spent in each stage below. h1_stages gives, since the
+ * last call, the stages of the render that took longest in all (the one closest to running late), and its total;
+ * then starts again. Call it from the main loop with the audio held off for the moment it reads. NULL (the default):
+ * nothing is timed and h1_stages gives zeros.
+ *   SEQ     events from the UI, the tape, the step sequencer, the arpeggiator
+ *   VOICES  the voices this core renders
+ *   WAIT    waiting for the second core's voices (or rendering them here, when it gave them back)
+ *   MIX     each voice's gain, declick and pan into its track, and the tracks into the mix and the send
+ *   FX      the effect in hand
+ *   MASTER  the master bus, the tape tricks, the meters, the limiter and the output */
+enum { H1_STG_SEQ, H1_STG_VOICES, H1_STG_WAIT, H1_STG_MIX, H1_STG_FX, H1_STG_MASTER, H1_NSTG };
+void h1_stage_clock(uint32_t (*clock)(void));
+uint32_t h1_stages(uint32_t out[H1_NSTG]);       /* returns the worst render's total count */
+
 /* A second core, where a port has one. run hands it fn(arg) and returns 1, or returns 0 (then the core
  * that asked does the work); wait returns 0 when the job is back, anything else if it was dropped (then
  * too). h1_render gives it every other voice and does the rest meanwhile, so run and wait are called

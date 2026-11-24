@@ -41,11 +41,28 @@ FXK = {"MIX. DECAY. DAMP. MOD": "PLATE", "MIX. TIME. FEEDBK. TAPE": "DELAY", "LP
        "CRUSH. RATE. BAND. GRIT": "LOFI", "PUNCH. DRIVE. BASS. TONE": "THUMP"}
 CHORD = [0, 2, 4, 7, 9, 11, 14, 16]
 PERF = re.compile(r"FPS (\d+)\. DRAW (\d+) MAX (\d+).*AUDIO (\d+) MAX (\d+)(?: LATE (\d+) SHED (\d+))?")
+# (0.6.0 on) the slowest render by stage, in % of the block (seq voices wait mix fx master), and the tape's flash writes
+STAGE = re.compile(r"STAGE (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)")
+FLASH = re.compile(r"FLASH (\d+) (\d+)")
+STAGES = ("seq", "voices", "wait", "mix", "fx", "master")
+
+
+def extra(s):
+    """the STAGE and FLASH parts of a PERF line, as text ("" from a firmware before 0.6.0)"""
+    out = []
+    m = STAGE.search(s)
+    if m:
+        out.append("slowest: " + " ".join(f"{n} {v}" for n, v in zip(STAGES, m.groups())))
+    m = FLASH.search(s)
+    if m:
+        out.append(f"flash {m.group(1)} writes, max {m.group(2)} us")
+    return "  ".join(out)
 
 
 class Unit:
     def __init__(self):
         self.fm = R.FM1()
+        self.last_extra = ""                     # (the last PERF line's STAGE and FLASH, as text)
 
     def said(self, secs):
         return [f[2:].decode("latin1", "replace") for f in self.fm.frames(R.SR, secs) if f and f[0] == 16]
@@ -81,6 +98,7 @@ class Unit:
         for s in self.said(1.2):
             m = PERF.search(s)
             if m:
+                self.last_extra = extra(s)
                 return tuple(int(x) if x is not None else 0 for x in m.groups())
         return None
 
@@ -176,11 +194,11 @@ def jam(u, secs):
             return rows, False
         take(u, steps)
         time.sleep(0.5)
-        rows.append((name, u.perf(secs)))
-        print(f"  {name:36s} {rows[-1][1]}", flush=True)
+        rows.append((name, u.perf(secs), u.last_extra))
+        print(f"  {name:36s} {rows[-1][1]} {rows[-1][2]}", flush=True)
     chord(u, HOLD4, 1)                                                                      # (on T4, live)
     time.sleep(0.3)
-    rows.append(("+ 4 keys held live on T4", u.perf(secs)))
+    rows.append(("+ 4 keys held live on T4", u.perf(secs), u.last_extra))
     chord(u, HOLD4, 0)
     return rows, True
 
@@ -206,7 +224,8 @@ def time_engine(u, knobs, secs):
         if knobs:                                    # (SAVE held 0.9..2.2 s: this algorithm's knobs to factory)
             u.run("press", "SAVE", "wait", 1300, "release", "SAVE", "wait", 300)
         rows.append((w, p))
-        print(f"  {w:24s} {'FPS %d  DRAW %d max %d ms  AUDIO %d%% max %d%%' % p[:5] if p else 'no PERF line'}", flush=True)
+        print(f"  {w:24s} {'FPS %d  DRAW %d max %d ms  AUDIO %d%% max %d%%' % p[:5] if p else 'no PERF line'}"
+              f"{'  ' + u.last_extra if p and u.last_extra else ''}", flush=True)
         time.sleep(0.4)
         u.run("turn", "ALGO", 1, "wait", 350)
     return rows
@@ -234,9 +253,11 @@ def main():
                 print("jam clears the FM-1's tape (CLEAR ALL): say --clear-tape")
                 return 2
             rows, ok = jam(u, max(a.secs, 4.0))
-            for w, p in rows:
+            for w, p, x in rows:
                 print(f"  {w:36s} " + ("FPS %d  DRAW %d max %d ms  AUDIO %d%% max %d%%  LATE %d  SHED %d" % p if p else "no PERF line"),
                       flush=True)
+                if x:
+                    print(f"  {'':36s} {x}", flush=True)
                 if p is None or p[4] > a.max or p[5]:
                     bad.append((w, p))
             start = "?"                               # (the tracks keep the jam's engines: nothing to put back)

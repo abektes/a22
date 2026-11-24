@@ -93,9 +93,12 @@ static void send_rest(void)
  * DRAW and SEND are milliseconds a frame (the picture drawn, with most of the frame before it sent meanwhile;
  * then the rest of that frame sent and this one's changes found); KB and RECTS are what a frame sends;
  * AUDIO is the share of each block's time the sound took, in percent; STACK is the bytes of the main
- * loop's and the interrupts' stacks that have never been used since the start. */
+ * loop's and the interrupts' stacks that have never been used since the start.
+ * Then STAGE seq voices wait mix fx master: the slowest render since the last PERF, split by h1_stages, each in
+ * percent of the block's time (they add up to that render's AUDIO); and FLASH n max: the tape's flash writes in that
+ * time and the longest in microseconds (each holds the interrupts off, the audio's included: ring_write). */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
-static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms; } pf;
+static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max; } pf;
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
 static uint8_t pf_ask;
 
@@ -422,6 +425,18 @@ static const uint8_t *ring_start(uint32_t *len)
 }
 
 /* a save given up part-way: its header says so, and how far it got, so the records after it can be found */
+/* a write into the ring, timed for the PERF line (FLASH): a page program holds the interrupts off while it runs */
+static int ring_write(uint32_t off, const void *src, uint32_t n)
+{
+    uint32_t t0 = plat_ticks24(), us;
+    int rc = plat_data_write(off, src, n);
+    us = US(plat_ticks24() - t0);
+    pf.flash_n++;
+    if (us > pf.flash_max)
+        pf.flash_max = us;
+    return rc;
+}
+
 static void ring_drop(void)
 {
     static uint8_t head[16];
@@ -430,7 +445,7 @@ static void ring_drop(void)
     wr32(head + 4, 0);
     wr32(head + 8, ring.at);
     wr32(head + 12, 0);
-    ring.fill[ring.to] = plat_data_write(ring_off(ring.to) + ring.to_at, head, sizeof head) == 0
+    ring.fill[ring.to] = ring_write(ring_off(ring.to) + ring.to_at, head, sizeof head) == 0
         ? ring.to_at + used : RING_FULL;
     ring.to = -1;
 }
@@ -462,7 +477,7 @@ static void ring_step(void)
             for (k = 0; k < n; k++)
                 page[k] = ring_src[ring.at + k];
             ring.crc = crc32_run(ring.crc, page, n);
-            if (plat_data_write(off + RING_BODY + ring.at, page, n) != 0) {
+            if (ring_write(off + RING_BODY + ring.at, page, n) != 0) {
                 ring.at += n;                    /* (a failed write: given up, the save tried anew) */
                 ring_drop();
                 return;
@@ -477,7 +492,7 @@ static void ring_step(void)
             wr32(head + 8, ring.len);
             wr32(head + 12, ~ring.crc);
             ring.fill[ring.to] = ring.to_at + RING_BODY + ring_pages(ring.len);
-            if (plat_data_write(off, head, sizeof head) == 0) {
+            if (ring_write(off, head, sizeof head) == 0) {
                 const uint8_t *h = plat_data(off);
                 if (h && rd32(h) == RING_MAGIC && rd32(h + 8) == ring.len
                     && crc32_of(h + RING_BODY, ring.len) == rd32(h + 12)) {
@@ -536,6 +551,7 @@ void app_init(void)
     uint32_t size;
     int n;
     h1_init(44100);
+    h1_stage_clock(plat_ticks24);                           /* (the PERF line's STAGE) */
     h1_while_drawing(send_some);
     h1_midi_out(midi_send);
     h1_usb_host_fn(usb_host);
@@ -661,11 +677,13 @@ static char *say_num(char *d, char *end, uint32_t v)
 
 static void say_perf(void)
 {
-    char t[176], *d, *end = t + sizeof t - 1;
-    uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am;
+    char t[241], *d, *end = t + sizeof t - 1;
+    uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am, stg[H1_NSTG], stg_total;
+    int k;
     f = plat_lock();
     nb = pf_blocks; au = pf_audio; am = pf_audio_max;
     pf_blocks = pf_audio = pf_audio_max = 0;
+    stg_total = h1_stages(stg);
     plat_unlock(f);
     d = say_cat(t, end, "PERF. FPS ");
     d = say_num(d, end, ms ? (pf.frames * 1000u + ms / 2u) / ms : 0u);
@@ -706,10 +724,21 @@ static void say_perf(void)
     /* the cores making the sound, then: with two, how deep the second's stack has gone; with one, why
      * (plat_cpu2_gave_up) */
     d = say_cat(d, end, plat_cpu2_on() ? ". CORES 2 " : ". CORES 1 ");
-    say_num(d, end, plat_cpu2_on() ? plat_cpu2_stack() : (uint32_t)plat_cpu2_gave_up());
+    d = say_num(d, end, plat_cpu2_on() ? plat_cpu2_stack() : (uint32_t)plat_cpu2_gave_up());
 #endif
+    if (stg_total) {                                        /* the slowest render, stage by stage (h1_stages) */
+        d = say_cat(d, end, ". STAGE");
+        for (k = 0; k < H1_NSTG; k++) {
+            d = say_cat(d, end, " ");
+            d = say_num(d, end, (US(stg[k]) * 100u + pf_block_us / 2u) / pf_block_us);
+        }
+    }
+    d = say_cat(d, end, ". FLASH ");                        /* the tape's flash writes, and the longest (us) */
+    d = say_num(d, end, pf.flash_n);
+    d = say_cat(d, end, " ");
+    say_num(d, end, pf.flash_max);
     ann_say(t, 0, ANN_NOW);
-    pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = 0;
+    pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = pf.flash_n = pf.flash_max = 0;
     pf.since_ms = plat_ms();
 }
 

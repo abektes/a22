@@ -44,6 +44,13 @@ said HOME
 midi B0 77 01
 wait 100
 said PERF. FPS
+# and (0.6.0) the slowest render split by stage, and the tape's flash writes (none yet)
+midi B0 77 01
+wait 100
+said . STAGE
+midi B0 77 01
+wait 100
+said . FLASH 0 0
 # SAVE writes the settings, and a restart keeps them
 tap SAVE
 wait 200
