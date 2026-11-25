@@ -49,3 +49,33 @@ expect_out USB B0 7B 00
 expect_out USB B1 7B 00
 expect_out USB B2 7B 00
 expect_out USB B3 7B 00
+out
+# The tape playing, the port turned host for a keyboard: it gets no clock, Start or Stop
+tap PLAY
+wait 200
+out
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+expect usbh >0
+usbh plug Keys_49 both
+wait 400
+out
+wait 1000
+expect_no_out USBH F8 00 00
+expect_no_out USBH FA 00 00
+# back to the computer while the tape plays: Stop and Start for it when the tape comes round to IN
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+expect usbh 0
+out
+wait 9000
+expect_out USB FC 00 00
+expect_out USB FA 00 00

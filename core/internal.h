@@ -320,6 +320,7 @@ void eng_post(int type, int a);
 void eng_post_note(int on, int note, int vel, int from_midi);
 void eng_post_auto(int knob, int val);
 void eng_post_auto_in(int knob, int val);  /* the same, set over MIDI in: on the tape, never sent back out */
+void eng_midi_resync(void);              /* a new listener on MIDI out: Stop and Start at the next loop start */
 extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
 
 const uint8_t *eng_loop_blob(uint32_t *size);

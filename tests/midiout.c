@@ -543,6 +543,75 @@ static void host_mode_sends_no_clock(void)
     h1_usb_host_fn(0);
 }
 
+/* A computer that connects while the tape plays (or the port back from USB host) gets Start when the tape next
+ * comes round to IN, the clock in step from there: mid-bar, a Start would put its bar 1 in the wrong place
+ * (found in code review: it got no Start until the next PLAY) */
+static void resync_starts_at_next_loop(void)
+{
+    int bad;
+    fresh();
+    st.seq[1] = 2;                               /* 4 bars at 118: 8.1 s a pass */
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    go(2000);
+    nrt = 0;
+    nmo = 0;
+    h1_midi_resync();
+    go(1000);
+    CHECK(nrt == 0, "connected mid-bar: no Start yet");
+    go(5500);                                    /* round to IN */
+    CHECK(nrt == 2 && rt_seq[0] == 0xFC && rt_seq[1] == 0xFA, "Start when the tape comes round to IN");
+    CHECK(first_on(0) >= 0 && rt_at[1] <= first_on(0), "before the note at IN");
+    bad = clock_follows_tape(1500, 1536.0f);
+    CHECK(bad == 0, "the clock in step with the tape from there");
+    go(9000);
+    CHECK(nrt == 2, "once");
+}
+static void resync_stopped_does_nothing(void)
+{
+    fresh();
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);                            /* stopped */
+    go(100);
+    nrt = 0;
+    h1_midi_resync();
+    go(500);
+    tap(H1_BTN_PLAY);
+    go(9000);
+    CHECK(nrt == 1 && rt_seq[0] == 0xFA, "stopped when connected: the next PLAY's Start, nothing more");
+}
+static void resync_step_pattern(void)
+{
+    fresh();
+    st.seq[0] = SEQ_STEP;
+    memset(st.steps, 0, sizeof st.steps);
+    st.steps[0][0] = 61;
+    tap(H1_BTN_PLAY);
+    go(1000);
+    nrt = 0;
+    h1_midi_resync();
+    go(9000);                                    /* (the 64-step pattern: 8.1 s) */
+    CHECK(nrt == 2 && rt_seq[0] == 0xFC && rt_seq[1] == 0xFA, "the step pattern: Start when it comes round");
+}
+static void host_back_to_computer_while_playing(void)
+{
+    fresh();
+    h1_usb_host_fn(usb_fn);
+    usb_swap();                                  /* USB host */
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    go(1000);
+    usb_swap();                                  /* back to the computer, the tape playing */
+    rt_reset();
+    go(9000);
+    CHECK(nrt >= 1 && rt_seq[nrt - 1] == 0xFA, "back from USB host while it plays: Start when the tape comes round");
+    h1_usb_host_fn(0);
+}
+
 int main(void)
 {
     keys_on_t2();
@@ -568,6 +637,10 @@ int main(void)
     tape_keeps_with_clock(5, 120, TAPE_SPD_REV, 5);
     start_stop_edges();
     host_mode_sends_no_clock();
+    resync_starts_at_next_loop();
+    resync_stopped_does_nothing();
+    resync_step_pattern();
+    host_back_to_computer_while_playing();
     h1_midi_out(0);
     printf("midiout: %d checks, %d failed\n", checks, fails);
     return fails != 0;

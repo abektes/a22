@@ -1033,6 +1033,17 @@ static void click_run(f32 pos, int sound)
 static int32_t tp_i;
 static f32 tp_f, tp_last = -1.0f;
 static int clk_jump;                             /* the tape jumped to IN while it plays: MIDI clock restarts */
+static volatile int clk_resync;                  /* a new listener: restart it when the tape next comes round */
+void eng_midi_resync(void) { clk_resync = 1; }
+static f32 clk_from = -1.0f;                     /* ticks the tape is past its start at a Start from clock_round */
+static void clock_round(f32 since)               /* the tape or the step pattern back at its start, SINCE ticks ago */
+{
+    if (clk_resync) {
+        clk_resync = 0;
+        clk_jump = 1;
+        clk_from = since;
+    }
+}
 static void tp_take(f32 at)
 {
     tp_i = (int32_t)at;                          /* (at >= 0) */
@@ -1078,6 +1089,7 @@ static void tape_tick(f32 dticks)
             tp_i += (int32_t)(out_t - in_t);     /* (whole bars of whole ticks) */
             b = (f32)tp_i + tp_f;
             tape_release_seq();
+            clock_round(out_t - b);
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
             if (s == LOOP_REC) { loop_state = LOOP_PLAY; rec_forget(); track_snap_live(cur_trk); }
             click_at = -1;
@@ -1091,6 +1103,7 @@ static void tape_tick(f32 dticks)
             tp_i -= (int32_t)(out_t - in_t);
             b = (f32)tp_i + tp_f;
             tape_release_seq();
+            clock_round(b - in_t);
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
             if (s == LOOP_REC) { loop_state = LOOP_PLAY; rec_forget(); track_snap_live(cur_trk); }
             click_at = -1;
@@ -1343,7 +1356,7 @@ static void step_tick(f32 dticks)
         int at = step_at;
         step_acc = at >= n ? 0.0f : step_acc - step_len(at);
         at = at + 1 >= n ? 0 : at + 1;
-        if (at == 0) click_at = -1;
+        if (at == 0) { click_at = -1; clock_round(step_acc); }
         step_at = at;
         step_fire(at, step_len(at) * 0.85f);
     }
@@ -2004,7 +2017,7 @@ uint32_t eng_stages(uint32_t out[H1_NSTG])
  * can follow A22's tempo; Start when the tape or the step pattern starts, Stop when it stops. The tape's SPEED and
  * SWING don't touch it. A clock is at most one control block late (32 samples). */
 static f32 clk_acc;
-static int xport_was;
+static int xport_was, clk_started;
 static int xport_running(void)
 {
     if (st.seq[0] == SEQ_STEP)
@@ -2035,6 +2048,7 @@ static int clock_edge(void)
     if (run) {                                   /* Start, and the clock that is the first beat's first */
         if (fn) { fn(0xFAu, 0, 0); fn(0xF8u, 0, 0); }
         clk_acc = 0.0f;
+        clk_started = 1;
         return 1;
     }
     if (fn) fn(0xFCu, 0, 0);
@@ -2043,9 +2057,17 @@ static int clock_edge(void)
 static void clock_tick(f32 dticks)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = rt_fn();
-    (void)clock_edge();                          /* (a Start here or from a note earlier in the block: the tape has
-                                                  *  moved this block's ticks from IN either way, and so does the clock) */
-    clk_acc += dticks;
+    if (clk_resync && !xport_running())
+        clk_resync = 0;                          /* (stopped: the next Start is the DAW's anyway) */
+    (void)clock_edge();
+    if (clk_started) {                           /* a Start this block, here or from a note before: the clock is where
+                                                  * the tape is, this block's ticks past IN (from PLAY, a take's first
+                                                  * key, a jump), or as far as it went past it when it came round */
+        clk_started = 0;
+        clk_acc = clk_from >= 0.0f ? clk_from : dticks;
+    } else
+        clk_acc += dticks;
+    clk_from = -1.0f;                            /* (only ever for this block's Start) */
     while (clk_acc >= 4.0f) {
         clk_acc -= 4.0f;
         if (fn) fn(0xF8u, 0, 0);
@@ -2380,7 +2402,8 @@ SMALL void eng_init(uint32_t sample_rate)
     nlev = nclip = 0;
     rec_forget();
     clk_acc = 0.0f;                              /* (stopped, no Start owed; no note's channel kept) */
-    xport_was = clk_jump = 0;
+    xport_was = clk_jump = clk_resync = clk_started = 0;
+    clk_from = -1.0f;
     for (i = 0; i < 128; i++) live_chs[i] = 0;
     for (i = 0; i < NTRACK * 16; i++) tape_open[i >> 4][i & 15] = 0;
     tp_last = -1.0f;

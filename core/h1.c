@@ -443,3 +443,4 @@ int h1_quiet(void) { return eng_quiet(); }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && !eng_loop_taking(); }
 void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2)) { eng_midi_fn = fn; }
+void h1_midi_resync(void) { eng_midi_resync(); }

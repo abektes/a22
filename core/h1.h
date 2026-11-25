@@ -34,6 +34,10 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);   /* MIDI in: notes with t
  * Start (0xFA) and Stop (0xFC) as the tape or the step pattern starts and stops. Never what came in over MIDI. The notes are sent from inside h1_render, the
  * knobs from h1_encoder (the main loop): fn must be safe from both. NULL: nothing is sent (the default). */
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2));
+/* A new listener on MIDI out (a computer just connected, or the port back from USB host): if the tape or the step
+ * pattern is playing, it is sent Stop and Start when that next comes round to its start, with the clock in step
+ * from there, so it can follow from bar 1. Safe from the main loop. */
+void h1_midi_resync(void);
 void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame. The
                                                   * core shows it (a ring while it turns) and, with EDIT held,
                                                   * takes it as the volume of the instrument in hand */

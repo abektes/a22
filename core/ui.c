@@ -882,6 +882,8 @@ static void holds(void)
         if (usb_fn) {
             usb_host = !usb_host;
             usb_fn(usb_host);
+            if (!usb_host)
+                eng_midi_resync();               /* (the computer again: Start for it when the tape comes round) */
             toast(usb_host ? "USB HOST" : "USB COMPUTER", 0, 0, 0, -1);
         } else toast("NO USB HOST", 0, 0, 0, -1);
     }

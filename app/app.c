@@ -182,6 +182,12 @@ static void usb_tell(const char *s)             /* on the screen, and to the rea
 static void usb_news(void)
 {
     static int host_was;
+    static uint32_t link_was;
+    if (plat_midi_out_link() != link_was) {      /* a new USB connection: a DAW that joins while the tape plays gets
+                                                  * Stop and Start when it next comes round (h1_midi_resync) */
+        link_was = plat_midi_out_link();
+        h1_midi_resync();
+    }
     if (h1_usb_host() != host_was) {             /* (the core's own toast says it on the screen) */
         host_was = h1_usb_host();
         if (ann_on())
