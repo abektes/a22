@@ -154,6 +154,47 @@ static void arp_across_track_change(void)
     CHECK(balanced(), "the arpeggiator's notes end on the channel they began on");
 }
 
+/* The same pitch live on two channels at once: T1's key still held when T2's arpeggiator or Riff plays it
+ * (found in review: one channel kept a note, and the other's note was cut) */
+static void same_pitch_from_arp_on_two_channels(void)
+{
+    fresh();
+    h1_key(19, 1);                               /* C5 (72) held on T1, no arpeggiator */
+    go(100);
+    track(+1);
+    st.ip[st.inst].arp[0] = ARP_UP;              /* T2's arpeggiator over two octaves: 60, 72, ... */
+    st.ip[st.inst].arp[2] = 2;
+    h1_key(7, 1);
+    go(1200);
+    h1_key(19, 0);
+    go(100);
+    h1_key(7, 0);
+    go(500);
+    CHECK(mo_n(0x91, 72) > 0, "T2's arpeggiator played 72 on channel 2");
+    CHECK(balanced(), "T1's held 72 still ends on channel 1");
+}
+
+static void same_pitch_from_riff_on_two_channels(void)
+{
+    fresh();
+    h1_key(7, 1);                                /* C4 (60) held on T1 */
+    go(100);
+    track(+1);
+    st.ip[st.inst].arp[0] = ARP_RIFF;            /* T2's riff from 55: 55, 60 */
+    st.riff_root = 55;
+    st.riff[0] = 56;
+    st.riff[1] = 61;
+    st.riff_len = 2;
+    h1_key(2, 1);
+    go(1200);
+    h1_key(7, 0);
+    go(100);
+    h1_key(2, 0);
+    go(500);
+    CHECK(mo_n(0x91, 60) > 0, "T2's riff played 60 on channel 2");
+    CHECK(balanced(), "T1's held 60 still ends on channel 1");
+}
+
 static void tape_tracks_on_their_channels(void)
 {
     fresh();
@@ -296,6 +337,8 @@ int main(void)
     keys_on_t2();
     key_held_across_track_change();
     arp_across_track_change();
+    same_pitch_from_arp_on_two_channels();
+    same_pitch_from_riff_on_two_channels();
     tape_tracks_on_their_channels();
     step_notes_on_their_track();
     knob_cc_on_track_channel();

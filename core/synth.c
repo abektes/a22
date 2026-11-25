@@ -126,15 +126,28 @@ static void mout_trk(int trk, int on, int note, int vel)
 }
 
 /* What the hand plays (keys, chords, the arpeggiator, Riff, Shake) goes out on the track in hand's channel, and a
- * note's off on the channel its on went out on: a track changed while it sounds, it still ends in the DAW. */
-static uint8_t live_ch[128];
+ * note's off on every channel it went out on since its last off: a track changed while it sounds, or the same note
+ * started on another track meanwhile (T1's key held, T2's arpeggiator on it), it still ends in the DAW. (The sound
+ * does the same: a live note's off ends it on every track.) Nothing open: the off goes on the track in hand's. */
+static uint8_t live_chs[128];                   /* bit t: open on track t's channel */
 static void mout_live(int on, int note, int vel)
 {
+    int t;
     if (note < 0 || note > 127)
         return;
-    if (on)
-        live_ch[note] = (uint8_t)cur_trk;
-    mout_trk(live_ch[note], on, note, vel);
+    if (on) {
+        live_chs[note] |= (uint8_t)(1u << cur_trk);
+        mout_trk(cur_trk, 1, note, vel);
+        return;
+    }
+    if (!live_chs[note]) {
+        mout_trk(cur_trk, 0, note, 0);
+        return;
+    }
+    for (t = 0; t < NTRACK; t++)
+        if (live_chs[note] >> t & 1u)
+            mout_trk(t, 0, note, 0);
+    live_chs[note] = 0;
 }
 
 void dsp_init(void)
@@ -2300,7 +2313,7 @@ SMALL void eng_init(uint32_t sample_rate)
     rec_forget();
     clk_acc = 0.0f;                              /* (stopped, no Start owed; no note's channel kept) */
     xport_was = 0;
-    for (i = 0; i < 128; i++) live_ch[i] = 0;
+    for (i = 0; i < 128; i++) live_chs[i] = 0;
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());
     for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = midi_down[i] = 0;
