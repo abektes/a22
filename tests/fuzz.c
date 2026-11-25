@@ -158,7 +158,20 @@ static void frame(uint32_t ms, int with_sound)
 static void poke(int with_sound)
 {
     int r = below(100), k;
-    if (r < 30) {                                            /* a key */
+    if (r < 4) {                                             /* FX held and a snapshot key (a punch), or both let go */
+        static const uint8_t SK[8] = {0, 2, 4, 6, 7, 9, 11, 12};
+        if (!(btns_down >> H1_BTN_FX & 1u)) {
+            btns_down |= 1u << H1_BTN_FX;
+            h1_button(H1_BTN_FX, 1);
+        }
+        k = SK[below(8)];
+        keys_down ^= 1u << k;
+        h1_key(k, (int)(keys_down >> k & 1u));
+        if (below(3) == 0) {
+            btns_down &= ~(1u << H1_BTN_FX);
+            h1_button(H1_BTN_FX, 0);
+        }
+    } else if (r < 30) {                                     /* a key */
         k = below(H1_NKEYS);
         keys_down ^= 1u << k;
         h1_key(k, (int)(keys_down >> k & 1u));
@@ -344,6 +357,17 @@ static void part_state(int rounds)
                 for (j = 0; j < (ln - 12u) / 8u; j++)        /* e[7] of each event: a valid key, or any byte */
                     if (below(2))
                         lp[3 + 12u + j * 8u + 7u] = below(2) ? (uint8_t)(0x80 | below(8) << 4 | below(12)) : (uint8_t)rnd();
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* a third of the events punches (kind 3) in the tail:
+                                                              * ticks in [15360, 30720), some outside it (junk) */
+                    if (below(3) == 0) {
+                        uint32_t tk = below(5) ? 15360u + (uint32_t)below(15360) : (uint32_t)below(65536);
+                        lp[3 + 12u + j * 8u] = (uint8_t)tk;
+                        lp[3 + 12u + j * 8u + 1u] = (uint8_t)(tk >> 8);
+                        lp[3 + 12u + j * 8u + 2u] = (uint8_t)(below(4) ? below(8) : below(256));      /* d1: the punch */
+                        lp[3 + 12u + j * 8u + 3u] = (uint8_t)(3u | (below(4) == 0 ? 0x18u : 0u) | (below(8) == 0 ? 0x80u : 0u));
+                        lp[3 + 12u + j * 8u + 6u] = (uint8_t)(below(4) ? below(2) : below(256));      /* d2: start or end */
+                    }
             if (below(8) == 0)
                 lp[3 + (uint32_t)below((int)ln)] ^= (uint8_t)(1u << below(8));
             if (h1_loop_load(lp + 3, below(4) ? ln : ln - (uint32_t)below(9)) == 0)

@@ -56,6 +56,8 @@ out=app/build/host
 "$out/a22_host" tests/midiclock.txt "$out"
 # KEY FOLLOW: MIX -> KEY turns T1 on (said), a take on T1 plays back two semitones up after ROOT goes up 2
 "$out/a22_host" tests/keyfollow.txt "$out"
+# PUNCH: hold FX and a snapshot key (said PUNCH, then the name; no note, no FX page), a second key replaces the first
+"$out/a22_host" tests/punch.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host

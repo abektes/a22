@@ -1,0 +1,50 @@
+# PUNCH in fm1-base's host simulator: the device app, the platform simulated.
+#   ./build.sh --host, then app/build/host/a22_host tests/punch.txt app/build/host
+# Hold FX and a snapshot key (the eight white keys from the lowest F: keys 0 2 4 6 7 9 11 12) and the reader says
+# PUNCH, then the punch's name; the key plays no note, any other key does; FX let go after a punch opens no page.
+# (key 4 is note 57 = 39, key 1 is 54 = 36; A22 plays panel keys at 127 = 7F.) Never presses SAVE.
+wait 600
+listen
+# FX tapped alone: its page opens as it is let go
+tap FX
+wait 300
+said PAGE
+tap HOME
+wait 300
+said HOME
+# FX held: the strip is up, and the reader says so
+out
+press FX
+wait 300
+said PUNCH
+# a snapshot key is a punch: the third, ST 1/16. It plays no note
+key 4 down
+wait 300
+said ST 1/16
+expect_no_out USB 90 39 7F
+# a key that is no punch plays its note, the punch holds on
+key 1 down
+wait 300
+key 1 up
+wait 100
+expect_out USB 90 36 7F
+# a second punch key replaces the first: the seventh, CRUSH
+key 11 down
+wait 300
+said CRUSH
+key 11 up
+wait 100
+# FX let go with a punch held: no page opens (and the first key still holds, so its punch goes on)
+release FX
+wait 300
+unsaid PAGE
+key 4 up
+wait 300
+unsaid PAGE
+where
+wait 100
+said HOME
+# FX tapped alone again: the page opens, as before
+tap FX
+wait 300
+said PAGE

@@ -63,6 +63,16 @@ track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix
 
 The master bus has its own three-band EQ and drive (the MIX page's last subpage).
 
+**PUNCH.** Hold FX and one of the eight white keys from the lowest F, and a punch hits the whole mix for as long as
+you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (opens from a dull sound over
+a bar), 6 HPF (the same from the bottom), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
+replaces the first, and the key holds its punch even after FX is let go. A strip along the bottom of the screen
+shows the eight, the one held lit, and the screen reader says PUNCH, then the punch's name. FX tapped alone opens the
+FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is
+recorded on the track in hand and plays back on the whole mix (not on a muted track); CUT, PASTE and clear treat
+it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A punch you hold by hand wins
+over the tape's. Punches do not go out over MIDI. A tape with punches loaded into 0.6.0 plays without them.
+
 ## Pages
 
 <p>
@@ -153,7 +163,8 @@ MONO is monophonic and plays the chord's root alone. A chord takes a voice a not
 | KNOB 1–4 | Home screen: the engine's four knobs. On a page: its four columns. On the MIX volume subpage with EDIT held: mute T1 to T4 |
 | SELECT | Home screen: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
 | MASTER | Volume of everything. **Hold EDIT:** the track's volume |
-| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back |
+| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back. FX opens its page when you let go, unless you played a punch |
+| hold FX + white key 1–8 | A punch on the whole mix while the key is held (see Effects). The keys are the eight white keys from the lowest F; other keys play notes. SAVE and EDIT do nothing while FX is held |
 | EDIT | Pins the knob strip on the home screen. Writing steps or Riff: a rest |
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
