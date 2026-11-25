@@ -14,6 +14,12 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   that starts it) and Stop as it stops. The FM-1 sends the clock, Start and Stop ahead of notes and knobs when
   the USB queue is busy, as it does note-offs.
 
+**The tape's timing**
+- The tape keeps its place in whole ticks and a fraction. Added up in one float, it lost a little of every 0.7 ms
+  far into a long tape, and a 32-bar tape came round up to 7 MIDI clocks (about 150 ms at 120) off the clock in five
+  passes. It now keeps to the clock pass after pass, at every SPEED and in REV. Notes on a long tape land a fraction
+  of a tick from where 0.6.0 put them.
+
 ## 0.6.0
 
 Identity `FM-1_4122000600`. Released 2026-11-25. More room for the audio in a dense loop jam

@@ -44,8 +44,11 @@ static int nmo;
 static int rt_n[8], rt_seq[64], rt_at[64], nrt; /* real time: counts by status - 0xF8, and Start / Stop in order,
                                                   * with how many other messages had gone out before each */
 static void rt_reset(void) { memset(rt_n, 0, sizeof rt_n); nrt = 0; }
+static int stamp[64], nstamp, stamping;         /* the clock count at each note-on of note 60, while stamping */
 static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
 {
+    if (stamping && s == 0x90 && a == 60 && b && nstamp < 64)
+        stamp[nstamp++] = rt_n[0];
     if (s >= 0xF8) {
         rt_n[s - 0xF8]++;
         if (s != 0xF8 && nrt < 64) {
@@ -311,6 +314,43 @@ static void clock_per_bar(void)
     CHECK(nrt == 0, "and no Start or Stop while nothing plays");
 }
 
+/* The tape and the clock keep together: pass after pass, the same note of the tape comes the same number of clocks
+ * later, a bar's 96 each bar (found in review: a 32-bar tape slipped 7 clocks in five passes) */
+static void go_fast(int msec)                    /* (the sound only, no pictures) */
+{
+    static int32_t out[512];
+    int blocks = msec * 441 / 2560 + 1, i;
+    for (i = 0; i < blocks; i++)
+        h1_render(out, 256);
+}
+static void tape_keeps_with_clock(int bars_log2, int bpm, int speed, int passes)
+{
+    static const char *const SPD[4] = {"0.5X", "1X", "2X", "REV"};
+    int k, worst = 0, bars = 1 << bars_log2;
+    int pass = speed == TAPE_SPD_HALF ? bars * 192 : speed == TAPE_SPD_2X ? bars * 48 : bars * 96;   /* clocks */
+    char what[112];
+    fresh();
+    st.glo[0] = (uint8_t)bpm;
+    st.seq[1] = (uint8_t)bars_log2;
+    go(50);
+    tap(H1_BTN_REC);
+    note(7, 100);                                /* one note at the tape's start */
+    tap(H1_BTN_REC);
+    st.tape[0] = (uint8_t)speed;
+    nstamp = 0;
+    stamping = 1;
+    go_fast(pass * (passes + 1) / bpm * 2500 + 500);           /* (a clock: 2500 / bpm ms) */
+    stamping = 0;
+    for (k = 1; k < nstamp; k++) {
+        int off = stamp[k] - stamp[0] - k * pass;
+        if (off < 0) off = -off;
+        if (off > worst) worst = off;
+    }
+    snprintf(what, sizeof what, "%d bars at %d, %s: %d passes, the tape within a clock of the clock (off by %d)",
+             bars, bpm, SPD[speed & 3], nstamp - 1, worst);
+    CHECK(nstamp >= passes && worst <= 1, what);
+}
+
 static void clock_ignores_speed(void)
 {
     fresh();
@@ -378,6 +418,11 @@ int main(void)
     t1_unchanged();
     clock_per_bar();
     clock_ignores_speed();
+    tape_keeps_with_clock(5, 120, TAPE_SPD_1X, 5);
+    tape_keeps_with_clock(4, 173, TAPE_SPD_1X, 11);
+    tape_keeps_with_clock(5, 120, TAPE_SPD_2X, 10);
+    tape_keeps_with_clock(4, 173, TAPE_SPD_HALF, 5);
+    tape_keeps_with_clock(5, 120, TAPE_SPD_REV, 5);
     start_stop_edges();
     h1_midi_out(0);
     printf("midiout: %d checks, %d failed\n", checks, fails);

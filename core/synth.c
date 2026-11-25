@@ -1021,6 +1021,25 @@ static void click_run(f32 pos, int sound)
     click_at = e;
 }
 
+/* Where the tape is, in whole ticks and a fraction: added up in one float, loop_pos lost a little of every block's
+ * ticks far into a long tape (a float near 12,288 keeps three decimals), and a 32-bar tape came round 7 clocks off
+ * MIDI clock in five passes. loop_pos is still what the rest reads and sets; a new value there is taken up here. */
+static int32_t tp_i;
+static f32 tp_f, tp_last = -1.0f;
+static void tp_take(f32 at)
+{
+    tp_i = (int32_t)at;                          /* (at >= 0) */
+    tp_f = at - (f32)tp_i;
+    tp_last = at;
+}
+static f32 tp_move(f32 d)                        /* + forwards, - backwards: where it is now */
+{
+    tp_f += d;
+    while (tp_f >= 1.0f) { tp_f -= 1.0f; tp_i++; }
+    while (tp_f < 0.0f) { tp_f += 1.0f; tp_i--; }
+    return (f32)tp_i + tp_f;
+}
+
 static void tape_tick(f32 dticks)
 {
     f32 in_t, out_t, a, b;
@@ -1041,12 +1060,15 @@ static void tape_tick(f32 dticks)
         a = rev ? out_t : in_t;
         click_at = -1;
     }
+    if (a != tp_last)
+        tp_take(a);
     if (rev) {
-        b = a - dticks;
+        b = tp_move(-dticks);
         if (s != LOOP_REC) tape_play_rev(a, maxf(in_t, b));
         click_run(maxf(0.0f, b), s == LOOP_PLAY ? click_mode() == CLICK_ON : click_mode() != CLICK_OFF);
         if (b < in_t) {
-            b += (out_t - in_t);
+            tp_i += (int32_t)(out_t - in_t);     /* (whole bars of whole ticks) */
+            b = (f32)tp_i + tp_f;
             tape_release_seq();
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
             if (s == LOOP_REC) { loop_state = LOOP_PLAY; rec_forget(); track_snap_live(cur_trk); }
@@ -1054,11 +1076,12 @@ static void tape_tick(f32 dticks)
             tape_play_rev(out_t, b);             /* (a take just closed too: its first note is there) */
         }
     } else {
-        b = a + dticks;
+        b = tp_move(dticks);
         if (s != LOOP_REC) tape_play_fwd(a, minf(out_t, b));
         click_run(b, s == LOOP_PLAY ? click_mode() == CLICK_ON : click_mode() != CLICK_OFF);
         if (b >= out_t) {
-            b -= (out_t - in_t);
+            tp_i -= (int32_t)(out_t - in_t);
+            b = (f32)tp_i + tp_f;
             tape_release_seq();
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
             if (s == LOOP_REC) { loop_state = LOOP_PLAY; rec_forget(); track_snap_live(cur_trk); }
@@ -1068,6 +1091,7 @@ static void tape_tick(f32 dticks)
         }
     }
     loop_pos = b;
+    tp_last = b;
 }
 
 static void tape_record_note(int note, int on, int vel)
@@ -2339,6 +2363,7 @@ SMALL void eng_init(uint32_t sample_rate)
     xport_was = 0;
     for (i = 0; i < 128; i++) live_chs[i] = 0;
     for (i = 0; i < NTRACK * 16; i++) tape_open[i >> 4][i & 15] = 0;
+    tp_last = -1.0f;
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());
     for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = midi_down[i] = 0;
