@@ -634,6 +634,140 @@ static void key_subpage(void)
     CHECK(st.trk[1].rsv == 1, "ON is the top");
 }
 
+/* ---- the step pattern's key ---- */
+static int ons(int n)                            /* note-ons of N on any channel */
+{
+    int c, k = 0;
+    for (c = 0; c < 16; c++) k += mo_n((uint8_t)(0x90 | c), n);
+    return k;
+}
+static void to_step(void)
+{
+    h1_button(H1_BTN_SEQ, 1); go(800); h1_button(H1_BTN_SEQ, 0); go(50);
+}
+static void write_step(int key)                  /* REC, one key, REC: a step at the cursor (which moves on) */
+{
+    tap(H1_BTN_REC);
+    note(key, 60);
+    tap(H1_BTN_REC);
+}
+static void play_steps(void)                     /* one pass of the pattern, notes out collected */
+{
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    go(700);
+    tap(H1_BTN_PLAY);
+    go(300);
+}
+
+static void step_key_set_on_first_write(void)
+{
+    fresh();
+    to_step();
+    st.keys[0] = 4;                              /* ROOT E */
+    st.keys[1] = 2;                              /* MINOR */
+    CHECK(st.rsv[0] == 0, "an empty pattern has no key");
+    write_step(7);
+    CHECK(st.rsv[0] == key_byte(4, 2), "the first step sets the pattern's key to GLO's");
+}
+
+static void step_follows(void)
+{
+    fresh();
+    to_step();
+    st.trk[0].rsv = 1;
+    st.keys[0] = 0; st.keys[1] = 1;
+    write_step(7);                               /* C (60) */
+    CHECK(st.steps[0][0] == 61, "written in the pattern's own key: as played");
+    play_steps();
+    CHECK(ons(60) >= 1 && exact(), "KEY on: plays C in C major");
+    st.keys[0] = 2;                              /* ROOT D */
+    play_steps();
+    CHECK(ons(62) >= 1 && ons(60) == 0 && exact(), "ROOT moves to D: the step's note moves to D");
+}
+
+static void step_written_in_other_key_stored_mapped(void)
+{
+    fresh();
+    to_step();
+    st.trk[0].rsv = 1;
+    st.keys[0] = 0; st.keys[1] = 1;
+    write_step(7);                               /* the pattern's key: C major */
+    st.keys[0] = 2;                              /* ROOT D */
+    write_step(9);                               /* D (62), into step 1 */
+    CHECK(st.rsv[0] == key_byte(0, 1), "the pattern keeps its key");
+    CHECK(st.steps[1][0] == 61, "D played in D major is stored as C (60)");
+    st.keys[0] = 0;
+    play_steps();
+    CHECK(ons(60) >= 1 && ons(62) == 0 && exact(), "back in C major it plays 60");
+    st.keys[0] = 2;
+    play_steps();
+    CHECK(ons(62) >= 1 && ons(60) == 0 && exact(), "in D it plays 62");
+}
+
+static void step_key_off_stored_as_played(void)
+{
+    fresh();
+    to_step();
+    st.trk[0].rsv = 0;
+    st.keys[0] = 0; st.keys[1] = 1;
+    write_step(7);
+    st.keys[0] = 2;
+    write_step(9);
+    CHECK(st.steps[1][0] == 63, "KEY off: stored as played (62)");
+    st.keys[0] = 5;
+    play_steps();
+    CHECK(ons(62) >= 1 && ons(60) >= 1 && exact(), "KEY off: plays as stored whatever ROOT is");
+}
+
+static void step_mapping_uses_step_track(void)
+{
+    fresh();
+    to_step();
+    st.trk[1].rsv = 1;
+    st.keys[0] = 0; st.keys[1] = 1;
+    track(1);                                    /* T2, KEY on */
+    write_step(7);                               /* C (60) */
+    CHECK(st.step_trk[0][0] == 1, "the step is on T2");
+    track(-1);                                   /* T1, KEY off, in hand */
+    st.keys[0] = 5;                              /* ROOT F */
+    play_steps();
+    CHECK(ons(65) >= 1 && ons(60) == 0 && exact(), "T2's step moves with ROOT though T1 is in hand");
+    st.keys[0] = 0;
+    write_step(9);                               /* on T1, KEY off: as played (62), into step 1 */
+    CHECK(st.steps[1][0] == 63 && st.step_trk[1][0] == 0, "a step on T1 (KEY off) is stored as played");
+    st.keys[0] = 5;
+    play_steps();
+    CHECK(ons(62) >= 1 && ons(65) >= 1 && exact(), "T1's stays as written, T2's moved");
+}
+
+static void step_from_060(void)
+{
+    fresh();
+    to_step();
+    st.steps[3][0] = 61;
+    st.step_trk[3][0] = 0;
+    st.step_vel[3][0] = 100;
+    st.rsv[0] = 0;
+    st.keys[0] = 2; st.keys[1] = 1;
+    write_step(9);
+    CHECK(st.rsv[0] == key_byte(2, 1), "the next write sets the key");
+    CHECK(st.steps[3][0] == 61, "the earlier step is untouched, and reads as in that key");
+}
+
+static void clear_all_clears_key(void)
+{
+    fresh();
+    to_step();
+    st.keys[0] = 0; st.keys[1] = 1;
+    write_step(7);
+    CHECK(st.rsv[0] != 0, "a key is set");
+    h1_button(H1_BTN_REC, 1); go(3300); h1_button(H1_BTN_REC, 0); go(100);
+    CHECK(st.rsv[0] != 0 && st.steps[0][0] == 0, "clearing one track keeps the key");
+    tap(H1_BTN_REC);
+    CHECK(st.rsv[0] == 0, "CLEAR ALL clears the key");
+}
+
 int main(void)
 {
     recorded_notes_carry_key();
@@ -653,6 +787,13 @@ int main(void)
     shared_pitch();
     on_again();
     key_subpage();
+    step_key_set_on_first_write();
+    step_follows();
+    step_written_in_other_key_stored_mapped();
+    step_key_off_stored_as_played();
+    step_mapping_uses_step_track();
+    step_from_060();
+    clear_all_clears_key();
     h1_midi_out(0);
     printf("keyfollow: %d checks, %d failed\n", checks, fails);
     return fails != 0;

@@ -1360,6 +1360,8 @@ static void step_fire(int i, f32 len)
             int vel = st.step_vel[i][j] ? st.step_vel[i][j] : 120;
             if (!track_muted(trk)) {
                 int part = PART(st.trk[trk].inst, st.trk[trk].algo);
+                if (eng_follows(trk, part) && (st.rsv[0] & KEY_VALID))
+                    n = key_map(n, st.rsv[0], eng_key_play());
                 voice_on_ex(n, part, trk, 1, vel);
                 mout_trk(trk, 1, n, vel);
                 step_snd[step_nsnd] = (uint8_t)n;
@@ -1409,6 +1411,10 @@ static void step_put(int i, int note, int vel)
     int j;
     track_snap_live(cur_trk);
     saved_n++;
+    if (!(st.rsv[0] & KEY_VALID))                /* the pattern's key: GLO's at the first write */
+        st.rsv[0] = eng_key_glo();
+    if (eng_follows(cur_trk, live_part()))       /* a following track's note is stored in the pattern's key */
+        note = key_map(note, eng_key_glo(), st.rsv[0]);
     for (j = 0; j < NSNOTE; j++)
         if (st.steps[i][j] == note + 1 && st.step_trk[i][j] == cur_trk) {
             st.step_vel[i][j] = (uint8_t)iclamp(vel, 1, 127);
@@ -1843,6 +1849,7 @@ static void handle(uint32_t e)
             step_release();
             for (i = 0; i < NSTEP; i++)
                 step_clear_trk(i, a ? (a - 1) : -1);
+            if (!a) st.rsv[0] = 0;               /* (clear all: the pattern has no key again) */
             step_cursor = 0;
         } else if (a) {
             /* clear only one track (a - 1) */
