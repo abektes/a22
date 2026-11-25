@@ -1032,6 +1032,7 @@ static void click_run(f32 pos, int sound)
  * MIDI clock in five passes. loop_pos is still what the rest reads and sets; a new value there is taken up here. */
 static int32_t tp_i;
 static f32 tp_f, tp_last = -1.0f;
+static int clk_jump;                             /* the tape jumped to IN while it plays: MIDI clock restarts */
 static void tp_take(f32 at)
 {
     tp_i = (int32_t)at;                          /* (at >= 0) */
@@ -1065,6 +1066,7 @@ static void tape_tick(f32 dticks)
         for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
         a = rev ? out_t : in_t;
         click_at = -1;
+        clk_jump = 1;                            /* (the DAW's bars went on: it is told Stop and Start) */
     }
     if (a != tp_last)
         tp_take(a);
@@ -2021,6 +2023,12 @@ static int clock_edge(void)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = rt_fn();
     int run = xport_running();
+    if (run && xport_was && clk_jump) {          /* the tape back at IN while it runs: Stop, then a Start there */
+        clk_jump = 0;
+        if (fn) fn(0xFCu, 0, 0);
+        xport_was = 0;
+    }
+    clk_jump = 0;
     if (run == xport_was)
         return 0;
     xport_was = run;
@@ -2372,7 +2380,7 @@ SMALL void eng_init(uint32_t sample_rate)
     nlev = nclip = 0;
     rec_forget();
     clk_acc = 0.0f;                              /* (stopped, no Start owed; no note's channel kept) */
-    xport_was = 0;
+    xport_was = clk_jump = 0;
     for (i = 0; i < 128; i++) live_chs[i] = 0;
     for (i = 0; i < NTRACK * 16; i++) tape_open[i >> 4][i & 15] = 0;
     tp_last = -1.0f;

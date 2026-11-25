@@ -390,7 +390,7 @@ static void tape_keeps_with_clock(int bars_log2, int bpm, int speed, int passes)
 /* Block by block from a Start, the clocks sent since it (its own first included) are the tape's ticks since IN over
  * 4, plus one: whether the Start went out with a note (a take's first key) or from the clock alone (PLAY, the
  * tape's first note on a muted track). Found in code review: the second path ran a block behind. */
-static int clock_follows_tape(int blocks)
+static int clock_follows_tape(int blocks, f32 loop_ticks)
 {
     static int32_t out[64];
     SeqInfo si;
@@ -399,7 +399,7 @@ static int clock_follows_tape(int blocks)
         f32 ticks, q;
         h1_render(out, 32);                      /* one control block */
         eng_seq_info(&si);
-        ticks = si.loop_pos * 1536.0f;           /* (4 bars of 4/4) */
+        ticks = si.loop_pos * loop_ticks;
         q = ticks / 4.0f - (f32)(int)(ticks / 4.0f);
         if (q < 0.002f || q > 0.998f)
             continue;                            /* (too near a clock to tell) */
@@ -416,7 +416,7 @@ static void start_clock_phase(void)
     tap(H1_BTN_REC);                             /* armed */
     go(100);
     h1_key(7, 1);                                /* the first key: Start with a note */
-    bad = clock_follows_tape(2000);
+    bad = clock_follows_tape(2000, 1536.0f);    /* (4 bars of 4/4) */
     h1_key(7, 0);
     CHECK(nrt >= 1 && rt_seq[0] == 0xFA && bad == 0, "a take's first key: the clock in step with the tape");
     tap(H1_BTN_REC);
@@ -428,11 +428,31 @@ static void start_clock_phase(void)
     go(100);
     nrt = 0;
     h1_button(H1_BTN_PLAY, 1);
-    bad = clock_follows_tape(2000);
+    bad = clock_follows_tape(2000, 1536.0f);
     h1_button(H1_BTN_PLAY, 0);
     CHECK(nrt >= 1 && rt_seq[0] == 0xFA, "PLAY sends Start");
     CHECK(mo_n(0x90, 60) <= 1, "(the muted note did not go out)");
     CHECK(bad == 0, "PLAY with no note at IN: the clock in step with the tape too");
+}
+
+/* BARS turned down while the tape plays past the new end: the tape starts again at IN, and the DAW is told with
+ * a Stop and a Start, its clock in step from there (found in code review: its bars went on from where they were) */
+static void tape_jump_restarts_the_daw(void)
+{
+    int bad;
+    fresh();
+    st.seq[1] = 2;                               /* 4 bars */
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    go(5500);                                    /* into bar 3 */
+    nrt = 0;
+    nmo = 0;
+    st.seq[1] = 1;                               /* 2 bars: the playhead is past the end */
+    bad = clock_follows_tape(1500, 768.0f);
+    CHECK(nrt == 2 && rt_seq[0] == 0xFC && rt_seq[1] == 0xFA, "the tape back at IN: Stop, then Start");
+    CHECK(bad == 0, "and the clock in step with the tape from there");
+    CHECK(first_on(0) >= 0 && rt_at[1] <= first_on(0), "the Start before the note at IN");
 }
 
 static void clock_ignores_speed(void)
@@ -539,6 +559,7 @@ int main(void)
     t1_unchanged();
     clock_per_bar();
     start_clock_phase();
+    tape_jump_restarts_the_daw();
     clock_ignores_speed();
     tape_keeps_with_clock(5, 120, TAPE_SPD_1X, 5);
     tape_keeps_with_clock(4, 173, TAPE_SPD_1X, 11);
