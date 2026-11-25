@@ -9,7 +9,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 - Hold FX and one of the eight white keys from the lowest F for a punch on the whole mix, while the key is held: BRAKE,
   ST 1/8, ST 1/16, ST 1/32, LPF, HPF, CRUSH, GATE. Other keys play notes, a second key replaces the first, and the
   key holds the punch after FX is let go. FX tapped alone opens its page on release; one used for a punch does not.
-  EDIT + FX is the bypass as before. While FX is held, SAVE and EDIT do nothing.
+  With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before.
 - A strip at the bottom of the screen shows the eight punches, the held one lit, with a toast (PUNCH ST 1/16); FX's
   light is on while it is held, and the screen reader says PUNCH, then the punch's name.
 - Recording or overdubbing on the tape records the punches on the track in hand, and they play back on the whole mix

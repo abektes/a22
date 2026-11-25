@@ -164,7 +164,7 @@ MONO is monophonic and plays the chord's root alone. A chord takes a voice a not
 | SELECT | Home screen: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
 | MASTER | Volume of everything. **Hold EDIT:** the track's volume |
 | FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back. FX opens its page when you let go, unless you played a punch |
-| hold FX + white key 1–8 | A punch on the whole mix while the key is held (see Effects). The keys are the eight white keys from the lowest F; other keys play notes. SAVE and EDIT do nothing while FX is held |
+| hold FX + white key 1–8 | A punch on the whole mix while the key is held (see Effects). The keys are the eight white keys from the lowest F; other keys play notes. With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before |
 | EDIT | Pins the knob strip on the home screen. Writing steps or Riff: a rest |
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
