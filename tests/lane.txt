@@ -36,4 +36,9 @@ said ROOT NONE
 spin K4 -4
 wait 600
 said DEG NONE
+# and the dash itself is never spoken: ROOT is spoken again (C, then none), and no "ROOT -" is in what was said
+spin K2 1
+wait 600
+spin K2 -1
+wait 600
 unsaid ROOT -
