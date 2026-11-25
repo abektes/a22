@@ -688,11 +688,11 @@ static void cells_drawn(void)
     go(100);
     CHECK(cell_sum(0, 4) != cell_sum(2, 4), "the cursor's cell is lit");
 }
-static long under_sum(int b, int bars)           /* the underline band (rows 97 to 100) of bar b's cell */
+static long under_sum(int b, int bars)           /* the underline band (row 100) of bar b's cell */
 {
     int cw = 224 / bars, x, y;
     long sum = 0;
-    for (y = 97; y < 100; y++)
+    for (y = 100; y < 101; y++)
         for (x = 8 + b * cw + 3; x < 8 + (b + 1) * cw - 3; x++)
             sum += g_fb[y * FB_W + x];
     return sum;

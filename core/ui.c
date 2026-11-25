@@ -1711,7 +1711,7 @@ static void draw_lane_cells(void)
         if (minor) {                                      /* a minor chord: an underline */
             f32 w = g_text_w(num, 18.0f);
             if (w > cw - 8.0f) w = cw - 8.0f;
-            g_rect(x + (cw - w) * 0.5f, 98.0f, w, 1.0f, a);
+            g_rect(x + (cw - w) * 0.5f, 100.0f, w, 1.0f, a);
         }
         g_color(GC_SLATE);
         {
