@@ -221,6 +221,37 @@ static void tape_tracks_on_their_channels(void)
     CHECK(mo_n(0xB1, 20) > 0 && mo_n(0xB0, 20) == 0, "T2's recorded knob goes out as CC 20 on channel 2");
 }
 
+/* More tape notes sounding than voices, the tape stopped: every note the tape sent still gets its off, the ones
+ * whose voices were taken for later notes too (found in review: two left on) */
+static void tape_stop_with_voices_taken(void)
+{
+    int i, ons = 0;
+    fresh();
+    st.chord[0] = CHORD_SHAPE;                   /* a 7th with the root again below: five notes a key */
+    st.chord[1] = 3;
+    st.chord[2] = 3;
+    st.chord[3] = 0;
+    tap(H1_BTN_REC);
+    h1_key(7, 1);
+    h1_key(12, 1);                               /* ten notes, eight voices */
+    go(1500);
+    h1_key(7, 0);
+    h1_key(12, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    go(4000);
+    nmo = 0;
+    for (i = 0; i < 400 && ons < 10; i++) {      /* round to the chord again */
+        go(20);
+        ons = mo_n(0x90, -1);
+    }
+    CHECK(ons >= 10, "the tape plays the ten-note chord again");
+    go(300);
+    tap(H1_BTN_PLAY);                            /* stopped in the middle of it */
+    go(200);
+    CHECK(balanced(), "every note the tape sent ends when it stops, its voice taken or not");
+}
+
 static void step_notes_on_their_track(void)
 {
     fresh();
@@ -340,6 +371,7 @@ int main(void)
     same_pitch_from_arp_on_two_channels();
     same_pitch_from_riff_on_two_channels();
     tape_tracks_on_their_channels();
+    tape_stop_with_voices_taken();
     step_notes_on_their_track();
     knob_cc_on_track_channel();
     hush_on_four_channels();
