@@ -162,16 +162,6 @@ void dsp_init(void)
 }
 
 /* ---- scales --------------------------------------------------------------------------- */
-static const uint16_t SCALE_MASK[8] = {
-    0xFFF, /* CHROM */
-    0xAB5, /* MAJOR */
-    0x5AD, /* MINOR */
-    0x295, /* PENTA */
-    0x4A9, /* MPENT */
-    0x4E9, /* BLUES */
-    0x6AD, /* DORIAN */
-    0x555, /* WHOLE */
-};
 
 int scale_snap(int note)
 {

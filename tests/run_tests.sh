@@ -8,6 +8,7 @@
 #   midiout    MIDI out as a DAW records it: each track on its own channel, a note's off on its on's channel,
 #              knob and tape automation CCs, HUSH on all four channels
 #   miditiers  the device's MIDI out queue: what still goes when it is nearly full (app/midi_tiers.h)
+#   keymap     the key mapping (core/keymap.c): a note in one key played in another, by scale steps, clamped
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
@@ -64,6 +65,8 @@ $CC -std=c99 $SAN core/*.c tests/midiout.c -o build/a22midiout -lm
 build/a22midiout
 $CC -std=c99 $SAN tests/miditiers.c -o build/a22miditiers
 build/a22miditiers
+$CC -std=c99 $SAN tests/keymap.c core/keymap.c -o build/a22keymap
+build/a22keymap
 $CC -std=c99 $SAN core/*.c tests/mixer.c -o build/a22mixer -lm
 build/a22mixer
 $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm

@@ -352,6 +352,15 @@ extern Voice voices[NVOICE];
 extern uint32_t eng_rng;
 int scale_snap(int note);
 
+/* keymap.c: the scales' notes (bit n = n semitones above the root), and a note moved from one key to another. */
+#define KEY_VALID 0x80u
+extern const uint16_t SCALE_MASK[8];
+uint8_t key_byte(int root, int scale);
+int key_root(uint8_t k);
+int key_scale(uint8_t k);
+int key_map(int note, uint8_t from, uint8_t to);
+int key_steps(int note, uint8_t key, int steps);
+
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];
 extern const char *const FX_KNOBS[NFX][4];
