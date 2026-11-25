@@ -172,8 +172,18 @@ through it.
 **MIDI in,** over USB or the TRS jack, on any channel: notes play the engine in hand at their velocity
 (softer is quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
 
-**MIDI out,** over USB only, on channel 1: the notes of the keys, the arpeggiator and the tape, and
-CC 20 to 23 as the knobs turn. A note that came in over MIDI isn't sent back out.
+**MIDI out,** over USB only, each track on its own channel (T1 on 1, T2 on 2, T3 on 3, T4 on 4), so a DAW
+records the four tracks apart:
+- the notes of the tape and the step sequencer on their track's channel, and those of the keys, chords and the
+  arpeggiator on the channel of the track in hand (a note ends on the channel it started on);
+- CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back;
+- MIDI clock, 24 a beat at TEMPO, all the time, with Start when the tape or the step pattern starts (PLAY, or
+  the first key of a take) and Stop when it stops. Set the DAW to follow external MIDI clock and it keeps
+  A22's tempo and starts recording on A22's bar 1;
+- CC 123 on channels 1 to 4 when HOME is held.
+
+A note that came in over MIDI isn't sent back out. A synth played from A22's MIDI out hears T2 to T4 only if it
+listens on every channel (omni).
 
 **A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB port
 turns host for a USB-MIDI keyboard. The keyboard needs its own power or a powered hub. Hold both again to

@@ -3,6 +3,17 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**MIDI out for a DAW**
+- Each track goes out on its own MIDI channel, T1 on 1 to T4 on 4: the tape's and the step sequencer's notes on
+  their track's, the keys' and the arpeggiator's on the track in hand's, each note-off on its note-on's channel.
+  The knobs' CC 20 to 23 go out on the same channels, and so do the tape's recorded knob moves as it plays.
+  HOME held sends CC 123 on all four. Playing on T1 sends what it sent before.
+- MIDI clock, 24 a beat at TEMPO, all the time, with Start as the tape or the step pattern starts (before the note
+  that starts it) and Stop as it stops. The FM-1 sends the clock, Start and Stop ahead of notes and knobs when
+  the USB queue is busy, as it does note-offs.
+
 ## 0.6.0
 
 Identity `FM-1_4122000600`. Released 2026-11-25. More room for the audio in a dense loop jam

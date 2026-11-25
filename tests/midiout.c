@@ -41,14 +41,17 @@ static void track(int d)                         /* EDIT held, PRESETS turned, E
 /* ---- what went out ---- */
 static uint8_t mo[4096][3];
 static int nmo;
-static int rt_n[8], rt_seq[64], nrt;            /* real time: counts by status - 0xF8, and Start / Stop in order */
+static int rt_n[8], rt_seq[64], rt_at[64], nrt; /* real time: counts by status - 0xF8, and Start / Stop in order,
+                                                  * with how many other messages had gone out before each */
 static void rt_reset(void) { memset(rt_n, 0, sizeof rt_n); nrt = 0; }
 static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
 {
     if (s >= 0xF8) {
         rt_n[s - 0xF8]++;
-        if (s != 0xF8 && nrt < 64)
+        if (s != 0xF8 && nrt < 64) {
+            rt_at[nrt] = nmo;
             rt_seq[nrt++] = s;
+        }
         return;
     }
     if (nmo < 4096) {
@@ -65,6 +68,14 @@ static int mo_n(uint8_t s, int d1)               /* (d1 < 0: any) */
         if (mo[i][0] == s && (d1 < 0 || mo[i][1] == d1))
             n++;
     return n;
+}
+static int first_on(int from)                    /* where the first note-on at or after FROM is in mo[], or -1 */
+{
+    int i;
+    for (i = from; i < nmo; i++)
+        if ((mo[i][0] & 0xF0) == 0x90 && mo[i][2])
+            return i;
+    return -1;
 }
 static int balanced(void)                        /* every channel's every note: no on left without its off (a
                                                   * spare off is harmless, and the arpeggiator sends one today) */
@@ -245,20 +256,25 @@ static void clock_ignores_speed(void)
 
 static void start_stop_edges(void)
 {
+    int from;
     fresh();
     tap(H1_BTN_REC);                             /* armed, waiting for the first key */
     go(500);
     CHECK(nrt == 0, "REC armed and waiting sends no Start");
     note(7, 150);
     CHECK(nrt == 1 && rt_seq[0] == 0xFA, "the first key of a take sends Start");
+    CHECK(first_on(0) >= 0 && rt_at[0] <= first_on(0), "Start goes out before the take's first note");
     note(9, 150);
     tap(H1_BTN_REC);
     go(9000);                                    /* round the loop */
     CHECK(loop_state() == LOOP_PLAY && nrt == 1, "no Start again as the loop goes round");
     tap(H1_BTN_PLAY);
     CHECK(nrt == 2 && rt_seq[1] == 0xFC, "PLAY stops, Stop goes out");
+    from = nmo;
     tap(H1_BTN_PLAY);
+    go(300);
     CHECK(nrt == 3 && rt_seq[2] == 0xFA, "PLAY plays, Start goes out");
+    CHECK(first_on(from) >= 0 && rt_at[2] <= first_on(from), "Start goes out before the tape's first note");
     h1_button(H1_BTN_HOME, 1);
     go(1000);
     h1_button(H1_BTN_HOME, 0);

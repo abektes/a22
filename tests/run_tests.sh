@@ -46,6 +46,8 @@ out=app/build/host
 "$out/a22_host" tests/looppower.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
 "$out/a22_host" tests/dice.txt "$out"
+# MIDI out to USB as a DAW records it: clock, Start and Stop, T2 on channel 2, HUSH on all four channels
+"$out/a22_host" tests/midiclock.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host

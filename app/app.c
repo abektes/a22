@@ -277,16 +277,18 @@ static int core2_run(void (*fn)(uint32_t), uint32_t arg) { return plat_cpu2_on()
 static int core2_wait(void) { return plat_cpu2_wait(); }
 #endif
 
-/* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes from the render,
- * its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and nothing
- * is queued. A note-on or a knob goes only while there is room to spare, so the queue never fills with them
- * and leaves a note-off out (a note the computer would then hold for ever). */
+/* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes and clock from the
+ * render, its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and
+ * nothing is queued. A note-on or a knob goes only while there is room to spare, so the queue never fills with
+ * them and leaves out a note-off (a note the computer would then hold for ever), a CC 123, or the clock, Start or
+ * Stop a DAW follows (a clock dropped and its tempo wobbles). (A one-byte real-time message, 0xF8 and up, packs
+ * as code index 0xF, which status >> 4 gives.) */
 #define MIDI_SPARE 16u
 static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     uint32_t pkt = (uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24;
     uint32_t room = plat_midi_out_room(TO_USB);
-    int off = (status & 0xF0u) == 0x80u || (status == 0xB0u && d1 == 123u);
+    int off = status >= 0xF8u || (status & 0xF0u) == 0x80u || ((status & 0xF0u) == 0xB0u && d1 == 123u);
     if (off ? room > 0u : room > MIDI_SPARE)
         plat_midi_send(pkt, TO_USB);
 }

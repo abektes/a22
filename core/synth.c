@@ -112,10 +112,14 @@ void eng_post_auto(int knob, int val)
 
 /* ---- MIDI out ------------------------------------------------------------------------- */
 void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
+static int clock_edge(void);
+
 /* Each track's notes go out on its own channel, T1 on 1 to T4 on 4, so a DAW records the four apart. */
 static void mout_trk(int trk, int on, int note, int vel)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    if (on)                                      /* (the note that starts the tape goes out after its Start) */
+        (void)clock_edge();
     if (fn && note >= 0 && note < 128)
         fn((uint8_t)((on ? 0x90u : 0x80u) | (uint32_t)(trk & 3)), (uint8_t)note,
            (uint8_t)(on ? iclamp(vel, 1, 127) : 0));
@@ -1938,19 +1942,28 @@ static int xport_running(void)
         return step_playing != 0;
     return loop_state == LOOP_REC || loop_state == LOOP_PLAY || loop_state == LOOP_DUB;
 }
-static void clock_tick(f32 dticks)
+/* Start or Stop as the tape or the step pattern has just started or stopped: from each block, and from a note-on
+ * before it goes out, so a DAW that records from Start has the note that started it. 1: it has just started. */
+static int clock_edge(void)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
     int run = xport_running();
-    if (run != xport_was) {
-        xport_was = run;
-        if (run) {                               /* Start, and the clock that is the first beat's first */
-            if (fn) { fn(0xFAu, 0, 0); fn(0xF8u, 0, 0); }
-            clk_acc = 0.0f;
-            return;
-        }
-        if (fn) fn(0xFCu, 0, 0);
+    if (run == xport_was)
+        return 0;
+    xport_was = run;
+    if (run) {                                   /* Start, and the clock that is the first beat's first */
+        if (fn) { fn(0xFAu, 0, 0); fn(0xF8u, 0, 0); }
+        clk_acc = 0.0f;
+        return 1;
     }
+    if (fn) fn(0xFCu, 0, 0);
+    return 0;
+}
+static void clock_tick(f32 dticks)
+{
+    void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    if (clock_edge())
+        return;
     clk_acc += dticks;
     while (clk_acc >= 4.0f) {
         clk_acc -= 4.0f;
