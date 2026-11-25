@@ -11,8 +11,12 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   The knobs' CC 20 to 23 go out on the same channels, and so do the tape's recorded knob moves as it plays.
   HOME held sends CC 123 on all four. Playing on T1 sends what it sent before.
 - MIDI clock, 24 a beat at TEMPO, all the time, with Start as the tape or the step pattern starts (before the note
-  that starts it) and Stop as it stops. When the USB queue is busy the FM-1 keeps its last places for note-offs,
-  CC 123 and Stop, then the clock and Start, then notes and knobs.
+  that starts it) and Stop as it stops. The tape jumping back to IN while it plays (BARS turned down, IN or OUT
+  moved past it) sends Stop and Start again, and a computer that connects while the tape plays gets them when the
+  tape next comes round to IN. When the USB queue is busy the FM-1 keeps its last places for note-offs, CC 123,
+  Start and Stop, then the clock, then notes and knobs. A keyboard on USB host gets no clock, Start or Stop.
+- A knob set over MIDI while recording plays back from the tape but is never sent back out (the tape marks it;
+  earlier firmware loads such a tape as before).
 
 **The tape's timing**
 - The tape keeps its place in whole ticks and a fraction. Added up in one float, it lost a little of every 0.7 ms

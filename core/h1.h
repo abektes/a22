@@ -31,7 +31,9 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);   /* MIDI in: notes with t
  * on the track in hand's (note-on with its velocity, its note-off on the same channel); CC 20-23 as the four home
  * knobs turn (the track in hand's channel) and as the tape plays its automation back (its track's); and CC 123 on
  * channels 1 to 4 on a hush. MIDI clock (0xF8, 24 a beat) at TEMPO all the time, from inside h1_render, with
- * Start (0xFA) and Stop (0xFC) as the tape or the step pattern starts and stops. Never what came in over MIDI. The notes are sent from inside h1_render, the
+ * Start (0xFA) and Stop (0xFC) as the tape or the step pattern starts and stops, and Stop then Start as the tape
+ * jumps back to IN while it plays; none of the three while h1_usb_host. Never what came in over MIDI (a knob set
+ * over MIDI and recorded is not sent as the tape plays it). The notes are sent from inside h1_render, the
  * knobs from h1_encoder (the main loop): fn must be safe from both. NULL: nothing is sent (the default). */
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2));
 /* A new listener on MIDI out (a computer just connected, or the port back from USB host): if the tape or the step

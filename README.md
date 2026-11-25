@@ -176,14 +176,17 @@ through it.
 records the four tracks apart:
 - the notes of the tape and the step sequencer on their track's channel, and those of the keys, chords and the
   arpeggiator on the channel of the track in hand (a note ends on the channel it started on);
-- CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back;
+- CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back (not those that came in
+  over MIDI);
 - MIDI clock, 24 a beat at TEMPO, all the time, with Start when the tape or the step pattern starts (PLAY, or
   the first key of a take), sent before the note that starts it, and Stop when it stops. A DAW set to follow
-  external MIDI clock can take A22's tempo, Start and Stop from it;
+  external MIDI clock can take A22's tempo, Start and Stop from it. When the tape jumps back to IN while it plays
+  (BARS turned down, IN or OUT moved past it), it sends Stop and Start again; a computer that connects while the
+  tape plays gets Stop and Start when the tape next comes round to IN;
 - CC 123 on channels 1 to 4 when HOME is held.
 
 A note that came in over MIDI isn't sent back out. A synth played from A22's MIDI out hears T2 to T4 only if it
-listens on every channel (omni).
+listens on every channel (omni). A keyboard on USB host gets no clock, Start or Stop.
 
 **A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB port
 turns host for a USB-MIDI keyboard. The keyboard needs its own power or a powered hub. Hold both again to

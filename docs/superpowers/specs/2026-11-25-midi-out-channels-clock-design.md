@@ -65,8 +65,8 @@ into the DAW" work properly: four separate parts, each on its own channel, recor
 
 **Getting through.** `midi_send` (`app/app.c:285`) drops a note-on or a CC when the USB queue has 16 or fewer
 free places, and keeps the last places for note-offs. Clock, Start and Stop get through ahead of notes and CCs, in
-tiers (changed after review): a note-off, CC 123 and Stop while there is any room; the clock and Start while more
-than 8 places are left; a note-on or a CC while more than 16 are. (A clock at 48 to 96 a second sharing the note-offs'
+tiers (changed after review): a note-off, CC 123, Start and Stop while there is any room; the clock while more
+than 8 places are left; a note-on or a CC while more than 16 are (`app/midi_tiers.h`, `tests/miditiers.c`). (A clock at 48 to 96 a second sharing the note-offs'
 last places would fill them within a fraction of a second of a stall, and the offs could no longer go.) With nothing listening there is no room and nothing is sent, as today.
 The USB-MIDI packet for a one-byte real-time message is code index 0xF, which `midi_send`'s packing already
 gives for 0xF8, 0xFA and 0xFC.
@@ -81,3 +81,15 @@ gives for 0xF8, 0xFA and 0xFC.
   channels; clock count per bar at a couple of tempos; Start and Stop on each transport change; clock still
   sent while the queue is nearly full.
 - The README's "USB audio and MIDI" section and the CHANGELOG.
+
+## Changed after the code review (2026-11-25)
+
+- Start is in the queue's top tier (above).
+- No clock, Start or Stop while the port is USB host: a keyboard with a sequencer would follow them.
+- A knob set over MIDI and recorded is marked on the tape (flag bit 3, kept through save and load) and not sent as
+  the tape plays it: "nothing that came in goes back".
+- The tape jumping back to IN while it plays sends Stop and Start.
+- `h1_midi_resync()`: a new USB connection, or the port back from USB host, gets Stop and Start when the tape or
+  step pattern next comes round to its start, the clock's phase where the tape is.
+- Not changed: the clock's phase still jumps at a Start (one interval of 0 to 4 ticks before it), because the clock
+  runs while stopped and a Start falls where the player presses.
