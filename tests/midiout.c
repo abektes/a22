@@ -5,6 +5,9 @@
  *                note-on went on, a track change in between or not
  *   CCs          a knob on the track in hand's channel, the tape's automation on its track's, HUSH's CC 123
  *                on all four
+ *   clock        24 a beat at TEMPO, stopped or playing, whatever the tape's SPEED; Start when the tape or the
+ *                step pattern starts (PLAY, a take's first key), Stop when it stops (PLAY, HUSH, TAPE / STEP
+ *                swapped), never again as the loop goes round
  */
 #include <stdio.h>
 #include <string.h>
@@ -38,8 +41,16 @@ static void track(int d)                         /* EDIT held, PRESETS turned, E
 /* ---- what went out ---- */
 static uint8_t mo[4096][3];
 static int nmo;
+static int rt_n[8], rt_seq[64], nrt;            /* real time: counts by status - 0xF8, and Start / Stop in order */
+static void rt_reset(void) { memset(rt_n, 0, sizeof rt_n); nrt = 0; }
 static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
 {
+    if (s >= 0xF8) {
+        rt_n[s - 0xF8]++;
+        if (s != 0xF8 && nrt < 64)
+            rt_seq[nrt++] = s;
+        return;
+    }
     if (nmo < 4096) {
         mo[nmo][0] = s;
         mo[nmo][1] = a;
@@ -88,6 +99,7 @@ static void fresh(void)
     h1_init(44100);
     ms = 0;
     nmo = 0;
+    rt_reset();
     h1_midi_out(mo_fn);
     go(100);
 }
@@ -200,6 +212,69 @@ static void t1_unchanged(void)
     CHECK(mo_n(0x90, 60) == 1 && mo_n(0x80, 60) == 1, "a key on T1 goes out on channel 1 as before");
 }
 
+static void clock_per_bar(void)
+{
+    fresh();
+    st.glo[0] = 120;
+    go(50);
+    rt_reset();
+    go(2000);                                    /* a bar of 4/4 at 120 */
+    CHECK(rt_n[0] >= 95 && rt_n[0] <= 97, "96 clocks a bar at 120, stopped");
+    st.glo[0] = 90;
+    go(50);
+    rt_reset();
+    go(2667);                                    /* a bar at 90 */
+    CHECK(rt_n[0] >= 95 && rt_n[0] <= 97, "96 clocks a bar at 90");
+    CHECK(nrt == 0, "and no Start or Stop while nothing plays");
+}
+
+static void clock_ignores_speed(void)
+{
+    fresh();
+    st.glo[0] = 120;
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    CHECK(loop_state() == LOOP_PLAY, "a take plays");
+    st.tape[0] = TAPE_SPD_2X;
+    go(50);
+    rt_reset();
+    go(2000);
+    CHECK(rt_n[0] >= 95 && rt_n[0] <= 97, "the clock stays at TEMPO when the tape plays at 2X");
+}
+
+static void start_stop_edges(void)
+{
+    fresh();
+    tap(H1_BTN_REC);                             /* armed, waiting for the first key */
+    go(500);
+    CHECK(nrt == 0, "REC armed and waiting sends no Start");
+    note(7, 150);
+    CHECK(nrt == 1 && rt_seq[0] == 0xFA, "the first key of a take sends Start");
+    note(9, 150);
+    tap(H1_BTN_REC);
+    go(9000);                                    /* round the loop */
+    CHECK(loop_state() == LOOP_PLAY && nrt == 1, "no Start again as the loop goes round");
+    tap(H1_BTN_PLAY);
+    CHECK(nrt == 2 && rt_seq[1] == 0xFC, "PLAY stops, Stop goes out");
+    tap(H1_BTN_PLAY);
+    CHECK(nrt == 3 && rt_seq[2] == 0xFA, "PLAY plays, Start goes out");
+    h1_button(H1_BTN_HOME, 1);
+    go(1000);
+    h1_button(H1_BTN_HOME, 0);
+    go(100);
+    CHECK(nrt == 4 && rt_seq[3] == 0xFC, "HUSH stops, one Stop");
+    tap(H1_BTN_PLAY);
+    CHECK(nrt == 5 && rt_seq[4] == 0xFA, "PLAY again, Start");
+    h1_button(H1_BTN_SEQ, 1); go(800); h1_button(H1_BTN_SEQ, 0); go(50);   /* hold SEQ: STEP */
+    CHECK(st.seq[0] == SEQ_STEP, "holding SEQ swaps the tape for the step sequencer");
+    CHECK(nrt == 6 && rt_seq[5] == 0xFC, "swapping TAPE and STEP stops, one Stop");
+    tap(H1_BTN_PLAY);
+    go(500);
+    tap(H1_BTN_PLAY);
+    CHECK(nrt == 8 && rt_seq[6] == 0xFA && rt_seq[7] == 0xFC, "the step pattern sends Start and Stop");
+}
+
 int main(void)
 {
     keys_on_t2();
@@ -210,6 +285,9 @@ int main(void)
     knob_cc_on_track_channel();
     hush_on_four_channels();
     t1_unchanged();
+    clock_per_bar();
+    clock_ignores_speed();
+    start_stop_edges();
     h1_midi_out(0);
     printf("midiout: %d checks, %d failed\n", checks, fails);
     return fails != 0;

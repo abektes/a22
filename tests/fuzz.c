@@ -58,12 +58,15 @@ static void blit(int x, int y, int w, int h)
 
 extern uint32_t h1_fuzz_nan;                 /* core/synth.c, in this build: samples that were not numbers */
 
-/* MIDI out (h1_midi_out): every message a well-formed one on channel 1, notes and CC 20-23 and 123 only */
+/* MIDI out (h1_midi_out): every message a well-formed one on channels 1 to 4 (a track each), notes and CC 20-23
+ * and 123 only; or clock, Start or Stop, with nothing after them */
 static volatile uint32_t midi_outs;
 static void midi_out_check(uint8_t status, uint8_t d1, uint8_t d2)
 {
-    int ok = d1 < 128 && d2 < 128 && ((status == 0x90 && d2 >= 1) || (status == 0x80 && d2 == 0) ||
-             (status == 0xB0 && ((d1 >= 20 && d1 <= 23) || (d1 == 123 && d2 == 0))));
+    int type = status & 0xF0, ch = status & 0x0F;
+    int ok = (status == 0xF8 || status == 0xFA || status == 0xFC) ? d1 == 0 && d2 == 0 :
+             ch < 4 && d1 < 128 && d2 < 128 && ((type == 0x90 && d2 >= 1) || (type == 0x80 && d2 == 0) ||
+             (type == 0xB0 && ((d1 >= 20 && d1 <= 23) || (d1 == 123 && d2 == 0))));
     if (!ok)
         die("a MIDI message out that is not one", status, d1, d2, 0);
     midi_outs++;

@@ -1927,6 +1927,37 @@ uint32_t eng_stages(uint32_t out[H1_NSTG])
     return total;
 }
 
+/* MIDI clock out, 24 a beat (one every 4 of the sequencer's 96 ticks a beat) at TEMPO, stopped or playing, so a DAW
+ * can follow A22's tempo; Start when the tape or the step pattern starts, Stop when it stops. The tape's SPEED and
+ * SWING don't touch it. A clock is at most one control block late (32 samples). */
+static f32 clk_acc;
+static int xport_was;
+static int xport_running(void)
+{
+    if (st.seq[0] == SEQ_STEP)
+        return step_playing != 0;
+    return loop_state == LOOP_REC || loop_state == LOOP_PLAY || loop_state == LOOP_DUB;
+}
+static void clock_tick(f32 dticks)
+{
+    void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    int run = xport_running();
+    if (run != xport_was) {
+        xport_was = run;
+        if (run) {                               /* Start, and the clock that is the first beat's first */
+            if (fn) { fn(0xFAu, 0, 0); fn(0xF8u, 0, 0); }
+            clk_acc = 0.0f;
+            return;
+        }
+        if (fn) fn(0xFCu, 0, 0);
+    }
+    clk_acc += dticks;
+    while (clk_acc >= 4.0f) {
+        clk_acc -= 4.0f;
+        if (fn) fn(0xF8u, 0, 0);
+    }
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 sl[CTRL], sr[CTRL], tl[CTRL], tr[CTRL];
@@ -1956,6 +1987,7 @@ static void block(f32 *L, f32 *R)
     else tape_tick(dticks);
     free_tick(dticks);
     arp_tick(&st.ip[cur_i], dticks, dt);
+    clock_tick(dticks);
 
     stg_mark(H1_STG_SEQ);
     kg = st.keys[2] ? onepole_k(0.004f * exp2fx((f32)st.keys[2] * 0.08f), SR / (f32)CTRL) : 1.0f;
@@ -2253,6 +2285,9 @@ SMALL void eng_init(uint32_t sample_rate)
     loop_state = LOOP_EMPTY;
     nlev = nclip = 0;
     rec_forget();
+    clk_acc = 0.0f;                              /* (stopped, no Start owed; no note's channel kept) */
+    xport_was = 0;
+    for (i = 0; i < 128; i++) live_ch[i] = 0;
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());
     for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = midi_down[i] = 0;
