@@ -500,7 +500,7 @@ void h1_midi(uint8_t status, uint8_t d1, uint8_t d2)
         uint8_t val = (uint8_t)(((d2 & 127) * 100 + 63) / 127);
         KNOBS_NOW(st.inst)[k] = val;
         knob_touch[k] = 0.0f;
-        eng_post_auto(k, val);
+        eng_post_auto_in(k, val);
         mark_dirty();                            /* (a knob set over MIDI is saved as a turned one is) */
     }
 }

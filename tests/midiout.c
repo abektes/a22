@@ -255,6 +255,39 @@ static void tape_stop_with_voices_taken(void)
     CHECK(balanced(), "every note the tape sent ends when it stops, its voice taken or not");
 }
 
+/* A knob set over MIDI while recording is on the tape and plays back, but never goes out over MIDI: nothing that
+ * came in goes back (a DAW echoing it would have it recorded again each pass; found in code review). After a
+ * power cycle too. */
+static void midi_in_knob_not_sent_back(void)
+{
+    static uint8_t blob[H1_LOOP_MAX];
+    const uint8_t *p;
+    uint32_t size;
+    fresh();
+    tap(H1_BTN_REC);
+    note(7, 150);                                /* the take */
+    h1_midi(0xB0, 20, 100);                      /* K1 over MIDI, recorded */
+    go(100);
+    h1_encoder(H1_ENC_K2, 5);                    /* K2 by hand, recorded */
+    go(100);
+    note(9, 150);
+    tap(H1_BTN_REC);
+    nmo = 0;
+    go(9000);
+    CHECK(mo_n(0xB0, 21) > 0, "the tape's K2, turned by hand, goes out");
+    CHECK(mo_n(0xB0, 20) == 0, "its K1, set over MIDI, does not");
+    tap(H1_BTN_PLAY);
+    go(100);
+    p = (const uint8_t *)h1_loop(&size);
+    memcpy(blob, p, size);
+    fresh();
+    CHECK(h1_loop_load(blob, size) == 0, "the tape loads after a power cycle");
+    tap(H1_BTN_PLAY);
+    nmo = 0;
+    go(9000);
+    CHECK(mo_n(0xB0, 21) > 0 && mo_n(0xB0, 20) == 0, "and still only the hand's knob goes out");
+}
+
 static void step_notes_on_their_track(void)
 {
     fresh();
@@ -448,6 +481,7 @@ int main(void)
     same_pitch_from_riff_on_two_channels();
     tape_tracks_on_their_channels();
     tape_stop_with_voices_taken();
+    midi_in_knob_not_sent_back();
     step_notes_on_their_track();
     knob_cc_on_track_channel();
     hush_on_four_channels();

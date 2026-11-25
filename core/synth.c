@@ -109,6 +109,10 @@ void eng_post_auto(int knob, int val)
 {
     post(((uint32_t)EV_AUTOMATION << 8) | ((uint32_t)(knob & 3)) | ((uint32_t)iclamp(val, 0, 100) << 16));
 }
+void eng_post_auto_in(int knob, int val)        /* (bit 23: it came in over MIDI, as a note's) */
+{
+    post(((uint32_t)EV_AUTOMATION << 8) | ((uint32_t)(knob & 3)) | ((uint32_t)iclamp(val, 0, 100) << 16) | (1u << 23));
+}
 
 /* ---- MIDI out ------------------------------------------------------------------------- */
 void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
@@ -841,10 +845,11 @@ static void route(int note, int on, int vel, int from_midi)
 
 /* ---- 4-Track Virtual Tape Deck (notes + velocity + K1-K4 motion + Cut/Paste) ---------- */
 enum { LEV_OFF = 0, LEV_ON = 1, LEV_AUTO = 2 };
+#define LEV_MIDI 0x08u                           /* (flags) a knob move that came in over MIDI: never sent back out */
 typedef struct LEv {
     uint16_t tick;
     uint8_t d1;      /* note (0..127) or knob (0..3) */
-    uint8_t flags;   /* bits 0..2 kind, bit 7 fresh */
+    uint8_t flags;   /* bits 0..2 kind, bit 3 LEV_MIDI, bit 7 fresh */
     uint8_t trk;     /* 0..3 */
     uint8_t part;    /* PART(inst, algo) */
     uint8_t d2;      /* vel or knob value */
@@ -961,7 +966,8 @@ static void tape_fire_ev(const LEv *e, int reverse)
         int k = e->d1 & 3;
         trun[trk].auto_k[k] = e->d2 <= 100 ? e->d2 : 100;
         trun[trk].auto_on[k] = 1;
-        if (eng_midi_fn)                         /* (out as the knob went out when it was turned, on its track's channel) */
+        if (eng_midi_fn && !(e->flags & LEV_MIDI))   /* (out as the knob went out when it was turned, on its track's
+                                                      * channel; not what came in over MIDI) */
             eng_midi_fn((uint8_t)(0xB0u | (uint32_t)trk), (uint8_t)(20 + k), (uint8_t)((trun[trk].auto_k[k] * 127 + 50) / 100));
         return;
     }
@@ -1147,7 +1153,7 @@ static void tape_record_note(int note, int on, int vel)
     loop_gen++;
 }
 
-static void tape_record_auto(int knob, int val)
+static void tape_record_auto(int knob, int val, int from_midi)
 {
     LEv *e;
     uint16_t tick;
@@ -1160,7 +1166,7 @@ static void tape_record_auto(int knob, int val)
     if (!e) return;
     e->tick  = tick;
     e->d1    = (uint8_t)(knob & 3);
-    e->flags = (uint8_t)(LEV_AUTO | 0x80u);
+    e->flags = (uint8_t)(LEV_AUTO | 0x80u | (from_midi ? LEV_MIDI : 0u));
     e->trk   = (uint8_t)cur_trk;
     e->part  = live_part();
     e->d2    = (uint8_t)iclamp(val, 0, 100);
@@ -1698,7 +1704,7 @@ static void handle(uint32_t e)
         }
         break;
     case EV_AUTOMATION:
-        tape_record_auto(a & 3, (int)((e >> 16) & 127u));
+        tape_record_auto(a & 3, (int)((e >> 16) & 127u), (int)(e >> 23 & 1u));
         break;
     case EV_CUT:
         tape_cut();
@@ -2628,7 +2634,7 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         if (!d) break;
         d->tick  = (uint16_t)tick;
         d->d1    = e[2] & 127u;
-        d->flags = e[3] & 7u;
+        d->flags = e[3] & (7u | LEV_MIDI);
         d->trk   = e[4] & 3u;
         d->part  = part_ok(e[5]) ? e[5] : PART(st.trk[d->trk].inst, st.trk[d->trk].algo);
         d->d2    = e[6] & 127u;
