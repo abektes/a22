@@ -74,7 +74,7 @@ Each page's four columns are the four knobs. SELECT steps through a page's subpa
 | Page | Button | Columns |
 |---|---|---|
 | FX | FX | The effect's four knobs |
-| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE |
+| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE; KEY: each track's tape follows the key, OFF or ON (DRUM on a drum track) |
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
@@ -99,10 +99,20 @@ When it is full the screen says **TAPE FULL**.
   it is answered: tap REC within three seconds of letting go to clear the whole tape. Anything else (another
   button, a key, an encoder, or waiting) keeps it.
 
+**KEY.** A track can play its tape in the key you have set. Open MIX (SEL), then SELECT four times to the fifth
+subpage, KEY, and turn a track's knob to ON (it is OFF to begin with). Each note on that track sounds in GLO's
+KEYS ROOT and SCALE, whatever they are now, from the key it was recorded in: ROOT up 2 and the track plays two
+semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its place in the scale; between
+others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
+Drum engines (KIT, SKINS) never move, and say DRUM. A tape recorded on 0.6.0 or earlier plays as recorded,
+and so does a track with KEY off. MIDI out sends the notes as they sound.
+
 The tape and every setting are saved by themselves and come back after a restart.
 
 **STEP.** Hold SEQ to swap the tape for the step sequencer. REC then turns step writing on and off, PLAY
-runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest.
+runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest. The pattern has one key, the
+ROOT and SCALE when its first step is written; clearing the whole pattern clears it. A track with KEY on plays
+the pattern in the key it has now, as it does the tape.
 
 ## Riff and Shake
 

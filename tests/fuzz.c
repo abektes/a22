@@ -25,20 +25,22 @@
  * drawn) leaves the panel showing exactly that frame. */
 #include <pthread.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../core/internal.h"
 #include "../core/h1.h"
 
 /* how many algorithms an instrument has (eight, LAVA nine): the names it gives */
 static int nalgos(int inst) { int a = 0; while (a < 16 && *h1_algo_name(inst, a)) a++; return a; }
 
-static uint32_t rng_s = 1;
+static uint32_t fz_s = 1;
 static uint32_t rnd(void)
 {
-    rng_s ^= rng_s << 13;
-    rng_s ^= rng_s >> 17;
-    rng_s ^= rng_s << 5;
-    return rng_s;
+    fz_s ^= fz_s << 13;
+    fz_s ^= fz_s >> 17;
+    fz_s ^= fz_s << 5;
+    return fz_s;
 }
 static int below(int n) { return (int)(rnd() % (uint32_t)n); }
 
@@ -302,6 +304,15 @@ static void part_state(int rounds)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
+        {                                                    /* the keys: a step pattern's, a track's KEY bit (any bits
+                                                              * past bit 0 are cleared, an invalid key is none) */
+            static const uint8_t KB[] = {0, 0x80, 0x8C, 0xA5, 0xFF, 0x25, 0x71, 0xC3};
+            odd[1 + offsetof(H1State, rsv)] = below(2) ? KB[below(8)] : (uint8_t)rnd();
+            odd[1 + offsetof(H1State, rsv) + 1] = below(2) ? 0 : (uint8_t)rnd();
+            for (k = 0; k < NTRACK; k++)
+                odd[1 + offsetof(H1State, trk) + (size_t)k * sizeof(Track) + offsetof(Track, rsv)] =
+                    below(2) ? (uint8_t)below(2) : (uint8_t)rnd();
+        }
         if (n % 7 == 3 && n % 5 != 4) {                      /* a version 4 state (0.1.0 to 0.4.0: 2648 bytes), any
                                                               * bytes: taken, a table at a time (core/h1.c) */
             odd[1 + 4] = 4;
@@ -328,6 +339,11 @@ static void part_state(int rounds)
                 lp[9] = (uint8_t)ne; lp[10] = (uint8_t)(ne >> 8);
                 lp[11] = (uint8_t)len; lp[12] = (uint8_t)(len >> 8);
             }
+            lp[8] = below(3) ? 1 : (uint8_t)rnd();           /* h[5]: the events carry keys (bit 0), or not, any more */
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* e[7] of each event: a valid key, or any byte */
+                    if (below(2))
+                        lp[3 + 12u + j * 8u + 7u] = below(2) ? (uint8_t)(0x80 | below(8) << 4 | below(12)) : (uint8_t)rnd();
             if (below(8) == 0)
                 lp[3 + (uint32_t)below((int)ln)] ^= (uint8_t)(1u << below(8));
             if (h1_loop_load(lp + 3, below(4) ? ln : ln - (uint32_t)below(9)) == 0)
@@ -465,7 +481,7 @@ int main(int argc, char **argv)
     unsigned seeds = argc > 1 ? (unsigned)atoi(argv[1]) : 8u, first = argc > 2 ? (unsigned)atoi(argv[2]) : 1u, s;
     for (s = first; s < first + seeds; s++) {
         seed_now = s;
-        rng_s = s * 2654435761u + 1u;
+        fz_s = s * 2654435761u + 1u;
         part_state(40);
         part_panel(1500);
         part_long();

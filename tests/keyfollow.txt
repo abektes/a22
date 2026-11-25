@@ -1,0 +1,48 @@
+# KEY FOLLOW in fm1-base's host simulator: the device app, the platform simulated.
+#   ./build.sh --host, then app/build/host/a22_host tests/keyfollow.txt app/build/host
+# MIX -> KEY turns T1 on; a take on T1 played back after ROOT goes up 2 sounds two semitones higher.
+# (key 7 is note 60; A22 plays panel keys at 127 = 7F.) Never presses SAVE.
+wait 600
+listen
+tap SEL
+wait 100
+spin SELECT 1
+wait 400
+spin SELECT 1
+wait 400
+spin SELECT 1
+wait 400
+spin SELECT 1
+wait 600
+# the reader says the columns that changed (the last one wins; its "SUBPAGE 5 KEY" is said when no column
+# changes): T4 is a drum track by default, so KEY's last column says DRUM
+said T4 DRUM
+spin K1 1
+wait 600
+said T1 ON
+# a take on T1, in the key it is recorded in (GLO's: ROOT C)
+out
+tap REC
+wait 100
+key 7 down
+wait 300
+key 7 up
+wait 200
+tap REC
+wait 200
+# the tape plays on: stop it, and move ROOT up 2 (GLO, then its second subpage, KEYS: K1 is ROOT)
+tap PLAY
+wait 600
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+spin K1 2
+wait 600
+said ROOT D
+out
+tap PLAY
+wait 1500
+# the note moved up two semitones: 62 = 3E
+expect_out USB 90 3E 7F
+expect_out USB 80 3E 00

@@ -5,6 +5,14 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## Unreleased
 
+**The tape follows the key**
+- MIX has a fifth subpage, KEY (SEL, then SELECT four times): T1 to T4, OFF or ON (DRUM on a KIT or SKINS
+  track). A track with KEY on plays its tape in GLO's KEYS ROOT and SCALE, from the key each note was recorded in:
+  a seven-note scale keeps a note's place in the scale, any other shifts it by ROOT and snaps. Drums never move.
+- The tape remembers each note's key, and the step pattern has one (its first written step's; clearing the whole
+  pattern clears it). KEY is off to begin with, and tapes and settings from 0.6.0 and earlier play as recorded.
+- The screen reader says the columns as KEY's knobs turn (T1 ON), and MIDI out sends the notes as they sound.
+
 **MIDI out for a DAW**
 - Each track goes out on its own MIDI channel, T1 on 1 to T4 on 4: the tape's and the step sequencer's notes on
   their track's, the keys' and the arpeggiator's on the track in hand's, each note-off on its note-on's channel.

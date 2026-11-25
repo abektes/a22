@@ -27,7 +27,8 @@ void h1_encoder(int enc, int detents);           /* + = clockwise */
 void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);   /* MIDI in: notes with their velocity, CC 20-23 the
                                                   * knobs, CC 123 all notes off */
 /* MIDI out: fn is called with each message h1 sends, each track on its own channel (T1 on 1 to T4 on 4): the
- * notes played by the tape and the step sequencer on their track's channel, those of the keys and the arpeggiator
+ * notes played by the tape and the step sequencer on their track's channel (as they sound: a KEY-on track's
+ * notes moved to the key in force), those of the keys and the arpeggiator
  * on the track in hand's (note-on with its velocity, its note-off on the same channel); CC 20-23 as the four home
  * knobs turn (the track in hand's channel) and as the tape plays its automation back (its track's); and CC 123 on
  * channels 1 to 4 on a hush. MIDI clock (0xF8, 24 a beat) at TEMPO all the time, from inside h1_render, with
