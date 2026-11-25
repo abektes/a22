@@ -395,6 +395,29 @@ static void drums_stay(void)
     CHECK(st.trk[0].rsv == 1, "and turning it does nothing");
 }
 
+/* a KEY-on track whose engine becomes a drum: the page says DRUM, and its notes (played before, on another engine)
+ * stop following too; back on a melodic engine they follow again */
+static void drum_engine_stops_following(void)
+{
+    take_cmaj();
+    st.trk[0].rsv = 1;
+    h1_control_set(H1_ENC_PRESET, INST_KIT);
+    go(100);
+    st.keys[0] = 2;
+    pass();
+    CHECK(only_ch1(60, 64, 67), "the track in hand now on KIT: its FM-4 take stays put");
+    CHECK(exact() && gated() == 0, "ended note for note");
+    track(1);                                    /* (T1 no longer in hand: its engine read from its track) */
+    pass();
+    CHECK(only_ch1(60, 64, 67), "and with another track in hand");
+    track(-1);
+    h1_control_set(H1_ENC_PRESET, 0);
+    go(100);
+    pass();
+    CHECK(only_ch1(62, 66, 69), "back on FM-4: it follows again");
+    CHECK(exact() && gated() == 0, "ended note for note");
+}
+
 static void old_tape_unchanged(void)
 {
     const uint8_t k[4] = {0, 0, 0, 0};
@@ -779,6 +802,7 @@ int main(void)
     key_off_unchanged();
     key_on_follows();
     drums_stay();
+    drum_engine_stops_following();
     old_tape_unchanged();
     root_change_mid_note();
     key_on_mid_note();

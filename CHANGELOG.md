@@ -11,7 +11,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   key holds the punch after FX is let go. FX tapped alone opens its page on release; one used for a punch does not.
   With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before.
 - A strip at the bottom of the screen shows the eight punches, the held one lit, with a toast (PUNCH ST 1/16); FX's
-  light is on while it is held, and the screen reader says PUNCH, then the punch's name.
+  light is on while it is held, and the screen reader says PUNCH once FX is held (not on a tap), then the punch's name.
 - Recording or overdubbing on the tape records the punches on the track in hand, and they play back on the whole mix
   (not on a muted track). CUT, PASTE and clear treat them like knob moves, REV swaps their starts and ends, and a
   punch ends at stop and at the wrap (and where a take ends, if you still hold it). One held by hand wins over the tape's. Punches do not go over MIDI.

@@ -701,6 +701,35 @@ static void tape_tests(void)
         }
     }
 
+    /* a punch held on T1, the track in hand changed to T2 and T2 cleared mid-take: T1's punch still gets its end */
+    {
+        int k, ends = 0, starts = 0;
+        tfresh(0);
+        ttap(H1_BTN_REC);
+        t0 = tnow() + 50;
+        tkey(4, t0, 100);
+        tuntil(t0 + 600);
+        eng_post(EV_PUNCH, 8);
+        tuntil(t0 + 800);
+        eng_post(EV_TRACK, 1);
+        tuntil(t0 + 900);
+        eng_post(EV_CLEAR, 2);                   /* (hold REC on T2: that track cleared) */
+        tuntil(t0 + 1100);
+        eng_post(EV_PUNCH, 0);
+        tuntil(t0 + 1200);
+        ttap(H1_BTN_REC);
+        tuntil(tnow() + 50);
+        n = tblob(LEV_PUNCH, tick, d1, d2);
+        for (k = 0; k < n && k < 8; k++) { if (d2[k]) starts++; else ends++; }
+        CHECK(starts == 1 && ends == 1, "clear mid-take: the held punch's start on T1 keeps an end");
+        eng_post(EV_TRACK, 0);
+        tz = trestart();
+        tuntil(tz + 2100);
+        span(tz, 2000.0, 8, &a, &b);
+        printf("clear mid-take: punch 8 from %.0f to %.0f ms\n", a, b);
+        CHECK(a > 0.0 && b < 1500.0, "clear mid-take: the punch stops by the clear, not at the loop's end");
+    }
+
     /* hand_wins */
     ttake(0, 3, 400.0, 1400.0);
     tz = trestart();

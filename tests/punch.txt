@@ -5,17 +5,22 @@
 # (key 4 is note 57 = 39, key 1 is 54 = 36; A22 plays panel keys at 127 = 7F.) Never presses SAVE.
 wait 600
 listen
-# FX tapped alone: its page opens as it is let go
+# FX tapped alone: no PUNCH said (a tap is no hold), and its page opens as it is let go
+tap FX
+wait 300
+unsaid PUNCH
+tap HOME
+wait 300
 tap FX
 wait 300
 said PAGE
 tap HOME
 wait 300
 said HOME
-# FX held: the strip is up, and the reader says so
+# FX held: the strip is up, and once it is a hold the reader says so
 out
 press FX
-wait 300
+wait 600
 said PUNCH
 # a snapshot key is a punch: the third, ST 1/16. It plays no note
 key 4 down

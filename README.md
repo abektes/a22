@@ -67,7 +67,7 @@ The master bus has its own three-band EQ and drive (the MIX page's last subpage)
 you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (opens from a dull sound over
 a bar), 6 HPF (the same from the bottom), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
 replaces the first, and the key holds its punch even after FX is let go. A strip along the bottom of the screen
-shows the eight, the one held lit, and the screen reader says PUNCH, then the punch's name. FX tapped alone opens the
+shows the eight, the one held lit, and the screen reader says PUNCH (once FX is held, not on a tap), then the punch's name. FX tapped alone opens the
 FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is
 recorded on the track in hand and plays back on the whole mix (not on a muted track); CUT, PASTE and clear treat
 it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A punch you hold by hand wins
@@ -115,7 +115,8 @@ subpage, KEY, and turn a track's knob to ON (it is OFF to begin with). Each note
 KEYS ROOT and SCALE, whatever they are now, from the key it was recorded in: ROOT up 2 and the track plays two
 semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its place in the scale; between
 others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
-Drum engines (KIT, SKINS) never move, and say DRUM. A tape recorded on 0.6.0 or earlier plays as recorded,
+Drum engines (KIT, SKINS) never move, and say DRUM; a track switched to one stops following, and follows again on a
+melodic engine. A tape recorded on 0.6.0 or earlier plays as recorded,
 and so does a track with KEY off, except that a note recorded over a DEG bar on a KEY track is stored moved down (see
 LANE), so on 0.6.0, or after KEY is turned off, it plays moved down. MIDI out sends the notes as they sound.
 

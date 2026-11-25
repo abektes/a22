@@ -787,7 +787,8 @@ static void say_perf(void)
 
 static void speak(void)
 {
-    static int fx_was, punch_was, inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
+    static uint32_t fx_at;                                  /* when FX went down */
+    static int fx_said, fx_was, punch_was, inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
@@ -795,8 +796,16 @@ static void speak(void)
         int where = ann_where();
         if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
             ann_say(lay ? "LAYERS ON" : "LAYERS OFF", 0, ANN_NOW);
-        if (h1_fx_held() && !fx_was)                        /* FX held: the punch strip is up */
-            ann_say("PUNCH", 0, ANN_NOW);
+        if (h1_fx_held()) {                                 /* FX held: the punch strip is up. Said once it is a
+                                                             * hold (a tap opens the FX page and says only that), and
+                                                             * not when a punch already named itself */
+            if (!fx_was) { fx_at = plat_ms(); fx_said = 0; }
+            if (h1_punch()) fx_said = 1;
+            else if (!fx_said && plat_ms() - fx_at >= 400u) {
+                ann_say("PUNCH", 0, ANN_NOW);
+                fx_said = 1;
+            }
+        }
         if (h1_punch() && h1_punch() != punch_was)          /* a punch starts: its name */
             ann_say(h1_punch_name(h1_punch()), 0, ANN_NOW);
         if (ask && !ask_was)                                /* REC held: the whole tape, asked first */

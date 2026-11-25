@@ -970,6 +970,8 @@ static void tape_offs(int trk)                   /* the offs of what the tape le
  * (no wrap): root | scale << 4 (15: none, GLO's), and DEG (0 = I). GLO fills in as they are read, so turning GLO's
  * ROOT or SCALE needs no rebuild; an entry set, the tape loaded or cleared, or METER moved does (lane_build). */
 static uint8_t lane_rs[32], lane_dg[32];
+static uint8_t lane_e1[32], lane_e2[32];         /* each bar's own entry, d1 and d2 as stored (lane_e1 0xFF: none):
+                                                  * what the UI reads, so it never walks the tape the engine writes */
 static int lane_bt;                              /* the bar length they were built for */
 
 static int lane_bar(f32 t)                       /* the bar a tick of the tape is in, 0..31 */
@@ -986,25 +988,34 @@ static int lane_find(int bar)                    /* the entry that starts at BAR
 }
 static void lane_build(void)
 {
+    /* built aside and then copied: the keys (scale_snap) and the screen read these from the main loop, and must
+     * never see a bar half built */
+    uint8_t rs[32], dg[32], e1[32], e2[32];
     int i, b, ne = nlev, bt = seq_bar_ticks(), r = 15, s = 15, d = 0;
     for (b = 0; b < 32; b++) {
-        lane_rs[b] = 0xFF;
-        lane_dg[b] = 7;
+        rs[b] = 0xFF;
+        dg[b] = 7;
+        e1[b] = 0xFF;
+        e2[b] = 0;
     }
     for (i = lev_tail_find(0.0f); i < ne; i++) {  /* (by tick: the later entry in a bar wins) */
         const LEv *e = &lev[i];
         if ((e->flags & 7) != LEV_KEY) continue;
         b = ((int)e->tick - (int)LEV_TAIL) / bt;
         if (b < 0 || b >= 32) continue;          /* (past bar 32 after a METER change: never reached) */
-        lane_rs[b] = (uint8_t)((e->d1 < 12 ? e->d1 : 15) | ((e->d2 & 15) < 8 ? (e->d2 & 15) : 15) << 4);
-        lane_dg[b] = (uint8_t)((e->d2 >> 4) & 7);
+        rs[b] = (uint8_t)((e->d1 < 12 ? e->d1 : 15) | ((e->d2 & 15) < 8 ? (e->d2 & 15) : 15) << 4);
+        dg[b] = (uint8_t)((e->d2 >> 4) & 7);
+        e1[b] = e->d1;
+        e2[b] = e->d2;
     }
     for (b = 0; b < 32; b++) {                   /* each field from the last bar that set it */
-        if ((lane_rs[b] & 15) != 15) r = lane_rs[b] & 15;
-        if ((lane_rs[b] >> 4) != 15) s = lane_rs[b] >> 4;
-        if (lane_dg[b] != 7) d = lane_dg[b];
+        if ((rs[b] & 15) != 15) r = rs[b] & 15;
+        if ((rs[b] >> 4) != 15) s = rs[b] >> 4;
+        if (dg[b] != 7) d = dg[b];
         lane_rs[b] = (uint8_t)(r | s << 4);
         lane_dg[b] = (uint8_t)d;
+        lane_e2[b] = e2[b];
+        lane_e1[b] = e1[b];
     }
     lane_bt = bt;
 }
@@ -1014,11 +1025,11 @@ uint8_t eng_key_at(int bar)
     return key_byte(r == 15 ? st.keys[0] % 12 : r, s == 15 ? st.keys[1] & 7 : s);
 }
 int eng_deg_at(int bar) { return lane_dg[iclamp(bar, 0, 31)]; }
-int eng_lane_get(int bar, int field)
+int eng_lane_get(int bar, int field)             /* (from the copy lane_build keeps, not the tape) */
 {
-    int i = lane_find(bar), v;
-    if (i < 0) return -1;
-    v = field == 0 ? lev[i].d1 : field == 1 ? (lev[i].d2 & 15) : (lev[i].d2 >> 4 & 7);
+    int b = iclamp(bar, 0, 31), e1 = lane_e1[b], e2 = lane_e2[b], v;
+    if (e1 == 0xFF) return -1;
+    v = field == 0 ? e1 : field == 1 ? (e2 & 15) : (e2 >> 4 & 7);
     return v < (field == 0 ? 12 : field == 1 ? 8 : 7) ? v : -1;
 }
 /* EV_LANE: a field of BAR's entry (V 31: none). The first field set makes the entry, at the bar's first tick; the
@@ -1083,7 +1094,9 @@ uint8_t eng_key_live(void)                       /* the keys' key: the tape's wh
 int eng_follows(int trk, int part)               /* a track's KEY on, and the note not a drum's */
 {
     int inst = PART_INST(part);
-    return (st.trk[trk & 3].rsv & 1u) && inst != INST_KIT && inst != INST_SKINS;
+    int now = (trk & 3) == cur_trk ? cur_i : st.trk[trk & 3].inst;   /* (the track's engine now: MIX KEY says DRUM
+                                                                       * for a drum, and then nothing on it follows) */
+    return (st.trk[trk & 3].rsv & 1u) && inst != INST_KIT && inst != INST_SKINS && now != INST_KIT && now != INST_SKINS;
 }
 
 static void tape_release_seq(void)
@@ -2152,7 +2165,12 @@ static void handle(uint32_t e)
             /* clear only one track (a - 1) */
             int t = (a - 1) & 3, i, w = 0;
             tape_release_trk(t);                 /* (that track's notes, not every track's) */
-            if (t == cur_trk) rec_forget();
+            if (rec_punch && rec_punch_trk == t)
+                rec_punch = 0;                   /* (its start goes with the track: no end to write) */
+            if (t == cur_trk) {
+                rec_end_punch();                 /* (a punch held from another track: its end goes there now) */
+                rec_forget();
+            }
             for (i = 0; i < nlev; i++)          /* (the lane's entries are no track's: they stay) */
                 if ((lev[i].trk & 3) != t || (lev[i].flags & LEV_GLOBAL)) lev[w++] = lev[i];
             nlev = w;
