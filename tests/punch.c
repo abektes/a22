@@ -404,6 +404,392 @@ static void hand_tests(void)
     btn(H1_BTN_FX, 0);
 }
 
+/* ---- the tape: punches recorded at tick + 15,360 and played back ---- */
+#define LEV_ON 1
+#define LEV_PUNCH 3                              /* (the tape's event kinds are core/synth.c's) */
+static uint64_t tsmp;
+static uint32_t tms;
+static double blk_e[16384];                      /* the left channel's energy in each block, from the start */
+static signed char blk_p[16384];                 /* eng_punch() after each block */
+static uint8_t tmo[256][3];
+static int ntmo;
+static void tmo_fn(uint8_t s, uint8_t a, uint8_t b)
+{
+    if (s < 0xF8 && ntmo < 256) { tmo[ntmo][0] = s; tmo[ntmo][1] = a; tmo[ntmo][2] = b; ntmo++; }
+}
+static double tnow(void) { return (double)tsmp * 1000.0 / 44100.0; }
+static void tuntil(double at_ms)
+{
+    static int32_t out[512];
+    while (tnow() < at_ms) {
+        size_t bi = (size_t)(tsmp / 256u);
+        int j;
+        double e = 0.0;
+        h1_render(out, 256);
+        for (j = 0; j < 512; j += 2) e += (double)out[j] * (double)out[j] * 1e-6;
+        if (bi < 16384) { blk_e[bi] = e; blk_p[bi] = (signed char)eng_punch(); }
+        tsmp += 256;
+        if ((tsmp / 256) % 3 == 0) h1_frame(tms += 17);
+    }
+}
+static int pat(double at_ms) { return blk_p[(size_t)(at_ms * 44.1 / 256.0)]; }
+static double eat(double a_ms, double b_ms)      /* the energy between two moments */
+{
+    size_t i, a = (size_t)(a_ms * 44.1 / 256.0), b = (size_t)(b_ms * 44.1 / 256.0);
+    double e = 0.0;
+    for (i = a; i < b; i++) e += blk_e[i];
+    return e;
+}
+/* where punch P first and last shows from TZ to TZ + LEN (ms after TZ), -1 if never */
+static void span(double tz, double len, int p, double *first, double *last)
+{
+    double t;
+    *first = *last = -1.0;
+    for (t = 0.0; t < len; t += 1.0)
+        if (pat(tz + t) == p) {
+            if (*first < 0.0) *first = t;
+            *last = t;
+        }
+}
+static void ttap(int b) { h1_button(b, 1); tuntil(tnow() + 30); h1_button(b, 0); tuntil(tnow() + 30); }
+static void tkey(int k, double at, double len) { tuntil(at); h1_key(k, 1); tuntil(at + len); h1_key(k, 0); }
+static void tfresh(int bars_code)
+{
+    int k;
+    for (k = 0; k < H1_NKEYS; k++) h1_key(k, 0);
+    h1_init(44100);
+    h1_two_cores(0, 0);
+    ntmo = 0;
+    h1_midi_out(tmo_fn);
+    st.glo[0] = 120;                             /* (a bar: 2 s) */
+    st.seq[1] = (uint8_t)bars_code;
+    st.fx_on = 0;
+    memset(blk_p, 0, sizeof blk_p);
+    tsmp = 0;
+    tuntil(200);
+}
+/* a take on T1: a note to start it, punch P down at ON ms into it and up at OFF (-1: held until after the take) */
+static double ttake(int bars_code, int p, double on, double off)
+{
+    double t0, len = 2000.0 * (bars_code + 1);
+    tfresh(bars_code);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + on);
+    eng_post(EV_PUNCH, (uint32_t)p);
+    if (off >= 0.0) {
+        tuntil(t0 + off);
+        eng_post(EV_PUNCH, 0);
+    }
+    tuntil(t0 + len + 100);
+    if (off < 0.0) eng_post(EV_PUNCH, 0);
+    tuntil(t0 + len + 150);
+    return t0;
+}
+static double trestart(void)                     /* the tape from its start; the moment it started */
+{
+    SeqInfo si;
+    eng_seq_info(&si);
+    if (si.loop_state != LOOP_IDLE)              /* (playing: stopped first) */
+        eng_post(EV_PLAY, 0);
+    eng_post(EV_PLAY, 0);
+    return tnow();
+}
+static int tblob(int kind, int *tick, int *d1, int *d2)   /* the saved tape's events of a kind: how many */
+{
+    uint32_t size = 0, i, n = 0;
+    const uint8_t *b = (const uint8_t *)h1_loop(&size);
+    for (i = 0; b && 12u + 8u * (i + 1u) <= size; i++) {
+        const uint8_t *e = b + 12u + 8u * i;
+        if ((e[3] & 7) != kind) continue;
+        if (tick && n < 8) tick[n] = e[0] | e[1] << 8;
+        if (d1 && n < 8) d1[n] = e[2];
+        if (d2 && n < 8) d2[n] = e[6];
+        n++;
+    }
+    return (int)n;
+}
+static void put_ev(uint8_t *e, int tick, int d1, int flags, int d2)
+{
+    memset(e, 0, 8);
+    e[0] = (uint8_t)tick; e[1] = (uint8_t)(tick >> 8); e[2] = (uint8_t)d1; e[3] = (uint8_t)flags; e[6] = (uint8_t)d2;
+}
+static uint8_t crafted[12 + 8 * 4];
+static uint32_t craft(int n)                     /* a tape blob of N events already in crafted[12..] */
+{
+    memset(crafted, 0, 12);
+    crafted[0] = 0x41; crafted[1] = 0x32; crafted[2] = 0x32; crafted[3] = 0x54;   /* "A22T" */
+    crafted[4] = 1; crafted[5] = 1;
+    crafted[6] = (uint8_t)n;
+    crafted[8] = 0x80; crafted[9] = 0x01;                                         /* 384 */
+    return 12u + 8u * (uint32_t)n;
+}
+
+static void tape_tests(void)
+{
+    int tick[8], d1[8], d2[8], n, i;
+    double t0, tz, a, b;
+    static uint8_t copy[4096];
+    uint32_t size;
+
+    /* punch_recorded */
+    t0 = ttake(0, 3, 600.0, 900.0);
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 2, "recorded: a start and an end on the tape");
+    if (n == 2) {
+        CHECK(d1[0] == 2 && d2[0] == 1 && d2[1] == 0 && d1[1] == 2, "recorded: punch 3 is d1 2; d2 1 starts and 0 ends");
+        CHECK(tick[0] >= 15360 + 115 - 6 && tick[0] <= 15360 + 115 + 6, "recorded: the start at tick 15,360 + where it was played");
+        CHECK(tick[1] >= 15360 + 173 - 6 && tick[1] <= 15360 + 173 + 6, "recorded: the end at 15,360 + where it was let go");
+    }
+    (void)t0;
+
+    /* punch_plays_back */
+    tz = trestart();
+    tuntil(tz + 2100);
+    span(tz, 2000.0, 3, &a, &b);
+    printf("plays back: punch 3 from %.0f to %.0f ms (recorded 600 to 900)\n", a, b);
+    CHECK(a >= 600.0 - 12 && a <= 600.0 + 12 && b >= 900.0 - 12 && b <= 900.0 + 12, "plays back: punch 3 over the same span");
+    span(tz, 2000.0, 1, &a, &b);
+    CHECK(a < 0.0, "plays back: and no other punch");
+
+    /* punch_tail_in_blob: 0.6.0's loader drops events at tick >= 15,360, so only these may sit there */
+    {
+        uint32_t sz, k;
+        const uint8_t *bl = (const uint8_t *)h1_loop(&sz);
+        int ok = 1;
+        for (k = 0; bl && 12u + 8u * (k + 1u) <= sz; k++) {
+            const uint8_t *e = bl + 12u + 8u * k;
+            int tk = e[0] | e[1] << 8, kind = e[3] & 7;
+            if ((kind == LEV_PUNCH) != (tk >= 15360)) ok = 0;
+        }
+        CHECK(ok, "tail: the saved blob has a punch at tick >= 15,360 and nothing else there");
+    }
+    size = 0;
+    {
+        const uint8_t *bl = (const uint8_t *)h1_loop(&size);
+        memcpy(copy, bl, size);
+    }
+    tfresh(0);
+    CHECK(h1_loop_load(copy, size) == 0, "tail: the blob loads");
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 2 && tick[0] >= 15360 && tick[1] >= 15360, "tail: and its punches come back at their ticks");
+    tz = trestart();
+    tuntil(tz + 1200);
+    span(tz, 1200.0, 3, &a, &b);
+    CHECK(a >= 0.0, "tail: and play");
+    tfresh(0);                                   /* a punch below the tail, a note up in it: both dropped */
+    put_ev(crafted + 12, 100, 2, LEV_PUNCH, 1);
+    put_ev(crafted + 20, 15400, 60, LEV_ON, 100);
+    put_ev(crafted + 28, 15460, 2, LEV_PUNCH, 1);
+    put_ev(crafted + 36, 40000, 2, LEV_PUNCH, 0);
+    CHECK(h1_loop_load(crafted, craft(4)) == 0, "tail: a blob with strays loads");
+    CHECK(tblob(LEV_PUNCH, tick, 0, 0) == 1 && tick[0] == 15460 && tblob(LEV_ON, 0, 0, 0) == 0,
+          "tail: a punch under the tail, a note in it, a tick past it: dropped; the one in the tail kept");
+
+    /* muted_punch_silent */
+    ttake(0, 3, 600.0, 900.0);
+    st.trk[0].mute = 1;
+    tz = trestart();
+    tuntil(tz + 2100);
+    span(tz, 2000.0, 3, &a, &b);
+    CHECK(a < 0.0, "muted: the track's punch does not play");
+    st.trk[0].mute = 0;
+    tz = trestart();
+    tuntil(tz + 2100);
+    span(tz, 2000.0, 3, &a, &b);
+    CHECK(a >= 0.0, "muted: unmuted it does");
+
+    /* clear_track_removes_punch */
+    ttake(0, 3, 600.0, 900.0);
+    eng_post(EV_CLEAR, 2);
+    tuntil(tnow() + 40);
+    CHECK(tblob(LEV_PUNCH, 0, 0, 0) == 2, "clear: another track's clear leaves the punches");
+    eng_post(EV_CLEAR, 1);
+    tuntil(tnow() + 40);
+    CHECK(tblob(LEV_PUNCH, 0, 0, 0) == 0, "clear: the track's clear takes them");
+
+    /* cut_moves_punch, paste_brings_it, tail events past the tape's length stay */
+    tfresh(1);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + 600);
+    eng_post(EV_PUNCH, 3);
+    tuntil(t0 + 900);
+    eng_post(EV_PUNCH, 0);
+    tkey(7, t0 + 2500, 100);                     /* (a note in bar 2: it stays when bar 1 is cut) */
+    tuntil(t0 + 4000 + 100);
+    CHECK(tblob(LEV_PUNCH, 0, 0, 0) == 2, "cut: the punch is on a two-bar tape");
+    st.tape[2] = 1;                              /* OUT at bar 1 */
+    eng_post(EV_CUT, 0);
+    tuntil(tnow() + 40);
+    CHECK(tblob(LEV_PUNCH, 0, 0, 0) == 0 && tblob(LEV_ON, 0, 0, 0) == 1, "cut: bar 1's punch goes with its notes; bar 2's note stays");
+    st.tape[2] = 0;
+    st.tape[1] = 1;                              /* IN at bar 2: the tape plays there */
+    tuntil(tnow() + 300);
+    eng_post(EV_PASTE, 0);
+    tuntil(tnow() + 40);
+    st.tape[1] = 0;
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 2, "paste: the punch is back");
+    if (n == 2)
+        CHECK(tick[0] >= 15360 + 384 + 115 - 6 && tick[0] <= 15360 + 384 + 115 + 6 && d2[0] == 1 && d2[1] == 0,
+              "paste: a bar later (where it was pasted), start then end");
+    st.seq[1] = 0;                               /* BARS to 1: the punch is in bar 2, past the tape */
+    tz = trestart();
+    tuntil(tz + 2200);
+    span(tz, 2100.0, 3, &a, &b);
+    CHECK(a < 0.0 && tblob(LEV_PUNCH, 0, 0, 0) == 2, "length: a punch past the tape's length does not play, and stays stored");
+
+    /* rev_swaps */
+    ttake(0, 3, 600.0, 900.0);
+    st.tape[0] = TAPE_SPD_REV;
+    tz = trestart();
+    tuntil(tz + 2100);
+    span(tz, 2000.0, 3, &a, &b);
+    printf("rev: punch 3 from %.0f to %.0f ms (mirrored: 1100 to 1400)\n", a, b);
+    CHECK(a >= 1100.0 - 12 && a <= 1100.0 + 12 && b >= 1400.0 - 12 && b <= 1400.0 + 12, "rev: the punch spans the mirrored span");
+
+    /* tape_punch_across_wrap: held to the loop's end, it ends at the wrap and starts again next pass */
+    ttake(0, 3, 1700.0, -1.0);
+    CHECK(tblob(LEV_PUNCH, tick, d1, d2) == 1 && d2[0] == 1, "wrap: a punch held to the end leaves its start alone");
+    tz = trestart();
+    tuntil(tz + 4100);
+    CHECK(pat(tz + 1850) == 3, "wrap: punch 3 plays to the end");
+    CHECK(pat(tz + 2100) == 0 && pat(tz + 3000) == 0, "wrap: ended at the wrap");
+    CHECK(pat(tz + 2000 + 1850) == 3, "wrap: and starts again at its tick next pass");
+
+    /* hand_wins */
+    ttake(0, 3, 400.0, 1400.0);
+    tz = trestart();
+    tuntil(tz + 500);
+    CHECK(pat(tz + 500) == 3, "hand wins: the tape's punch 3 plays");
+    tuntil(tz + 700);
+    eng_post(EV_PUNCH, 6);
+    tuntil(tz + 800);
+    CHECK(eng_punch() == 6, "hand wins: punch 6 held by hand: 6");
+    eng_post(EV_PUNCH, 0);
+    tuntil(tz + 900);
+    CHECK(eng_punch() == 3, "hand wins: let go: the tape's 3 is back, its span goes on");
+    tuntil(tz + 1600);
+    CHECK(eng_punch() == 0, "hand wins: and ends at its end");
+    tz = trestart();                             /* the hand holds through the tape's start: it is ignored */
+    tuntil(tz + 300);
+    eng_post(EV_PUNCH, 6);
+    tuntil(tz + 1000);
+    CHECK(eng_punch() == 6, "hand wins: held through the tape's start: 6");
+    eng_post(EV_PUNCH, 0);
+    tuntil(tz + 1100);
+    CHECK(eng_punch() == 0, "hand wins: the tape's start was ignored: nothing after");
+    tz = trestart();                             /* the tape's end comes while the hand holds: nothing sticks on */
+    tuntil(tz + 500);
+    tuntil(tz + 700);
+    eng_post(EV_PUNCH, 6);
+    tuntil(tz + 1600);
+    CHECK(eng_punch() == 6, "hand wins: held through the tape's end: 6");
+    eng_post(EV_PUNCH, 0);
+    tuntil(tz + 1700);
+    CHECK(eng_punch() == 0, "hand wins: the tape's end cleared it: nothing sticks on");
+
+    /* stop_ends_punch, HUSH, a track's clear; the hand's punch is the hand's */
+    ttake(0, 3, 400.0, 1400.0);
+    tz = trestart();
+    tuntil(tz + 700);
+    CHECK(eng_punch() == 3, "stop: the tape's punch plays");
+    eng_post(EV_PLAY, 0);
+    tuntil(tnow() + 20);
+    CHECK(eng_punch() == 0, "stop: PLAY (stop) mid-punch: 0");
+    tz = trestart();
+    tuntil(tz + 700);
+    eng_post(EV_PANIC, 0);
+    tuntil(tnow() + 20);
+    CHECK(eng_punch() == 0, "stop: HUSH mid-punch: 0");
+    tz = trestart();
+    tuntil(tz + 700);
+    eng_post(EV_CLEAR, 1);
+    tuntil(tnow() + 20);
+    CHECK(eng_punch() == 0, "stop: the track's clear mid-punch: 0");
+    ttake(0, 3, 400.0, 1400.0);
+    tz = trestart();
+    tuntil(tz + 700);
+    eng_post(EV_PUNCH, 6);
+    tuntil(tnow() + 20);
+    eng_post(EV_PLAY, 0);
+    tuntil(tnow() + 20);
+    CHECK(eng_punch() == 6, "stop: the hand's punch is untouched by the stop");
+    eng_post(EV_PUNCH, 0);
+    tuntil(tnow() + 20);
+    CHECK(eng_punch() == 0, "stop: and ends with its key");
+
+    /* no_midi */
+    ttake(0, 3, 600.0, 900.0);
+    tz = trestart();
+    tuntil(tz + 2100);
+    {
+        int bad = 0;
+        for (i = 0; i < ntmo; i++)
+            if (((tmo[i][0] & 0xF0) != 0x90 && (tmo[i][0] & 0xF0) != 0x80) || tmo[i][1] < 24) bad++;
+        CHECK(ntmo > 0 && bad == 0, "no midi: only the notes went out, nothing for a punch");
+    }
+
+    /* held_before_rec: a hand punch held when REC starts records nothing until its next start */
+    tfresh(0);
+    eng_post(EV_PUNCH, 3);
+    tuntil(tnow() + 30);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + 300);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 500);
+    CHECK(tblob(LEV_PUNCH, 0, 0, 0) == 0, "held before REC: its end records nothing");
+    eng_post(EV_PUNCH, 5);
+    tuntil(t0 + 700);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 800);
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 2 && d1[0] == 4 && d1[1] == 4 && d2[0] == 1 && d2[1] == 0, "held before REC: its next start does");
+
+    /* a second key replaces the first: the first ends where the second starts */
+    tfresh(0);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + 400);
+    eng_post(EV_PUNCH, 2);
+    tuntil(t0 + 700);
+    eng_post(EV_PUNCH, 6);
+    tuntil(t0 + 900);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 1000);
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 4 && d1[0] == 1 && d2[0] == 1 && d1[1] == 1 && d2[1] == 0 && d1[2] == 5 && d2[2] == 1 && d2[3] == 0 &&
+          tick[1] == tick[2], "replaced: the first's end and the second's start at one tick, then the second's end");
+
+    /* restart_at_the_wrap: a sweep that ends at the wrap and starts again at once starts from its beginning */
+    tfresh(0);
+    put_ev(crafted + 12, 15360, 5, LEV_PUNCH, 1);                /* HPF at the tape's start, never ended */
+    CHECK(h1_loop_load(crafted, craft(1)) == 0, "restart: the crafted tape loads");
+    h1_midi(0x90, 69, 100);
+    tuntil(tnow() + 400);
+    tz = trestart();
+    tuntil(tz + 4100);
+    {
+        int steady = 1;
+        double t;
+        for (t = 50.0; t < 4000.0; t += 3.0)
+            if (pat(tz + t) != 6) steady = 0;
+        CHECK(steady, "restart: punch 6 is on all the way through the wrap");
+    }
+    {
+        double late = eat(tz + 1700, tz + 1950), early = eat(tz + 2000 + 100, tz + 2000 + 350);
+        printf("restart: the tone %.1f dB down at the end of a pass, %.1f dB over that after the wrap\n",
+               db(late, eat(tz + 100, tz + 350)), db(early, late));
+        CHECK(db(early, late) > 10.0, "restart: the sweep starts from open again on the next pass (no re-anchor at the wrap)");
+    }
+}
+
 
 int main(void)
 {
@@ -559,6 +945,7 @@ int main(void)
     }
 
     hand_tests();
+    tape_tests();
 
     printf("punch: %d checks, %d failed\n", checks, fails);
     return fails != 0;

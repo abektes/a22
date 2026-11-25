@@ -76,6 +76,8 @@ static f32 last_pitch = 60.0f;
 static volatile uint32_t note_count, hand_count;
 static volatile f32 hand_pitch, level_out, lfo_out, beat_out;
 static int punch_hand, punch_tape, punch_was;   /* the punch held by hand, the tape's (0 none), last block's */
+static int punch_tape_trk;                       /* the track the tape's punch is from */
+static uint32_t punch_gen, punch_gen_seen;       /* moves at every punch start (hand or tape): the effects start over */
 int eng_punch(void) { return punch_hand ? punch_hand : punch_tape; }
 static volatile uint32_t silent_blocks;          /* blocks the output has been silent (eng_quiet) */
 
@@ -836,7 +838,12 @@ static void route(int note, int on, int vel, int from_midi)
 }
 
 /* ---- 4-Track Virtual Tape Deck (notes + velocity + K1-K4 motion + Cut/Paste) ---------- */
-enum { LEV_OFF = 0, LEV_ON = 1, LEV_AUTO = 2 };
+enum { LEV_OFF = 0, LEV_ON = 1, LEV_AUTO = 2, LEV_PUNCH = 3 };
+/* Punches (and later the key lane) sit in the tape's tail: at their tick + LEV_TAIL, in memory and in the blob. They
+ * sort after every note and knob move, the note scans (which stop at 15,360 at most) never reach them, and 0.6.0's
+ * loader, which drops any event at 15,360 or more, loses them and nothing else. */
+#define LEV_TAIL 15360u
+static int lev_tail_kind(int kind) { return kind == LEV_PUNCH; }   /* (the kinds that live in the tail) */
 #define LEV_MIDI 0x08u                           /* (flags) a knob move that came in over MIDI: never sent back out */
 typedef struct LEv {
     uint16_t tick;
@@ -864,11 +871,13 @@ static uint8_t rec_part[128], rec_trk[128], rec_key[128];   /* (an off takes its
 static f32 rec_shift[128];                       /* SNAP's move of an open note's on: its off moves as much */
 static uint32_t rec_open[4];
 static int nopen, loop_fresh;
+static int rec_punch;                            /* the punch (1-8) whose start the take holds, its end to come */
 
 static void rec_forget(void)
 {
     rec_open[0] = rec_open[1] = rec_open[2] = rec_open[3] = 0;
     nopen = 0;
+    rec_punch = 0;                               /* (a punch still held is left open: the tape ends it at the wrap) */
 }
 
 static int lev_find(f32 t)
@@ -880,6 +889,11 @@ static int lev_find(f32 t)
         else hi = mid;
     }
     return lo;
+}
+
+static int lev_tail_find(f32 t)                  /* the first tail event at or after T (in the tape's own ticks) */
+{
+    return lev_find(t + (f32)LEV_TAIL);
 }
 
 static LEv *lev_insert(uint16_t tick)
@@ -950,6 +964,7 @@ int eng_follows(int trk, int part)               /* a track's KEY on, and the no
 static void tape_release_seq(void)
 {
     int n;
+    punch_tape = 0;                              /* (stopped, round the loop, cleared: the tape's punch ends) */
     for (n = 0; n < NVOICE; n++)
         if (voices[n].stage && voices[n].gate && voices[n].seq) {
             voices[n].gate = 0;
@@ -962,6 +977,8 @@ static void tape_release_seq(void)
 static void tape_release_trk(int t)              /* one track's tape notes let go (over MIDI out too) */
 {
     int n;
+    if (punch_tape && punch_tape_trk == (t & 3))
+        punch_tape = 0;
     for (n = 0; n < NVOICE; n++)
         if (voices[n].stage && voices[n].gate && voices[n].seq && (voices[n].trk & 3) == (t & 3)) {
             voices[n].gate = 0;
@@ -1027,12 +1044,32 @@ static void tape_fire_ev(const LEv *e, int reverse)
     }
 }
 
+/* A tail event acts on the whole mix, not a track's voices. A punch's start is ignored while the hand holds one (the
+ * hand wins) or on a muted track; its end always ends the tape's punch, so none sticks on. */
+static void tape_fire_tail(const LEv *e, int reverse)
+{
+    if ((e->flags & 7) == LEV_PUNCH) {
+        int on = e->d2 != 0;
+        if (reverse) on = !on;
+        if (!on)
+            punch_tape = 0;
+        else if (!punch_hand && !track_muted(e->trk & 3)) {
+            punch_tape = (e->d1 & 7) + 1;
+            punch_tape_trk = e->trk & 3;
+            punch_gen++;
+        }
+    }
+}
+
 static void tape_play_fwd(f32 a, f32 b)
 {
     int i;
     for (i = lev_find(a); i < nlev && (f32)lev[i].tick < b; i++)
         if (!(lev[i].flags & 0x80u))
             tape_fire_ev(&lev[i], 0);
+    for (i = lev_tail_find(a); i < nlev && (f32)lev[i].tick < b + (f32)LEV_TAIL; i++)
+        if (!(lev[i].flags & 0x80u))
+            tape_fire_tail(&lev[i], 0);
 }
 
 static void tape_play_rev(f32 hi, f32 lo)
@@ -1041,6 +1078,9 @@ static void tape_play_rev(f32 hi, f32 lo)
     for (i = lev_find(hi) - 1; i >= 0 && (f32)lev[i].tick >= lo; i--)
         if (!(lev[i].flags & 0x80u))
             tape_fire_ev(&lev[i], 1);
+    for (i = lev_tail_find(hi) - 1; i >= 0 && (f32)lev[i].tick >= lo + (f32)LEV_TAIL; i--)
+        if (!(lev[i].flags & 0x80u))
+            tape_fire_tail(&lev[i], 1);
 }
 
 /* ---- metronome ------------------------------------------------------------------------ */
@@ -1234,6 +1274,43 @@ static void tape_record_auto(int knob, int val, int from_midi)
     loop_gen++;
 }
 
+static int tape_put_tail(int kind, int d1, int d2, f32 t)
+{
+    uint16_t tick = (uint16_t)(clampf(t, 0.0f, loop_len - 1.0f) + (f32)LEV_TAIL);
+    LEv *e = lev_insert(tick);
+    if (!e) return 0;
+    e->tick  = tick;
+    e->d1    = (uint8_t)d1;
+    e->flags = (uint8_t)(kind | 0x80u);
+    e->trk   = (uint8_t)cur_trk;
+    e->part  = live_part();
+    e->d2    = (uint8_t)d2;
+    e->rsv   = 0;
+    loop_gen++;
+    return 1;
+}
+
+/* The hand's punch P (0: let go) while the tape takes: its start, and the end of the one before, on the track in hand.
+ * One held when the take began records nothing until its next start; one still held at the take's end is left open. */
+static void tape_record_punch(int p)
+{
+    f32 t = loop_pos;
+    if (st.seq[0] != SEQ_TAPE || (loop_state != LOOP_REC && loop_state != LOOP_DUB) || st.tape[0] == TAPE_SPD_REV)
+        return;
+    if (rec_punch) {
+        tape_put_tail(LEV_PUNCH, rec_punch - 1, 0, t);
+        rec_punch = 0;
+    }
+    if (p) {
+        if (nlev + nopen + 3 > NLEV) {           /* (room for its end too) */
+            loop_full++;
+            return;
+        }
+        if (tape_put_tail(LEV_PUNCH, p - 1, 1, t))
+            rec_punch = p;
+    }
+}
+
 static void seq_to_tape(int note, int on, int vel)
 {
     if (st.seq[0] == SEQ_TAPE && (loop_state == LOOP_REC || loop_state == LOOP_DUB))
@@ -1257,19 +1334,46 @@ static void tape_cut(void)
 {
     static uint8_t opart[128];
     uint32_t open[4] = {0u, 0u, 0u, 0u};
+    uint32_t popen = 0u;                         /* the punches whose start is in the clip, by number 0-7 */
     f32 in_t, out_t;
-    int i, w = 0, nop = 0, p;
+    int i, w = 0, nop = 0, npop = 0, p;
     tape_bounds(&in_t, &out_t);
     nclip = 0;
     for (i = 0; i < nlev; i++) {
         const LEv *e = &lev[i];
         int kind = e->flags & 7, is_open;
-        int in = (e->trk & 3) == cur_trk && (f32)e->tick >= in_t && (f32)e->tick < out_t;
+        int tail = lev_tail_kind(kind);
+        f32 at = (f32)e->tick - (tail ? (f32)LEV_TAIL : 0.0f);
+        int in = (e->trk & 3) == cur_trk && at >= in_t && at < out_t;
         p = e->d1 & 127;
+        if (tail) {                              /* (a punch: like a knob move, but its end stays if its start does) */
+            int pun = kind == LEV_PUNCH, pb = e->d1 & 7, start = pun && e->d2;
+            int po = pun && (int)((popen >> pb) & 1u);
+            if (in && pun && !start && !po)
+                in = 0;                          /* (the end of a punch begun before IN) */
+            if (in && nclip + nop + npop + (start && !po ? 2 : 1) > NCLIP)
+                in = 0;
+            if (in) {
+                clip_ev[nclip] = *e;
+                clip_ev[nclip].tick = (uint16_t)(at - in_t);
+                clip_ev[nclip].flags &= 0x7Fu;
+                nclip++;
+                if (start && !po) {
+                    popen |= 1u << pb;
+                    npop++;
+                } else if (pun && !start) {
+                    popen &= ~(1u << pb);
+                    npop--;
+                }
+            } else {
+                lev[w++] = *e;
+            }
+            continue;
+        }
         is_open = (int)((open[p >> 5] >> (p & 31)) & 1u);
         if (in && kind == LEV_OFF && !is_open)
             in = 0;                              /* (the end of a note begun before IN, or one left on the tape) */
-        if (in && kind != LEV_OFF && nclip + nop + (kind == LEV_ON && !is_open ? 2 : 1) > NCLIP)
+        if (in && kind != LEV_OFF && nclip + nop + npop + (kind == LEV_ON && !is_open ? 2 : 1) > NCLIP)
             in = 0;                              /* (the clip is full: it stays on the tape. Every event but the end
                                                   * of a note it holds needs a place, and a new note one for its end
                                                   * too: knob moves took places unchecked until 0.4.0) */
@@ -1302,6 +1406,18 @@ static void tape_cut(void)
             c->rsv = 0;
             nop--;
         }
+    for (p = 0; p < 8 && npop > 0; p++)          /* punches open at OUT: their ends, in the clip */
+        if ((popen >> p) & 1u) {
+            LEv *c = &clip_ev[nclip++];
+            c->tick = (uint16_t)maxf(0.0f, out_t - in_t - 1.0f);
+            c->d1 = (uint8_t)p;
+            c->flags = LEV_PUNCH;
+            c->trk = (uint8_t)cur_trk;
+            c->part = 0;
+            c->d2 = 0;
+            c->rsv = 0;
+            npop--;
+        }
     nlev = w;
     tape_release_trk(cur_trk);
     if (!nlev) loop_state = LOOP_EMPTY;
@@ -1323,7 +1439,9 @@ static void tape_paste(void)
     track_snap_live(cur_trk);
     for (i = 0; i < nclip && nlev < NLEV; i++) {
         uint32_t tk = (base_tick + clip_ev[i].tick) % (uint32_t)loop_len;
-        LEv *e = lev_insert((uint16_t)tk);
+        LEv *e;
+        if (lev_tail_kind(clip_ev[i].flags & 7)) tk += LEV_TAIL;
+        e = lev_insert((uint16_t)tk);
         if (!e) break;
         *e = clip_ev[i];
         e->tick = (uint16_t)tk;
@@ -1715,8 +1833,13 @@ static void handle(uint32_t e)
         if (!st.keys[3]) chord_key(a, 0, 0, from_midi);
         break;
     case EV_PUNCH:                               /* (bit 23: the tape's) */
-        if (from_midi) punch_tape = a <= 8 ? a : 0;
-        else punch_hand = a <= 8 ? a : 0;
+        if (a > 8) a = 0;
+        if (a) punch_gen++;
+        if (from_midi) punch_tape = a;
+        else {
+            tape_record_punch(a);
+            punch_hand = a;
+        }
         break;
     case EV_MIDI_OFF: {
         /* MIDI's all notes off, which a DAW sends on stop and a USB keyboard unplugged sends here: the notes MIDI
@@ -2301,6 +2424,10 @@ static void block(f32 *L, f32 *R)
     {
         /* a punch held replaces TRICK (1-4 are TRICK's own, 5-8 come after it), and when it ends TRICK is back */
         int p = eng_punch(), trick = p ? (p <= TRICK_STUT32 ? p : TRICK_OFF) : st.tape[3];
+        if (punch_gen != punch_gen_seen) {      /* (a punch started: the same one again starts over, not on) */
+            punch_gen_seen = punch_gen;
+            fx_punch_restart();
+        }
         fx_master_block(L, R, st.master, p || punch_was ? trick | TRICK_SMOOTH : trick, bpm);
         fx_punch_block(L, R, p, bpm, punch_phase16());
         punch_was = p;
@@ -2491,7 +2618,8 @@ SMALL void eng_init(uint32_t sample_rate)
     click_at = -1;
     ev_r = ev_w;
     sub_l = sub_r = 0.0f;
-    punch_hand = punch_tape = punch_was = 0;
+    punch_hand = punch_tape = punch_was = punch_tape_trk = 0;
+    punch_gen = punch_gen_seen = 0;
 }
 
 /* ---- main-loop introspection ---------------------------------------------------------- */
@@ -2730,7 +2858,8 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         LEv *d;
         /* keep what lies past the loop's present length: shortening the tape (bars, loop in/out) leaves
          * those events in memory to come back when it is lengthened, and a power cycle must not lose them */
-        if (tick >= 32u * 480u) continue;
+        if (lev_tail_kind((int)(e[3] & 7u)) ? (tick < LEV_TAIL || tick >= 2u * LEV_TAIL) : tick >= LEV_TAIL)
+            continue;                            /* (a tail kind lives in the tail, any other kind below it) */
         nlev = (int)k;
         d = lev_insert((uint16_t)tick);
         if (!d) break;

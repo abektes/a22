@@ -118,6 +118,7 @@ static f32 tfx_rpos, tfx_spd = 1.0f, tfx_stut_len = 5512.0f, tfx_stut_pos, tfx_s
 /* A punch's change of trick (TRICK_SMOOTH) is faded: the old trick goes out to the dry mix over 10 ms, then the new
  * one comes in over 10 ms. A change on the TRICK knob is at once, as before. */
 static int tfx_want;                         /* the trick a fade is going to (tfx_prev when none) */
+static int tfx_rst, tfx_force;               /* a punch started again: the trick fades out and starts over */
 static f32 tfx_wet = 1.0f;                   /* the trick's level over the dry mix, 0..1 */
 #define TFX_FADE 100.0f                      /* a fade's rate a second: 10 ms from 0 to 1 */
 static void punch_reset(void);
@@ -160,6 +161,7 @@ void fx_reset(void)
     eq_mid[0][0] = eq_mid[0][1] = eq_mid[1][0] = eq_mid[1][1] = 0.0f;
     glue_env = 0.0f;
     tfx_prev = tfx_want = TRICK_OFF;
+    tfx_rst = tfx_force = 0;
     tfx_wet = 1.0f;
     tfx_spd = 1.0f;
     tfx_w = 0;
@@ -830,7 +832,12 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
     /* Live RAM Tape Performance FX: Brake & Beat Stutter (48 KB stereo ring) */
     smooth = trick & TRICK_SMOOTH;
     trick &= ~TRICK_SMOOTH;
-    if (smooth || tfx_want != tfx_prev || tfx_wet < 1.0f) {
+    if (tfx_rst) {                               /* (the same trick again from a new punch: out, then in from its start) */
+        tfx_rst = 0;
+        if (smooth && trick != TRICK_OFF && trick == tfx_prev && tfx_want == tfx_prev)
+            tfx_force = 1;
+    }
+    if (smooth || tfx_want != tfx_prev || tfx_wet < 1.0f || tfx_force) {
         tfx_want = trick;                        /* (a punch's change, or one while a fade runs: faded) */
         fading = 1;
     } else if (trick != tfx_prev) {
@@ -842,9 +849,10 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
         uint32_t wi = tfx_w;                     /* (kept below TFX_FRAMES: no division a sample) */
         f32 dl = l[n], dr = r[n];
         if (fading) {
-            if (tfx_want != tfx_prev) {          /* the old trick out, then the new one in from 0 */
+            if (tfx_want != tfx_prev || tfx_force) {   /* the old trick out, then the new one in from 0 */
                 tfx_wet -= TFX_FADE * ISRf;
                 if (tfx_prev == TRICK_OFF || tfx_wet <= 0.0f) {
+                    tfx_force = 0;
                     tfx_enter(tfx_want, bpm);
                     tfx_wet = tfx_want == TRICK_OFF ? 1.0f : 0.0f;
                 }
@@ -900,6 +908,7 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
 #define PCH_LEVELS 32.0f                     /* CRUSH: 6 bits, 64 levels over -1..1 */
 #define PCH_HOLD 6u                          /* CRUSH: a sample held for 6, the rate down to 1/6 */
 #define PCH_EDGE 0.002f                      /* GATE: its edges, in seconds */
+static int pch_rst;                          /* a punch started again: it goes out and starts over */
 static int pch_cur, pch_in, pch_out;         /* the effect running (0 none), the punch last asked for, going out */
 static f32 pch_wet, pch_t, pch_ph, pch_g;    /* the level over dry, the sweep 0..1 in bars, the gate's phase, gain */
 static f32 pch_s[2][2], pch_hl, pch_hr;      /* the filters' state, CRUSH's held samples */
@@ -907,7 +916,7 @@ static uint32_t pch_cnt;
 
 static void punch_reset(void)
 {
-    pch_cur = pch_in = pch_out = 0;
+    pch_cur = pch_in = pch_out = pch_rst = 0;
     pch_wet = pch_t = pch_ph = pch_g = 0.0f;
     pch_s[0][0] = pch_s[0][1] = pch_s[1][0] = pch_s[1][1] = pch_hl = pch_hr = 0.0f;
     pch_cnt = 0;
@@ -923,6 +932,12 @@ static void punch_start(int p, f32 phase16)
     pch_g = phase16 < 0.5f ? 1.0f : 0.0f;
 }
 
+void fx_punch_restart(void)
+{
+    tfx_rst = 1;
+    pch_rst = 1;
+}
+
 void fx_punch_block(f32 *l, f32 *r, int punch, f32 bpm, f32 phase16)
 {
     int want = punch >= PUNCH_LPF && punch <= PUNCH_GATE ? punch : 0, n;
@@ -932,6 +947,11 @@ void fx_punch_block(f32 *l, f32 *r, int punch, f32 bpm, f32 phase16)
     if (punch != pch_in) {                       /* (a new punch, or the end: the one running goes out first) */
         pch_in = punch;
         pch_out = pch_cur != 0;
+    }
+    if (pch_rst) {                               /* (the same punch from a new start: out, then in from its beginning) */
+        pch_rst = 0;
+        if (pch_cur && want && punch == pch_in)
+            pch_out = 1;
     }
     if (pch_out && pch_wet <= 0.0f) {
         pch_out = 0;
