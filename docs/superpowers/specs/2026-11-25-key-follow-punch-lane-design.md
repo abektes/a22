@@ -300,7 +300,14 @@ The tests are core-alone C programs in `tests/`, built with the address and unde
 
 ## Flash budget
 
-About 14 KB of the 582 KB flash slot is left after the MIDI out branch. The image size is read from the CI firmware job after each phase, since there's no local JieLi toolchain. If a phase doesn't fit (the user's choice): fewer punch effects first. Keep BRAKE, the three stutters, LPF and HPF; drop CRUSH and GATE, whose keys then do nothing. KEY FOLLOW and the LANE stay whole. If it still doesn't fit, stop and ask before cutting anything else.
+About 14 KB of the 582 KB flash slot is left after the MIDI out branch. The image size is read from the CI firmware job after each phase, since there's no local JieLi toolchain.
+
+**Step 0, before Phase 1 (the user's decision, 2026-11-25): STACK's and ELECTRIC's specialised renders come out.** `cluster_render_a` (`core/inst_stack.c`) and `elec_render_a` (`core/inst_electric.c`) go back to one render that takes the algorithm as a variable, as before 6494cf7.
+- **Flash:** this frees about 25 KB (15.0 + 10.3 KB, measured from the two builds' `a22.elf` in `docs/PLAN-after-sprints.md`), so about 39 KB in all.
+- **Sound:** it stays the same to the bit; `tests/cores.c`'s section hashes and `tests/sleep.c` are unchanged.
+- **Audio time:** the cost measured in 0.5.0 was +3.0 points on STACK and +2.1 on ELECTRIC (eight-note chords, PLATE), with peaks of 50–65% before. CC 119 on the FM-1 re-measures both engines' eight algorithms after the change: no algorithm's peak past 80%, LATE 0, SHED 0.
+- **Estimate:** the three phases come to about 12–19 KB, so the fallback below is not expected to be needed.
+- **Keep:** FM-4's and ANALOG's specialised renders stay, and so does SHAPER's (77% without it). If a phase doesn't fit (the user's choice): fewer punch effects first. Keep BRAKE, the three stutters, LPF and HPF; drop CRUSH and GATE, whose keys then do nothing. KEY FOLLOW and the LANE stay whole. If it still doesn't fit, stop and ask before cutting anything else.
 
 ## What's left to the builder
 
