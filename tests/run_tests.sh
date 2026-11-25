@@ -7,6 +7,8 @@
 #   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
 #   midiout    MIDI out as a DAW records it: each track on its own channel, a note's off on its on's channel,
 #              knob and tape automation CCs, HUSH on all four channels
+#   keyfollow  KEY FOLLOW's data: recorded notes carry GLO's key (an off its on's), the tape blob's header bit, junk
+#              keys dropped on load, the step pattern's key and each track's KEY bit in the saved state
 #   miditiers  the device's MIDI out queue: what still goes when it is nearly full (app/midi_tiers.h)
 #   keymap     the key mapping (core/keymap.c): a note in one key played in another, by scale steps, clamped
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
@@ -63,6 +65,8 @@ $CC -std=c99 $SAN core/*.c tests/basics.c -o build/a22basics -lm
 build/a22basics
 $CC -std=c99 $SAN core/*.c tests/midiout.c -o build/a22midiout -lm
 build/a22midiout
+$CC -std=c99 $SAN core/*.c tests/keyfollow.c -o build/a22keyfollow -lm
+build/a22keyfollow
 $CC -std=c99 $SAN tests/miditiers.c -o build/a22miditiers
 build/a22miditiers
 $CC -std=c99 $SAN tests/keymap.c core/keymap.c -o build/a22keymap

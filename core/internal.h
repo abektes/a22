@@ -360,6 +360,7 @@ int key_root(uint8_t k);
 int key_scale(uint8_t k);
 int key_map(int note, uint8_t from, uint8_t to);
 int key_steps(int note, uint8_t key, int steps);
+uint8_t eng_key_glo(void);                      /* GLO's ROOT and SCALE as a key byte (synth.c) */
 
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];

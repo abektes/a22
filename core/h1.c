@@ -355,6 +355,7 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         if (tr->send > 100) tr->send = 35;
         tr->mute &= 3u;
         tr->has_snap &= 1u;
+        tr->rsv &= 1u;                         /* (bit 0: the track follows the key) */
         for (j = 0; j < 4; j++) {
             if (tr->knob[j] > 100) tr->knob[j] = 50;
             if (tr->env[j] > 100) tr->env[j] = 50;
@@ -390,7 +391,9 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         }
     st.ninst = NINST;
     st.nfx = NFX;
-    st.rsv[0] = st.rsv[1] = 0;
+    /* rsv[0] is the step pattern's key: a valid key (the valid bit, a root of 0..11) or none */
+    if (!(st.rsv[0] & 0x80u) || (st.rsv[0] & 15u) > 11u) st.rsv[0] = 0;
+    st.rsv[1] = 0;
     eng_init(0);
     ui_init();
     return 0;

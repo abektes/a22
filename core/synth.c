@@ -858,7 +858,7 @@ static int nclip;
 static volatile uint32_t loop_gen, loop_full;
 static volatile int loop_state = LOOP_EMPTY;
 static volatile f32 loop_pos, loop_len = 1536.0f;
-static uint8_t rec_part[128], rec_trk[128];
+static uint8_t rec_part[128], rec_trk[128], rec_key[128];   /* (an off takes its on's key too) */
 static f32 rec_shift[128];                       /* SNAP's move of an open note's on: its off moves as much */
 static uint32_t rec_open[4];
 static int nopen, loop_fresh;
@@ -1105,6 +1105,11 @@ static void tape_tick(f32 dticks)
     tp_last = b;
 }
 
+uint8_t eng_key_glo(void)
+{
+    return key_byte(st.keys[0] % 12, st.keys[1] & 7);
+}
+
 static void tape_record_note(int note, int on, int vel)
 {
     static const f32 Q[3] = {0.0f, 24.0f, 48.0f};
@@ -1127,6 +1132,7 @@ static void tape_record_note(int note, int on, int vel)
         trk = cur_trk;
         rec_part[note] = (uint8_t)part;
         rec_trk[note] = (uint8_t)trk;
+        rec_key[note] = eng_key_glo();
         track_snap_live(trk);
     } else {
         part = rec_part[note] ? rec_part[note] : live_part();
@@ -1150,7 +1156,7 @@ static void tape_record_note(int note, int on, int vel)
     e->trk   = (uint8_t)trk;
     e->part  = (uint8_t)part;
     e->d2    = (uint8_t)(on ? iclamp(vel, 1, 127) : 0);
-    e->rsv   = 0;
+    e->rsv   = rec_key[note];
     if (on) {
         rec_open[note >> 5] |= 1u << (note & 31);
         nopen++;
@@ -2625,7 +2631,7 @@ const uint8_t *eng_loop_blob(uint32_t *size)
     put16(h, LOOP_MAGIC & 0xFFFFu);
     put16(h + 2, LOOP_MAGIC >> 16);
     h[4] = 1;
-    h[5] = 0;
+    h[5] = 1;                                    /* (bit 0: the events carry keys) */
     put16(h + 6, (uint32_t)ne);
     put16(h + 8, (uint32_t)loop_len);
     put16(h + 10, 0);
@@ -2659,7 +2665,8 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         d->trk   = e[4] & 3u;
         d->part  = part_ok(e[5]) ? e[5] : PART(st.trk[d->trk].inst, st.trk[d->trk].algo);
         d->d2    = e[6] & 127u;
-        d->rsv   = 0;
+        /* a key is kept only if the blob says its events carry them, and it is a valid one */
+        d->rsv   = ((b[5] & 1u) && (e[7] & KEY_VALID) && (e[7] & 15u) <= 11u) ? e[7] : 0;
         k++;
     }
     nlev = (int)k;
