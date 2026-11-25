@@ -64,8 +64,10 @@ into the DAW" work properly: four separate parts, each on its own channel, recor
 - No Song Position Pointer. A loop whose IN bar isn't 1 still sends Start at IN.
 
 **Getting through.** `midi_send` (`app/app.c:285`) drops a note-on or a CC when the USB queue has 16 or fewer
-free places, and keeps the last places for note-offs. Clock, Start and Stop get the same right as a note-off
-(sent while there is any room at all). With nothing listening there is no room and nothing is sent, as today.
+free places, and keeps the last places for note-offs. Clock, Start and Stop get through ahead of notes and CCs, in
+tiers (changed after review): a note-off, CC 123 and Stop while there is any room; the clock and Start while more
+than 8 places are left; a note-on or a CC while more than 16 are. (A clock at 48 to 96 a second sharing the note-offs'
+last places would fill them within a fraction of a second of a stall, and the offs could no longer go.) With nothing listening there is no room and nothing is sent, as today.
 The USB-MIDI packet for a one-byte real-time message is code index 0xF, which `midi_send`'s packing already
 gives for 0xF8, 0xFA and 0xFC.
 

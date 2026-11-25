@@ -279,17 +279,27 @@ static int core2_wait(void) { return plat_cpu2_wait(); }
 
 /* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes and clock from the
  * render, its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and
- * nothing is queued. A note-on or a knob goes only while there is room to spare, so the queue never fills with
- * them and leaves out a note-off (a note the computer would then hold for ever), a CC 123, or the clock, Start or
- * Stop a DAW follows (a clock dropped and its tempo wobbles). (A one-byte real-time message, 0xF8 and up, packs
- * as code index 0xF, which status >> 4 gives.) */
+ * nothing is queued. What may be left out goes in three tiers, so a computer that stops reading for a moment never
+ * loses what matters most to the room the rest took:
+ *   a note-off, a CC 123, Stop       while there is any room (a note left out is held for ever);
+ *   the clock, Start                 while MIDI_CLOCK_SPARE places are left (a clock left out wobbles the DAW's
+ *                                    tempo, but 48 to 96 a second would fill the last places in a fraction of a
+ *                                    second of a stall, and the offs could no longer go);
+ *   a note-on, a knob                while MIDI_SPARE places are left.
+ * (A one-byte real-time message, 0xF8 and up, packs as code index 0xF, which status >> 4 gives.) */
 #define MIDI_SPARE 16u
+#define MIDI_CLOCK_SPARE 8u
 static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     uint32_t pkt = (uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24;
-    uint32_t room = plat_midi_out_room(TO_USB);
-    int off = status >= 0xF8u || (status & 0xF0u) == 0x80u || ((status & 0xF0u) == 0xB0u && d1 == 123u);
-    if (off ? room > 0u : room > MIDI_SPARE)
+    uint32_t room = plat_midi_out_room(TO_USB), need;
+    if (status == 0xFCu || (status & 0xF0u) == 0x80u || ((status & 0xF0u) == 0xB0u && d1 == 123u))
+        need = 0u;
+    else if (status >= 0xF8u)
+        need = MIDI_CLOCK_SPARE;
+    else
+        need = MIDI_SPARE;
+    if (room > need)
         plat_midi_send(pkt, TO_USB);
 }
 

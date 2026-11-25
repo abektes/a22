@@ -178,8 +178,8 @@ records the four tracks apart:
   arpeggiator on the channel of the track in hand (a note ends on the channel it started on);
 - CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back;
 - MIDI clock, 24 a beat at TEMPO, all the time, with Start when the tape or the step pattern starts (PLAY, or
-  the first key of a take) and Stop when it stops. Set the DAW to follow external MIDI clock and it keeps
-  A22's tempo and starts recording on A22's bar 1;
+  the first key of a take), sent before the note that starts it, and Stop when it stops. A DAW set to follow
+  external MIDI clock can take A22's tempo, Start and Stop from it;
 - CC 123 on channels 1 to 4 when HOME is held.
 
 A note that came in over MIDI isn't sent back out. A synth played from A22's MIDI out hears T2 to T4 only if it
