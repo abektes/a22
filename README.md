@@ -71,7 +71,8 @@ shows the eight, the one held lit, and the screen reader says PUNCH, then the pu
 FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is
 recorded on the track in hand and plays back on the whole mix (not on a muted track); CUT, PASTE and clear treat
 it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A punch you hold by hand wins
-over the tape's. Punches do not go out over MIDI. A tape with punches loaded into 0.6.0 plays without them.
+over the tape's, and a punch replaces TRICK while it is held: TRICK's setting is back when the punch ends. A punch
+still held when a take ends is ended there. Punches do not go out over MIDI. A tape with punches loaded into 0.6.0 plays without them.
 
 ## Pages
 
@@ -115,7 +116,8 @@ KEYS ROOT and SCALE, whatever they are now, from the key it was recorded in: ROO
 semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its place in the scale; between
 others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
 Drum engines (KIT, SKINS) never move, and say DRUM. A tape recorded on 0.6.0 or earlier plays as recorded,
-and so does a track with KEY off. MIDI out sends the notes as they sound.
+and so does a track with KEY off, except that a note recorded over a DEG bar on a KEY track is stored moved down (see
+LANE), so on 0.6.0, or after KEY is turned off, it plays moved down. MIDI out sends the notes as they sound.
 
 **LANE.** The key can change from bar to bar. With the tape in view, tap SEQ, then SELECT twice to the third subpage,
 LANE: BAR (K1) picks a bar, and ROOT (K2), SCALE (K3) and DEG (K4) set that bar's entry. Turn a field below its first
@@ -128,7 +130,8 @@ cells show a bar each, an entry's bars bright, the bars it carries over dim, and
 the DECK subpage marks entry bars, and while the tape plays over a lane its header says the key in force, for
 example D MAJ . IV. Live keys and chord memory's SCALE mode snap to the root and scale in force while the tape
 plays (not to DEG), and to GLO's key when it is stopped; STEP mode ignores the lane. Recording over a bar with a
-DEG on a KEY track stores the note moved back down, so it plays as played and follows later changes. The lane
+DEG on a KEY track stores the note moved back down, so it plays as played and follows later changes; a note that is
+not in the bar's scale (from MIDI in, or a chord) is stored as played instead, and does not follow. The lane
 belongs to the whole tape: CUT, PASTE and holding REC leave it, CLEAR ALL clears it, and turning BARS down keeps
 entries past the new end. A tape saved with a lane loads on 0.6.0 without the lane and without its punches (it drops
 what it does not know), and its notes play as recorded.
@@ -138,7 +141,8 @@ The tape and every setting are saved by themselves and come back after a restart
 **STEP.** Hold SEQ to swap the tape for the step sequencer. REC then turns step writing on and off, PLAY
 runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest. The pattern has one key, the
 ROOT and SCALE when its first step is written; clearing the whole pattern clears it. A track with KEY on plays
-the pattern in the key it has now, as it does the tape.
+the pattern in the key it has now, as it does the tape. A step written on a track with KEY off while GLO's key differs
+from the pattern's is stored as played, and turning KEY on later maps it from the pattern's key.
 
 ## Riff and Shake
 

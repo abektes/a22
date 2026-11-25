@@ -369,6 +369,18 @@ static void hand_tests(void)
     btn(H1_BTN_EDIT, 0);
     CHECK(st.hud != hud, "EDIT works again after FX is let go");
 
+    hand();                                              /* SAVE held, then FX: no punch hold, SAVE's gesture works */
+    btn(H1_BTN_SAVE, 1);
+    btn(H1_BTN_FX, 1);
+    go(300);
+    CHECK(!h1_fx_held(), "SAVE then FX: FX is not held for punches (so no strip is drawn)");
+    key(WHITE[2], 1);
+    CHECK(eng_punch() == 0 && h1_punch() == 0, "SAVE then FX then a white key: no punch");
+    CHECK(st.snap[2].used, "and the key made SAVE's snapshot as it always did");
+    key(WHITE[2], 0);
+    btn(H1_BTN_FX, 0);
+    btn(H1_BTN_SAVE, 0);
+
     hand();                                              /* strip_drawn */
     go(300);
     without = band_sum();
@@ -660,6 +672,34 @@ static void tape_tests(void)
     CHECK(pat(tz + 1850) == 3, "wrap: punch 3 plays to the end");
     CHECK(pat(tz + 2100) == 0 && pat(tz + 3000) == 0, "wrap: ended at the wrap");
     CHECK(pat(tz + 2000 + 1850) == 3, "wrap: and starts again at its tick next pass");
+
+    /* a punch held when the take ends gets its end there: REC again, then PLAY */
+    {
+        int by_play;
+        for (by_play = 0; by_play < 2; by_play++) {
+            double t0;
+            char what[96];
+            tfresh(0);
+            ttap(H1_BTN_REC);
+            t0 = tnow() + 50;
+            tkey(4, t0, 100);
+            tuntil(t0 + 600);
+            eng_post(EV_PUNCH, 8);
+            tuntil(t0 + 1200);
+            ttap(by_play ? H1_BTN_PLAY : H1_BTN_REC);   /* (the take ends with the punch still held) */
+            eng_post(EV_PUNCH, 0);
+            tuntil(tnow() + 50);
+            snprintf(what, sizeof what, "ends held (%s): its start and its end are stored", by_play ? "PLAY" : "REC");
+            CHECK(tblob(LEV_PUNCH, tick, d1, d2) == 2 && d2[0] == 1 && d2[1] == 0, what);
+            tz = trestart();
+            tuntil(tz + 2100);
+            span(tz, 2000.0, 8, &a, &b);
+            printf("ends held (%s): punch 8 from %.0f to %.0f ms\n", by_play ? "PLAY" : "REC", a, b);
+            snprintf(what, sizeof what, "ends held (%s): the punch stops where the take ended, not at the loop's end",
+                     by_play ? "PLAY" : "REC");
+            CHECK(a > 0.0 && b < 1500.0, what);
+        }
+    }
 
     /* hand_wins */
     ttake(0, 3, 400.0, 1400.0);

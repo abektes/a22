@@ -14,7 +14,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   light is on while it is held, and the screen reader says PUNCH, then the punch's name.
 - Recording or overdubbing on the tape records the punches on the track in hand, and they play back on the whole mix
   (not on a muted track). CUT, PASTE and clear treat them like knob moves, REV swaps their starts and ends, and a
-  punch ends at stop and at the wrap. One held by hand wins over the tape's. Punches do not go over MIDI.
+  punch ends at stop and at the wrap (and where a take ends, if you still hold it). One held by hand wins over the tape's. Punches do not go over MIDI.
 - Tapes saved with punches load in 0.6.0 without them (it drops what it does not know).
 
 **LANE**
@@ -24,7 +24,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   DEG I: each field holds from the latest entry that sets it, from bar 1, with no wrap. Drums never follow.
 - A change applies from its bar's first tick; sounding notes keep their pitch. Live keys and chord memory's SCALE
   mode snap to the key in force while the tape plays (not DEG), GLO's when it is stopped; STEP ignores the lane.
-- Recording over a DEG bar on a KEY-on track stores the note moved down DEG - 1 steps, so it plays as played.
+- Recording over a DEG bar on a KEY-on track stores the note moved down DEG - 1 steps, so it plays as played; a note off the bar's scale is stored as played.
 - Entries belong to the whole tape: CUT, PASTE and holding REC leave them, CLEAR ALL clears them, a tape with only
   entries is not empty, an entry keeps its tick when METER changes, and BARS turned down keeps entries past the end.
 - The cells show a bar each (entry bars bright, inherited bars dim, a minor degree's numeral underlined), the DECK

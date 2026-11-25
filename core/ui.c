@@ -846,7 +846,10 @@ SMALL void h1_button(int btn, int down)
     }
 
     switch (btn) {
-    case H1_BTN_FX:    fx_hand = 1; break;       /* (its page opens when it is let go, unless a punch was played) */
+    case H1_BTN_FX:                              /* (its page opens when it is let go, unless a punch was played;
+                                                  * with SAVE held the keys are SAVE's: no strip, no punch) */
+        if (!(btn_held & (1u << H1_BTN_SAVE))) fx_hand = 1;
+        break;
     case H1_BTN_SEL:   open_page(PG_MIX); break;
     case H1_BTN_ENV:   open_page(PG_ENV); break;
     case H1_BTN_LFO:   open_page(PG_LFO); break;

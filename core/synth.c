@@ -881,7 +881,15 @@ static void rec_forget(void)
 {
     rec_open[0] = rec_open[1] = rec_open[2] = rec_open[3] = 0;
     nopen = 0;
-    rec_punch = 0;                               /* (a punch still held is left open: the tape ends it at the wrap) */
+    rec_punch = 0;
+}
+
+static int tape_put_tail(int kind, int d1, int d2, int trk, f32 t);
+
+static void rec_end_punch(void)                  /* a take ending with a punch held: its end goes where the take stops */
+{
+    if (rec_punch)
+        tape_put_tail(LEV_PUNCH, rec_punch - 1, 0, rec_punch_trk, loop_pos);
 }
 
 static int lev_find(f32 t)
@@ -1370,6 +1378,15 @@ static void tape_record_note(int note, int on, int vel)
         int b = lane_bar(t);
         rec_key[note] = eng_key_at(b);
         rec_trk[note] = (uint8_t)(trk | (eng_follows(trk, part) ? lane_dg[b] : 0) << 2);
+        if (rec_trk[note] >> 2 & 7) {
+            /* moving down then up by DEG is no round trip for a note off the scale: it is stored as played, with no
+             * key, so it sounds as heard (and does not follow later key changes) */
+            int dg = rec_trk[note] >> 2 & 7;
+            if (key_steps(key_steps(note, rec_key[note], -dg), rec_key[note], dg) != note) {
+                rec_key[note] = 0;
+                rec_trk[note] = (uint8_t)trk;
+            }
+        }
     }
     deg = rec_trk[note] >> 2 & 7;
     stored = deg ? key_steps(note, rec_key[note], -deg) : note;
@@ -1433,7 +1450,7 @@ static int tape_put_tail(int kind, int d1, int d2, int trk, f32 t)
 }
 
 /* The hand's punch P (0: let go) while the tape takes: its start, and the end of the one before, on the track in hand.
- * One held when the take began records nothing until its next start; one still held at the take's end is left open. */
+ * One held when the take began records nothing until its next start; one still held at the take's end ends there. */
 static void tape_record_punch(int p)
 {
     f32 t = loop_pos;
@@ -1463,6 +1480,7 @@ static void seq_to_tape(int note, int on, int vel)
 
 static void tape_stop(void)
 {
+    rec_end_punch();
     rec_forget();
     tape_release_seq();
     if (loop_state == LOOP_REC || loop_state == LOOP_DUB)
@@ -1476,7 +1494,7 @@ static void tape_stop(void)
  * the clip holds, events stay on the tape (they were lost); what the track sounds is let go. */
 static void tape_cut(void)
 {
-    static uint8_t opart[128];
+    static uint8_t opart[128], okey[128];
     uint32_t open[4] = {0u, 0u, 0u, 0u};
     uint32_t popen = 0u;                         /* the punches whose start is in the clip, by number 0-7 */
     f32 in_t, out_t;
@@ -1529,6 +1547,7 @@ static void tape_cut(void)
             if (kind == LEV_ON && !is_open) {
                 open[p >> 5] |= 1u << (p & 31);
                 opart[p] = e->part;
+                okey[p] = e->rsv;                /* (its end takes the key too) */
                 nop++;
             } else if (kind == LEV_OFF) {
                 open[p >> 5] &= ~(1u << (p & 31));
@@ -1547,7 +1566,7 @@ static void tape_cut(void)
             c->trk = (uint8_t)cur_trk;
             c->part = opart[p];
             c->d2 = 0;
-            c->rsv = 0;
+            c->rsv = okey[p];
             nop--;
         }
     for (p = 0; p < 8 && npop > 0; p++)          /* punches open at OUT: their ends, in the clip */
@@ -2089,6 +2108,7 @@ static void handle(uint32_t e)
         } else if (loop_state == LOOP_REC || loop_state == LOOP_DUB) {
             int i;
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
+            rec_end_punch();
             rec_forget();
             track_snap_live(cur_trk);
             loop_state = nlev ? LOOP_PLAY : LOOP_EMPTY;
@@ -3016,6 +3036,11 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
          * those events in memory to come back when it is lengthened, and a power cycle must not lose them */
         if (lev_tail_kind((int)(e[3] & 7u)) ? (tick < LEV_TAIL || tick >= 2u * LEV_TAIL) : tick >= LEV_TAIL)
             continue;                            /* (a tail kind lives in the tail, any other kind below it) */
+        if ((e[3] & 7u) == LEV_KEY) {            /* (a lane entry: a field out of range is none, and all none is no entry) */
+            uint32_t r = e[2] & 127u, sc = e[6] & 15u, dg = (e[6] >> 4) & 7u;
+            if (r > 11u && sc > 7u && dg > 6u)
+                continue;
+        }
         nlev = (int)k;
         d = lev_insert((uint16_t)tick);
         if (!d) break;
@@ -3029,6 +3054,10 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
             d->trk = d->part = 0;
         }
         d->d2    = e[6] & 127u;
+        if ((d->flags & 7u) == LEV_KEY) {
+            if (d->d1 > 11u) d->d1 = 127u;
+            if ((d->d2 & 15u) > 7u) d->d2 = (uint8_t)((d->d2 & 0x70u) | 15u);
+        }
         /* a key is kept only if the blob says its events carry them, and it is a valid one */
         d->rsv   = ((b[5] & 1u) && (e[7] & KEY_VALID) && (e[7] & 15u) <= 11u) ? e[7] : 0;
         k++;

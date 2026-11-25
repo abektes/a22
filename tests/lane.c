@@ -349,6 +349,99 @@ static void record_over_deg(void)
     CHECK(key_ev(0, &d1, &k) && d1 == 60, "and its off, let go in a bar of DEG I, as its on was: C");
 }
 
+static void record_off_scale_over_deg(void)
+{
+    int d1 = -1, k = -1, o[8];
+    fresh();
+    st.trk[0].rsv = 1;                           /* KEY on */
+    lane(0, 2, 1);                               /* bar 1: DEG II, C major */
+    tap(H1_BTN_REC);
+    h1_midi(0x90, 61, 100);                      /* C# over II, in C major: not in the scale */
+    go(200);
+    h1_midi(0x80, 61, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(100);
+    CHECK(key_ev(1, &d1, &k) && d1 == 61 && k == 0, "an off-scale C# over II is stored as played, with no key");
+    CHECK(key_ev(0, &d1, &k) && d1 == 61 && k == 0, "its off too");
+    pass();
+    CHECK(ons(o, 8) == 1 && o[0] == 61, "and it plays back as C#");
+    CHECK(exact() && gated() == 0, "ended");
+
+    fresh();                                     /* SHAPE MAJ on D over II: D, F#, A */
+    st.trk[0].rsv = 1;
+    st.chord[0] = CHORD_SHAPE;
+    st.chord[1] = 0;
+    lane(0, 2, 1);
+    tap(H1_BTN_REC);
+    h1_key(9, 1);                                /* D (62) */
+    go(200);
+    h1_key(9, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    pass();
+    CHECK(ons(o, 8) == 3 && triad(o, 62, 66, 69), "SHAPE MAJ on D over II plays back D, F#, A");
+    CHECK(exact() && gated() == 0, "ended");
+
+    fresh();                                     /* in-scale notes still follow */
+    st.trk[0].rsv = 1;
+    lane(0, 2, 1);
+    tap(H1_BTN_REC);
+    h1_key(12, 1);                               /* F over II */
+    go(200);
+    h1_key(12, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    CHECK(key_ev(1, &d1, &k) && d1 == 64 && k == C_MAJ, "an in-scale F over II is still stored one step down: E");
+    lane(0, 2, 3);
+    pass();
+    CHECK(ons(o, 8) == 1 && o[0] == 69, "and still follows a changed DEG (E over IV: A)");
+}
+
+static void cut_open_note_keeps_key(void)
+{
+    int o[8], n;
+    fresh();
+    st.trk[0].rsv = 1;                           /* KEY on */
+    nbl = 0;
+    b_ev(0, 60, 1, 100, C_MAJ);                  /* a note across bar 2's end, in C major */
+    b_ev(1000, 60, 0, 0, C_MAJ);
+    CHECK(b_load() == 0, "a note that spans OUT loads");
+    st.tape[2] = 2;                              /* OUT after bar 2 */
+    eng_post(EV_CUT, 0);
+    go(20);
+    eng_post(EV_PASTE, 0);
+    go(20);
+    st.tape[2] = 0;
+    st.tape[0] = TAPE_SPD_REV;
+    st.keys[0] = 2;                              /* GLO: D major */
+    pass();
+    n = ons(o, 8);                               /* (the off left on the tape past OUT fires too: mapped) */
+    CHECK(n >= 1 && o[0] == 62 && (n < 2 || o[1] == 62), "CUT's end of a note open at OUT plays mapped in REV: C is D");
+    CHECK(mo_n(0x90, 60) == 0, "none of it plays unmapped");
+    CHECK(exact() && gated() == 0, "balanced, nothing left open");
+}
+
+static void corrupt_lane_values(void)
+{
+    int tick[8], d1[8], d2[8];
+    fresh();
+    nbl = 0;
+    b_ev(15360, 50, 4, 12 | 7 << 4, 0);          /* ROOT 50, SCALE 12, DEG —: nothing a field can say */
+    b_ev(15360 + 384, 90, 4, 3 | 2 << 4, 0);     /* ROOT 90 (so —), SCALE 3, DEG 2 */
+    b_ev(15360 + 768, 7, 4, 14, 0);              /* ROOT 7, SCALE 14 (so —), DEG I */
+    CHECK(b_load() == 0, "a tape with corrupt lane entries loads");
+    CHECK(tblob(4, tick, d1, d2, 0) == 2, "the entry with nothing left is dropped");
+    CHECK(eng_lane_get(0, 0) == -1 && eng_lane_get(0, 1) == -1 && eng_lane_get(0, 2) == -1, "bar 1 has no entry");
+    CHECK(d1[0] == 127 && d2[0] == (3 | 2 << 4), "ROOT outside 0-11 is —; the rest is kept");
+    CHECK(d1[1] == 7 && d2[1] == (15 | 0 << 4), "SCALE outside 0-7 is —; the rest is kept");
+    lane(1, 0, NONE);
+    lane(1, 1, NONE);
+    lane(1, 2, NONE);
+    CHECK(tblob(4, 0, 0, 0, 0) == 1, "and what is left can be cleared field by field");
+}
+
 /* ---- live keys ---- */
 static void live_keys_snap_to_lane(void)
 {
@@ -764,6 +857,9 @@ int main(void)
     key_off_ignores_lane();
     boundary();
     record_over_deg();
+    record_off_scale_over_deg();
+    cut_open_note_keeps_key();
+    corrupt_lane_values();
     live_keys_snap_to_lane();
     step_mode_ignores_lane();
     chord_scale_follows_lane();
