@@ -44,6 +44,7 @@ static int nmo;
 static int rt_n[8], rt_seq[64], rt_at[64], nrt; /* real time: counts by status - 0xF8, and Start / Stop in order,
                                                   * with how many other messages had gone out before each */
 static void rt_reset(void) { memset(rt_n, 0, sizeof rt_n); nrt = 0; }
+static int f8_at_start;                          /* the clock count when the last Start went out */
 static int stamp[64], nstamp, stamping;         /* the clock count at each note-on of note 60, while stamping */
 static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
 {
@@ -51,6 +52,8 @@ static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
         stamp[nstamp++] = rt_n[0];
     if (s >= 0xF8) {
         rt_n[s - 0xF8]++;
+        if (s == 0xFA)
+            f8_at_start = rt_n[0];
         if (s != 0xF8 && nrt < 64) {
             rt_at[nrt] = nmo;
             rt_seq[nrt++] = s;
@@ -384,6 +387,54 @@ static void tape_keeps_with_clock(int bars_log2, int bpm, int speed, int passes)
     CHECK(nstamp >= passes && worst <= 1, what);
 }
 
+/* Block by block from a Start, the clocks sent since it (its own first included) are the tape's ticks since IN over
+ * 4, plus one: whether the Start went out with a note (a take's first key) or from the clock alone (PLAY, the
+ * tape's first note on a muted track). Found in code review: the second path ran a block behind. */
+static int clock_follows_tape(int blocks)
+{
+    static int32_t out[64];
+    SeqInfo si;
+    int b, bad = 0;
+    for (b = 0; b < blocks; b++) {
+        f32 ticks, q;
+        h1_render(out, 32);                      /* one control block */
+        eng_seq_info(&si);
+        ticks = si.loop_pos * 1536.0f;           /* (4 bars of 4/4) */
+        q = ticks / 4.0f - (f32)(int)(ticks / 4.0f);
+        if (q < 0.002f || q > 0.998f)
+            continue;                            /* (too near a clock to tell) */
+        if (rt_n[0] - f8_at_start != (int)(ticks / 4.0f) + 1)
+            bad++;
+    }
+    return bad;
+}
+static void start_clock_phase(void)
+{
+    int bad;
+    fresh();
+    st.seq[1] = 2;
+    tap(H1_BTN_REC);                             /* armed */
+    go(100);
+    h1_key(7, 1);                                /* the first key: Start with a note */
+    bad = clock_follows_tape(2000);
+    h1_key(7, 0);
+    CHECK(nrt >= 1 && rt_seq[0] == 0xFA && bad == 0, "a take's first key: the clock in step with the tape");
+    tap(H1_BTN_REC);
+    go(200);
+    tap(H1_BTN_PLAY);                            /* stop */
+    h1_button(H1_BTN_EDIT, 1);                   /* T1 muted: its first note sends nothing */
+    tap(H1_BTN_SEL);
+    h1_button(H1_BTN_EDIT, 0);
+    go(100);
+    nrt = 0;
+    h1_button(H1_BTN_PLAY, 1);
+    bad = clock_follows_tape(2000);
+    h1_button(H1_BTN_PLAY, 0);
+    CHECK(nrt >= 1 && rt_seq[0] == 0xFA, "PLAY sends Start");
+    CHECK(mo_n(0x90, 60) <= 1, "(the muted note did not go out)");
+    CHECK(bad == 0, "PLAY with no note at IN: the clock in step with the tape too");
+}
+
 static void clock_ignores_speed(void)
 {
     fresh();
@@ -487,6 +538,7 @@ int main(void)
     hush_on_four_channels();
     t1_unchanged();
     clock_per_bar();
+    start_clock_phase();
     clock_ignores_speed();
     tape_keeps_with_clock(5, 120, TAPE_SPD_1X, 5);
     tape_keeps_with_clock(4, 173, TAPE_SPD_1X, 11);

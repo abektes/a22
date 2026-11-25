@@ -2035,8 +2035,8 @@ static int clock_edge(void)
 static void clock_tick(f32 dticks)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = rt_fn();
-    if (clock_edge())
-        return;
+    (void)clock_edge();                          /* (a Start here or from a note earlier in the block: the tape has
+                                                  *  moved this block's ticks from IN either way, and so does the clock) */
     clk_acc += dticks;
     while (clk_acc >= 4.0f) {
         clk_acc -= 4.0f;
