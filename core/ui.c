@@ -1633,7 +1633,7 @@ static void draw_mix_page(void)
 
 /* DEG's numeral for bar b, lower case when the triad on that degree in the key in force has a minor third
  * (three semitones above its root); upper case otherwise, and in CHROM, where DEG does nothing */
-static void lane_numeral(int b, char *out)
+static int lane_numeral(int b, char *out)       /* (returns 1 for a minor one: the font is upper case only, so it is underlined) */
 {
     static const char *const NUM[7] = {"I", "II", "III", "IV", "V", "VI", "VII"};
     uint8_t key = eng_key_at(b);
@@ -1646,6 +1646,7 @@ static void lane_numeral(int b, char *out)
     for (; *s; s++)
         *out++ = (char)(minor ? *s + 32 : *s);
     *out = 0;
+    return minor;
 }
 static int lane_entry(int b)                     /* an entry starts at bar b */
 {
@@ -1660,11 +1661,13 @@ static int lane_first(int bars)                  /* the first bar with an entry,
 }
 
 /* the deck's header while the tape plays over a lane: the key in force at the playhead, "D MAJ . IV" */
+static int lane_head_minor, lane_head_nlen;
 static void lane_head_update(void)
 {
     static const char *const SC[8] = {"CHR", "MAJ", "MIN", "PEN", "MPN", "BLU", "DOR", "WHL"};
     int play = seq.loop_state == LOOP_PLAY || seq.loop_state == LOOP_REC || seq.loop_state == LOOP_DUB;
     lane_head[0] = 0;
+    lane_head_minor = 0;
     if (st.seq[0] == SEQ_TAPE && play && lane_first(32) < 32) {
         uint8_t key;
         int b = (int)(seq.loop_pos * (f32)seq.bars);
@@ -1675,7 +1678,8 @@ static void lane_head_update(void)
         d = put_s(put_s(d, " "), SC[key_scale(key) & 7]);
         if (key_scale(key)) {
             d = put_s(d, " . ");
-            lane_numeral(b, d);
+            lane_head_minor = lane_numeral(b, d);
+            for (lane_head_nlen = 0; d[lane_head_nlen]; lane_head_nlen++) {}
         }
     }
 }
@@ -1691,8 +1695,9 @@ static void draw_lane_cells(void)
         int b = b0 + i, cur = b == lane_bar, own = lane_entry(b);
         f32 x = 8.0f + (f32)i * cw, a = own ? 1.0f : 0.35f;
         char num[8];
+        int minor = 0;
         if (b < first) { num[0] = '-'; num[1] = 0; }
-        else lane_numeral(b, num);
+        else minor = lane_numeral(b, num);
         g_color(own ? GC_GOLD : GC_SLATE);
         if (cur) g_rect(x + 2.0f, 56.0f, cw - 4.0f, 62.0f, 0.28f);
         g_color(cur ? GC_WHITE : GC_SLATE);
@@ -1703,6 +1708,11 @@ static void draw_lane_cells(void)
         }
         g_color(own ? GC_GOLD : GC_WHITE);
         fit_text(x + cw * 0.5f, 78.0f, num, 18.0f, cw - 8.0f, a);
+        if (minor) {                                      /* a minor chord: an underline */
+            f32 w = g_text_w(num, 18.0f);
+            if (w > cw - 8.0f) w = cw - 8.0f;
+            g_rect(x + (cw - w) * 0.5f, 98.0f, w, 1.0f, a);
+        }
         g_color(GC_SLATE);
         {
             char nb[6];
@@ -1773,6 +1783,15 @@ static void draw_tape_page(void)
                 g_rect(28.0f + (f32)c * 6.25f, y0 + 7.0f - bh * 0.5f, 5.0f, bh, muted ? 0.3f : 0.9f);
             }
         }
+    }
+    if (lane_head_minor && sub == 0 && lane_head[0]) {   /* the header's minor numeral, underlined */
+        f32 sz = 10.5f, tw = g_text_w(lane_head, sz), nw;
+        const char *nm = lane_head;
+        { int n = 0; while (lane_head[n]) n++; nm = lane_head + n - lane_head_nlen; }
+        if (tw > 128.0f && tw > 0.1f) { sz *= 128.0f / tw; tw = 128.0f; }
+        nw = g_text_w(nm, sz);
+        g_color(GC_WHITE);
+        g_rect(34.0f + tw - nw, 12.5f + sz * 0.5f + 2.0f, nw, 1.0f, 1.0f);
     }
     /* the lane under the tracks: a mark at each bar that has an entry (TAPE mode only) */
     if (st.seq[0] == SEQ_TAPE && sub == 0) {

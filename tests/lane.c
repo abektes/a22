@@ -688,6 +688,33 @@ static void cells_drawn(void)
     go(100);
     CHECK(cell_sum(0, 4) != cell_sum(2, 4), "the cursor's cell is lit");
 }
+static long under_sum(int b, int bars)           /* the underline band (rows 97 to 100) of bar b's cell */
+{
+    int cw = 224 / bars, x, y;
+    long sum = 0;
+    for (y = 97; y < 100; y++)
+        for (x = 8 + b * cw + 3; x < 8 + (b + 1) * cw - 3; x++)
+            sum += g_fb[y * FB_W + x];
+    return sum;
+}
+static void minor_underlined(void)
+{
+    fresh();
+    st.seq[1] = 2;
+    go(40);
+    to_lane();
+    h1_control_set(H1_ENC_K1, 3);
+    go(40);
+    lane(0, 1, 1);                               /* bar 1: C MAJOR */
+    lane(0, 2, 1);                               /* DEG II: a minor triad (D F A) */
+    lane(1, 2, 3);                               /* bar 2: DEG IV: major (F A C) */
+    go(100);
+    CHECK(under_sum(0, 4) != under_sum(1, 4), "a minor degree (II in C MAJOR) is underlined, a major one (IV) is not");
+    lane(1, 1, 0);                               /* bar 2: CHROM: DEG does nothing, upper case */
+    lane(1, 2, 1);
+    go(100);
+    CHECK(under_sum(1, 4) == under_sum(2, 4), "CHROM: no underline (as the empty cell after it)");
+}
 static void deck_mark_and_header(void)
 {
     fresh();
@@ -750,6 +777,7 @@ int main(void)
     bar_clamps();
     knobs_set_entry();
     cells_drawn();
+    minor_underlined();
     deck_mark_and_header();
     step_mode_has_no_lane();
     printf("lane: %d checks, %d failed\n", checks, fails);
