@@ -112,11 +112,25 @@ void eng_post_auto(int knob, int val)
 
 /* ---- MIDI out ------------------------------------------------------------------------- */
 void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
-static void mout(int on, int note, int vel)
+/* Each track's notes go out on its own channel, T1 on 1 to T4 on 4, so a DAW records the four apart. */
+static void mout_trk(int trk, int on, int note, int vel)
 {
     void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
     if (fn && note >= 0 && note < 128)
-        fn(on ? 0x90u : 0x80u, (uint8_t)note, (uint8_t)(on ? iclamp(vel, 1, 127) : 0));
+        fn((uint8_t)((on ? 0x90u : 0x80u) | (uint32_t)(trk & 3)), (uint8_t)note,
+           (uint8_t)(on ? iclamp(vel, 1, 127) : 0));
+}
+
+/* What the hand plays (keys, chords, the arpeggiator, Riff, Shake) goes out on the track in hand's channel, and a
+ * note's off on the channel its on went out on: a track changed while it sounds, it still ends in the DAW. */
+static uint8_t live_ch[128];
+static void mout_live(int on, int note, int vel)
+{
+    if (note < 0 || note > 127)
+        return;
+    if (on)
+        live_ch[note] = (uint8_t)cur_trk;
+    mout_trk(live_ch[note], on, note, vel);
 }
 
 void dsp_init(void)
@@ -517,7 +531,7 @@ static void arp_release(void)
     int i;
     for (i = 0; i < arp_ncur; i++) {
         voice_off(arp_cur[i]);
-        mout(0, arp_cur[i], 0);
+        mout_live(0, arp_cur[i], 0);
         seq_to_tape(arp_cur[i], 0, 0);
     }
     arp_ncur = 0;
@@ -528,7 +542,7 @@ static void arp_play(int note, int vel)
     if (note < 0 || note > 127 || arp_ncur >= 16)
         return;
     voice_on(note, vel);
-    mout(1, note, vel);
+    mout_live(1, note, vel);
     seq_to_tape(note, 1, vel);
     arp_cur[arp_ncur++] = (uint8_t)note;
 }
@@ -542,7 +556,7 @@ static void shake_drop(int note)
         slot = (int)(rng_next(&eng_rng) % NSHAKE);
     if (tballs[slot].playing) {
         voice_off(tballs[slot].note);
-        mout(0, tballs[slot].note, 0);
+        mout_live(0, tballs[slot].note, 0);
         seq_to_tape(tballs[slot].note, 0, 0);
     }
     tballs[slot].on = 1;
@@ -564,7 +578,7 @@ static void shake_clear(void)
     for (i = 0; i < NSHAKE; i++) {
         if (tballs[i].playing) {
             voice_off(tballs[i].note);
-            mout(0, tballs[i].note, 0);
+            mout_live(0, tballs[i].note, 0);
             seq_to_tape(tballs[i].note, 0, 0);
         }
         tballs[i].on = tballs[i].playing = tballs[i].gone = 0;
@@ -588,7 +602,7 @@ static void shake_tick(f32 dt)
             b->gate_t -= dt;
             if (b->gate_t <= 0.0f) {
                 voice_off(b->note);
-                mout(0, b->note, 0);
+                mout_live(0, b->note, 0);
                 seq_to_tape(b->note, 0, 0);
                 b->playing = 0;
             }
@@ -624,11 +638,11 @@ static void shake_tick(f32 dt)
                     if (vn > 0.22f) {
                         if (b->playing) {
                             voice_off(b->note);
-                            mout(0, b->note, 0);
+                            mout_live(0, b->note, 0);
                             seq_to_tape(b->note, 0, 0);
                         }
                         voice_on(b->note, vel);
-                        mout(1, b->note, vel);
+                        mout_live(1, b->note, vel);
                         seq_to_tape(b->note, 1, vel);
                         b->playing = 1;
                         b->gate_t = 0.14f;
@@ -756,7 +770,7 @@ static void route(int note, int on, int vel, int from_midi)
         } else {
             voice_off(note);
         }
-        if (!from_midi) mout(on, note, vel);
+        if (!from_midi) mout_live(on, note, vel);
         return;
     }
     if (mode == ARP_SHAKE) {
@@ -774,7 +788,7 @@ static void route(int note, int on, int vel, int from_midi)
                 }
             if (!found) {                        /* (pressed before the mode changed: its own voice, */
                 voice_off(note);                 /*  and the note on MIDI out it sent then) */
-                if (!from_midi) mout(0, note, 0);
+                if (!from_midi) mout_live(0, note, 0);
             }
         }
         return;
@@ -782,7 +796,7 @@ static void route(int note, int on, int vel, int from_midi)
     if (mode == ARP_OFF) {
         if (on) voice_on(note, vel);
         else voice_off(note);
-        if (!from_midi) mout(on, note, vel);
+        if (!from_midi) mout_live(on, note, vel);
         return;
     }
     if (on) {
@@ -803,7 +817,7 @@ static void route(int note, int on, int vel, int from_midi)
             }
         if (!found) {                            /* (pressed before the mode changed: its own voice, */
             voice_off(note);                     /*  and the note on MIDI out it sent then) */
-            if (!from_midi) mout(0, note, 0);
+            if (!from_midi) mout_live(0, note, 0);
         }
     }
 }
@@ -885,7 +899,7 @@ static void tape_release_seq(void)
         if (voices[n].stage && voices[n].gate && voices[n].seq) {
             voices[n].gate = 0;
             voices[n].stage = 4;
-            mout(0, voices[n].note, 0);
+            mout_trk(voices[n].trk, 0, voices[n].note, 0);
         }
 }
 
@@ -896,7 +910,7 @@ static void tape_release_trk(int t)              /* one track's tape notes let g
         if (voices[n].stage && voices[n].gate && voices[n].seq && (voices[n].trk & 3) == (t & 3)) {
             voices[n].gate = 0;
             voices[n].stage = 4;
-            mout(0, voices[n].note, 0);
+            mout_trk(voices[n].trk, 0, voices[n].note, 0);
         }
 }
 
@@ -908,6 +922,8 @@ static void tape_fire_ev(const LEv *e, int reverse)
         int k = e->d1 & 3;
         trun[trk].auto_k[k] = e->d2 <= 100 ? e->d2 : 100;
         trun[trk].auto_on[k] = 1;
+        if (eng_midi_fn)                         /* (out as the knob went out when it was turned, on its track's channel) */
+            eng_midi_fn((uint8_t)(0xB0u | (uint32_t)trk), (uint8_t)(20 + k), (uint8_t)((trun[trk].auto_k[k] * 127 + 50) / 100));
         return;
     }
     {
@@ -919,10 +935,10 @@ static void tape_fire_ev(const LEv *e, int reverse)
             return;
         if (on) {
             voice_on_ex(e->d1 & 127, part, trk, 1, vel);
-            mout(1, e->d1 & 127, vel);
+            mout_trk(trk, 1, e->d1 & 127, vel);
         } else {
             voice_off_ex(e->d1 & 127, trk, 1);
-            mout(0, e->d1 & 127, 0);
+            mout_trk(trk, 0, e->d1 & 127, 0);
         }
     }
 }
@@ -1201,7 +1217,7 @@ static void step_release(void)
     int i;
     for (i = 0; i < step_nsnd; i++) {
         voice_off_ex(step_snd[i], step_st[i], 1);
-        mout(0, step_snd[i], 0);
+        mout_trk(step_st[i], 0, step_snd[i], 0);
     }
     step_nsnd = 0;
 }
@@ -1218,7 +1234,7 @@ static void step_fire(int i, f32 len)
             if (!track_muted(trk)) {
                 int part = PART(st.trk[trk].inst, st.trk[trk].algo);
                 voice_on_ex(n, part, trk, 1, vel);
-                mout(1, n, vel);
+                mout_trk(trk, 1, n, vel);
                 step_snd[step_nsnd] = (uint8_t)n;
                 step_st[step_nsnd++] = (uint8_t)trk;
             }
@@ -1596,7 +1612,11 @@ static void handle(uint32_t e)
         voices_release_all();
         chord_clear();
         nheld = phys_down = 0;
-        if (!a && eng_midi_fn) eng_midi_fn(0xB0u, 123u, 0u);
+        if (!a && eng_midi_fn) {                 /* (all four tracks' channels) */
+            int c;
+            for (c = 0; c < NTRACK; c++)
+                eng_midi_fn((uint8_t)(0xB0u | (uint32_t)c), 123u, 0u);
+        }
         break;
     case EV_INST:
         if (a < NINST) {

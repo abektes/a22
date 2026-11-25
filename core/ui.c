@@ -928,7 +928,7 @@ static void set_knob(int i, int v)
     if (*k != was) {
         eng_post_auto(i, *k);
         if (eng_midi_fn)
-            eng_midi_fn(0xB0u, (uint8_t)(20 + i), (uint8_t)((*k * 127 + 50) / 100));
+            eng_midi_fn((uint8_t)(0xB0u | (st.track & 3u)), (uint8_t)(20 + i), (uint8_t)((*k * 127 + 50) / 100));
     }
 }
 

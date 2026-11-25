@@ -26,9 +26,11 @@ void h1_button(int btn, int down);
 void h1_encoder(int enc, int detents);           /* + = clockwise */
 void h1_midi(uint8_t status, uint8_t d1, uint8_t d2);   /* MIDI in: notes with their velocity, CC 20-23 the
                                                   * knobs, CC 123 all notes off */
-/* MIDI out: fn is called with each message h1 sends, on channel 1: the notes played on the keys, by the
- * arpeggiator and by the sequencer (note-on with its velocity, note-off), CC 20-23 as the four home knobs
- * turn, and CC 123 on a hush. Never what came in over MIDI. The notes are sent from inside h1_render, the
+/* MIDI out: fn is called with each message h1 sends, each track on its own channel (T1 on 1 to T4 on 4): the
+ * notes played by the tape and the step sequencer on their track's channel, those of the keys and the arpeggiator
+ * on the track in hand's (note-on with its velocity, its note-off on the same channel); CC 20-23 as the four home
+ * knobs turn (the track in hand's channel) and as the tape plays its automation back (its track's); and CC 123 on
+ * channels 1 to 4 on a hush. Never what came in over MIDI. The notes are sent from inside h1_render, the
  * knobs from h1_encoder (the main loop): fn must be safe from both. NULL: nothing is sent (the default). */
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2));
 void h1_master(int level);                       /* where the volume knob stands, 0..1000, every frame. The
