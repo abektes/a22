@@ -819,17 +819,24 @@ static void speak(void)
             ann_say(t, 0, quiet ? 0 : ANN_NOW);
             quiet = 1;
         }
+        /* what changed is said in one go, SELECT's (a new subpage: its name) first, then the columns that
+         * changed with it. ann_later keeps one thing, the newest, so they are put together here */
+        d = t;
+        t[0] = 0;
         for (k = 0; k < H1_NENC; k++) {
             const char *name = 0, *text = 0;
             int v = h1_control(k, 0, 0, &name, &text);
             if (v != val_was[k] && !quiet && k != H1_ENC_PRESET && k != H1_ENC_ALGO && name && name[0]) {
-                d = say_cat(t, end, name);
+                if (d != t)
+                    d = say_cat(d, end, ". ");
+                d = say_cat(d, end, name);
                 d = say_cat(d, end, " ");
-                say_cat(d, end, text);
-                ann_later(t, ANN_NOW, 250u, plat_ms());
+                d = say_cat(d, end, text);
             }
             val_was[k] = v;
         }
+        if (d != t)
+            ann_later(t, ANN_NOW, 250u, plat_ms());
     }
     inst_was = inst;
     algo_was = algo;

@@ -14,9 +14,8 @@ spin SELECT 1
 wait 400
 spin SELECT 1
 wait 600
-# the reader says the columns that changed (the last one wins; its "SUBPAGE 5 KEY" is said when no column
-# changes): T4 is a drum track by default, so KEY's last column says DRUM
-said T4 DRUM
+# the reader names the subpage, then the columns that changed with it (T4 is a drum track: DRUM)
+said SUBPAGE 5 KEY. T1 OFF. T2 OFF. T3 OFF. T4 DRUM
 spin K1 1
 wait 600
 said T1 ON
