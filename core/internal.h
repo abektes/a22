@@ -361,6 +361,10 @@ int key_scale(uint8_t k);
 int key_map(int note, uint8_t from, uint8_t to);
 int key_steps(int note, uint8_t key, int steps);
 uint8_t eng_key_glo(void);                      /* GLO's ROOT and SCALE as a key byte (synth.c) */
+uint8_t eng_key_play(void);                     /* the key the tape plays in (synth.c) */
+int eng_follows(int trk, int part);             /* KEY on for the track, and not a drum part (synth.c) */
+#define INST_KIT 8                              /* the drum engines: their notes never follow the key */
+#define INST_SKINS 13
 
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];

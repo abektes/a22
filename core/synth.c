@@ -904,25 +904,45 @@ static void tape_bounds(f32 *in_t, f32 *out_t)
     *out_t = (f32)bo * bt;
 }
 
-/* The notes the tape has sent over MIDI out and not yet ended, a bit a note a track. When the tape lets go of its
- * notes (stopped, cut, cleared, round the loop) their offs go out from here, not from the voices: a voice taken for
- * a later note (eight voices, a ten-note chord) no longer sounds, but its note-on went out and the DAW holds it. */
-static uint8_t tape_open[NTRACK][16];
-static void tape_open_set(int trk, int note, int on)
+/* What the tape has sent, as MIDI out and the voices have it. A track that follows the key plays a recorded note
+ * at another pitch, so each recorded note's sent pitch is kept (tape_sent, 0xFF: nothing sounds for it), and how
+ * many recorded notes sound at each sent pitch (tape_pitch_n: two on one pitch are one voice and one note-on, ended
+ * with the later off). Its off ends the pitch that sounded, whatever the key is by then. When the tape lets go of
+ * its notes (stopped, cut, cleared, round the loop) the offs go out from these counts, not from the voices: a voice
+ * taken for a later note (eight voices, a ten-note chord) no longer sounds, but its note-on went out and the DAW
+ * holds it. */
+static uint8_t tape_sent[NTRACK][128];
+static uint8_t tape_pitch_n[NTRACK][128];
+static void tape_sent_clear(void)
 {
-    uint8_t *b = &tape_open[trk & 3][(note & 127) >> 3], m = (uint8_t)(1u << (note & 7));
-    *b = on ? (uint8_t)(*b | m) : (uint8_t)(*b & ~m);
+    int t, p;
+    for (t = 0; t < NTRACK; t++)
+        for (p = 0; p < 128; p++) {
+            tape_sent[t][p] = 0xFF;
+            tape_pitch_n[t][p] = 0;
+        }
 }
 static void tape_offs(int trk)                   /* the offs of what the tape left open on TRK */
 {
-    int i, k;
-    for (i = 0; i < 16; i++)
-        if (tape_open[trk & 3][i]) {
-            for (k = 0; k < 8; k++)
-                if (tape_open[trk & 3][i] >> k & 1u)
-                    mout_trk(trk, 0, i * 8 + k, 0);
-            tape_open[trk & 3][i] = 0;
-        }
+    int p;
+    trk &= 3;
+    for (p = 0; p < 128; p++) {
+        if (tape_pitch_n[trk][p])
+            mout_trk(trk, 0, p, 0);
+        tape_pitch_n[trk][p] = 0;
+        tape_sent[trk][p] = 0xFF;
+    }
+}
+
+uint8_t eng_key_play(void)                       /* the key the tape plays in */
+{
+    return eng_key_glo();
+}
+
+int eng_follows(int trk, int part)               /* a track's KEY on, and the note not a drum's */
+{
+    int inst = PART_INST(part);
+    return (st.trk[trk & 3].rsv & 1u) && inst != INST_KIT && inst != INST_SKINS;
 }
 
 static void tape_release_seq(void)
@@ -966,16 +986,33 @@ static void tape_fire_ev(const LEv *e, int reverse)
         int part = part_ok(e->part) ? e->part : PART(st.trk[trk].inst, st.trk[trk].algo);
         int vel = e->d2 ? e->d2 : 110;
         if (reverse) on = !on;
+        int d = e->d1 & 127;
         if (on && track_muted(trk))              /* (muted: no new notes, but offs still end what sounds) */
             return;
         if (on) {
-            voice_on_ex(e->d1 & 127, part, trk, 1, vel);
-            mout_trk(trk, 1, e->d1 & 127, vel);
-            tape_open_set(trk, e->d1 & 127, 1);
+            int p = eng_follows(trk, part) ? key_map(d, e->rsv, eng_key_play()) : d;
+            if (tape_sent[trk][d] != 0xFF) {     /* (an on again with no off between: the first one ends) */
+                int q = tape_sent[trk][d];
+                tape_sent[trk][d] = 0xFF;
+                if (--tape_pitch_n[trk][q] == 0) {
+                    voice_off_ex(q, trk, 1);
+                    mout_trk(trk, 0, q, 0);
+                }
+            }
+            tape_sent[trk][d] = (uint8_t)p;
+            if (tape_pitch_n[trk][p]++ == 0) {
+                voice_on_ex(p, part, trk, 1, vel);
+                mout_trk(trk, 1, p, vel);
+            }
         } else {
-            voice_off_ex(e->d1 & 127, trk, 1);
-            mout_trk(trk, 0, e->d1 & 127, 0);
-            tape_open_set(trk, e->d1 & 127, 0);
+            int p = tape_sent[trk][d];
+            if (p == 0xFF)                       /* (nothing sounds for this note: its on was muted) */
+                return;
+            tape_sent[trk][d] = 0xFF;
+            if (--tape_pitch_n[trk][p] == 0) {
+                voice_off_ex(p, trk, 1);
+                mout_trk(trk, 0, p, 0);
+            }
         }
     }
 }
@@ -2401,7 +2438,7 @@ SMALL void eng_init(uint32_t sample_rate)
     xport_was = clk_jump = clk_resync = clk_started = 0;
     clk_from = -1.0f;
     for (i = 0; i < 128; i++) live_chs[i] = 0;
-    for (i = 0; i < NTRACK * 16; i++) tape_open[i >> 4][i & 15] = 0;
+    tape_sent_clear();
     tp_last = -1.0f;
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());

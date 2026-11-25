@@ -301,6 +301,276 @@ static void state_rsv_valid(void)
     CHECK(st.rsv[0] == 0 && st.rsv[1] == 0 && st.trk[0].rsv == 0 && st.trk[3].rsv == 0, "defaults: none");
 }
 
+/* ---- the tape plays in the current key ---- */
+static int gated(void)                           /* voices the tape holds open */
+{
+    int v, n = 0;
+    for (v = 0; v < NVOICE; v++)
+        n += voices[v].stage && voices[v].gate;
+    return n;
+}
+static void take_cmaj(void)                      /* C-E-G in C major on T1, the tape stopped */
+{
+    fresh();
+    st.keys[0] = 0;
+    st.keys[1] = 1;
+    tap(H1_BTN_REC);
+    note(7, 150);
+    note(11, 150);
+    note(14, 150);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(200);
+}
+static void pass(void)                           /* a pass of the tape, then stopped */
+{
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    go(9000);
+    tap(H1_BTN_PLAY);
+    go(300);
+}
+static int only_ch1(int a, int b, int c)         /* channel 1 sent these three notes and no others */
+{
+    int i;
+    for (i = 0; i < nmo; i++) {
+        int n = mo[i][1];
+        if ((mo[i][0] & 0xF0) != 0x90 && (mo[i][0] & 0xF0) != 0x80) continue;
+        if ((mo[i][0] & 15) != 0 || (n != a && n != b && n != c)) return 0;
+    }
+    return mo_n(0x90, a) > 0 && mo_n(0x90, b) > 0 && mo_n(0x90, c) > 0;
+}
+
+static void key_off_unchanged(void)
+{
+    take_cmaj();
+    st.keys[0] = 2;
+    pass();
+    CHECK(only_ch1(60, 64, 67), "KEY off: the take plays as recorded, whatever ROOT is now");
+    CHECK(exact() && gated() == 0, "with its offs");
+}
+
+static void key_on_follows(void)
+{
+    take_cmaj();
+    st.trk[0].rsv = 1;
+    st.keys[0] = 2;
+    pass();
+    CHECK(only_ch1(62, 66, 69), "KEY on, ROOT D: D F# A");
+    CHECK(exact() && gated() == 0, "ended note for note");
+    st.keys[1] = 2;                              /* D minor */
+    pass();
+    CHECK(only_ch1(62, 65, 69), "SCALE MINOR: D F A");
+    CHECK(exact() && gated() == 0, "ended note for note");
+}
+
+static void drums_stay(void)
+{
+    const char *tx = 0, *nm = 0;
+    fresh();
+    h1_control_set(H1_ENC_PRESET, INST_KIT);
+    go(100);
+    st.keys[0] = 0;
+    st.keys[1] = 1;
+    tap(H1_BTN_REC);
+    note(7, 150);
+    note(11, 150);
+    note(14, 150);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(200);
+    st.trk[0].rsv = 1;
+    st.keys[0] = 2;
+    pass();
+    CHECK(only_ch1(60, 64, 67), "a KIT take stays put with KEY on");
+    CHECK(exact() && gated() == 0, "ended note for note");
+    tap(H1_BTN_SEL);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_control(H1_ENC_K1, 0, 0, &nm, &tx);
+    CHECK(!strcmp(nm, "T1") && !strcmp(tx, "DRUM"), "the MIX KEY column of a drum track reads DRUM");
+    h1_encoder(H1_ENC_K1, 1);
+    CHECK(st.trk[0].rsv == 1, "and turning it does nothing");
+}
+
+static void old_tape_unchanged(void)
+{
+    const uint8_t k[4] = {0, 0, 0, 0};
+    fresh();
+    mkblob(0, k);
+    CHECK(h1_loop_load(blob, sizeof blob) == 0, "an old blob loads");
+    st.trk[0].rsv = 1;
+    st.keys[0] = 2;
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    go(9000);
+    tap(H1_BTN_PLAY);
+    go(300);
+    CHECK(mo_n(0x90, 60) > 0 && mo_n(0x90, -1) == mo_n(0x90, 60), "a tape without keys plays as recorded");
+    CHECK(exact() && gated() == 0, "ended note for note");
+}
+
+static void long_note_take(void)                 /* one long C, in C major, the tape stopped */
+{
+    fresh();
+    st.keys[0] = 0;
+    st.keys[1] = 1;
+    tap(H1_BTN_REC);
+    h1_key(7, 1);
+    go(2500);
+    h1_key(7, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(200);
+}
+static void wait_on(void)                        /* play until the note starts */
+{
+    int i;
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    for (i = 0; i < 400 && !mo_n(0x90, -1); i++)
+        go(20);
+}
+
+static void root_change_mid_note(void)
+{
+    long_note_take();
+    st.trk[0].rsv = 1;
+    st.keys[0] = 2;
+    wait_on();
+    CHECK(mo_n(0x90, 62) == 1, "the note sounds in D");
+    st.keys[0] = 5;                              /* ROOT moves while it sounds */
+    go(3500);
+    CHECK(mo_n(0x80, 62) == 1 && mo_n(0x80, -1) == 1, "its off is the note that sounded");
+    CHECK(exact() && gated() == 0, "no voice left gated, no stray off");
+    tap(H1_BTN_PLAY);
+    go(300);
+}
+
+static void key_on_mid_note(void)
+{
+    long_note_take();
+    st.keys[0] = 2;
+    wait_on();
+    CHECK(mo_n(0x90, 60) == 1, "KEY off: it sounds as recorded");
+    st.trk[0].rsv = 1;                           /* KEY turned on while it sounds */
+    go(3500);
+    CHECK(mo_n(0x80, 60) == 1 && mo_n(0x80, -1) == 1, "it ends on its own pitch");
+    CHECK(exact() && gated() == 0, "no voice left gated");
+    tap(H1_BTN_PLAY);
+    go(300);
+}
+
+static void stop_wrap_cut_clear_mid_note(void)
+{
+    int w;
+    for (w = 0; w < 3; w++) {
+        long_note_take();
+        st.trk[0].rsv = 1;
+        st.keys[0] = 2;
+        wait_on();
+        CHECK(mo_n(0x90, 62) == 1, "sounding in D");
+        st.keys[0] = 7;                          /* ROOT changed mid-note */
+        go(100);
+        if (w == 0) tap(H1_BTN_PLAY);            /* stop */
+        else if (w == 1) eng_post(EV_CUT, 0);    /* cut */
+        else eng_post(EV_CLEAR, 1);              /* clear the track */
+        go(400);
+        CHECK(mo_n(0x80, 62) == 1 && mo_n(0x80, -1) == 1, "its off is the note that sounded");
+        CHECK(exact() && gated() == 0, "no stray off, no voice left gated");
+        if (w) { tap(H1_BTN_PLAY); go(300); }
+    }
+    /* the wrap: a pass of the tape, ROOT changed between its notes */
+    take_cmaj();
+    st.trk[0].rsv = 1;
+    st.keys[0] = 2;
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    go(2000);
+    st.keys[0] = 9;
+    go(16000);                                   /* round the loop at least once more */
+    tap(H1_BTN_PLAY);
+    go(300);
+    CHECK(exact() && gated() == 0, "the wrap: ended note for note");
+}
+
+static void two_keys_overdub(void)
+{
+    uint8_t c = key_byte(0, 1), e = key_byte(4, 1), g = key_byte(7, 1);
+    take_cmaj();
+    st.keys[0] = 4;
+    tap(H1_BTN_REC);                             /* an overdub in E major */
+    note(11, 150);                               /* 64 */
+    note(16, 150);                               /* 69 */
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(200);
+    st.trk[0].rsv = 1;
+    st.keys[0] = 7;
+    pass();
+    CHECK(mo_n(0x90, key_map(60, c, g)) > 0 && mo_n(0x90, key_map(67, c, g)) > 0, "the C major notes move from C");
+    CHECK(mo_n(0x90, key_map(64, e, g)) > 0 && mo_n(0x90, key_map(69, e, g)) > 0, "the E major notes move from E");
+    CHECK(key_map(64, c, g) != key_map(64, e, g), "(the two keys really differ)");
+    CHECK(exact() && gated() == 0, "ended note for note");
+}
+
+static void shared_pitch(void)
+{
+    int i;
+    fresh();
+    st.keys[0] = 0;
+    st.keys[1] = 1;
+    tap(H1_BTN_REC);
+    h1_key(11, 1);                               /* E */
+    go(100);
+    h1_key(12, 1);                               /* F, which becomes E too */
+    go(500);
+    h1_key(11, 0);
+    go(600);
+    h1_key(12, 0);
+    go(60);
+    tap(H1_BTN_REC);
+    tap(H1_BTN_PLAY);
+    go(200);
+    st.trk[0].rsv = 1;
+    st.keys[1] = 3;                              /* C pentatonic */
+    nmo = 0;
+    tap(H1_BTN_PLAY);
+    for (i = 0; i < 400 && !mo_n(0x90, -1); i++)
+        go(20);
+    CHECK(mo_n(0x90, 64) == 1 && mo_n(0x90, -1) == 1, "two notes on one pitch: one note-on");
+    go(900);                                     /* past the first off (+600), before the second (+1200) */
+    CHECK(mo_n(0x80, 64) == 0 && gated() == 1, "the first off does not end it");
+    go(700);
+    CHECK(mo_n(0x80, 64) == 1 && mo_n(0x90, -1) == 1, "the later off does, once");
+    CHECK(exact() && gated() == 0, "no voice left gated");
+    tap(H1_BTN_PLAY);
+    go(300);
+}
+
+static void key_subpage(void)
+{
+    const char *tx = 0, *nm = 0;
+    fresh();
+    tap(H1_BTN_SEL);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    h1_encoder(H1_ENC_SELECT, 1);
+    CHECK(ui_subpage() == 4, "SEL, SELECT four times: MIX's fifth subpage");
+    h1_control(H1_ENC_K2, 0, 0, &nm, &tx);
+    CHECK(!strcmp(nm, "T2") && !strcmp(tx, "OFF"), "K2 is T2, OFF");
+    h1_encoder(H1_ENC_K2, 1);
+    CHECK(st.trk[1].rsv == 1, "K2 turns T2's KEY on");
+    h1_control(H1_ENC_K2, 0, 0, &nm, &tx);
+    CHECK(!strcmp(tx, "ON"), "and it reads ON");
+    h1_encoder(H1_ENC_K2, 1);
+    CHECK(st.trk[1].rsv == 1, "ON is the top");
+}
+
 int main(void)
 {
     recorded_notes_carry_key();
@@ -309,6 +579,16 @@ int main(void)
     blob_round_trip();
     junk_keys_dropped();
     state_rsv_valid();
+    key_off_unchanged();
+    key_on_follows();
+    drums_stay();
+    old_tape_unchanged();
+    root_change_mid_note();
+    key_on_mid_note();
+    stop_wrap_cut_clear_mid_note();
+    two_keys_overdub();
+    shared_pitch();
+    key_subpage();
     h1_midi_out(0);
     printf("keyfollow: %d checks, %d failed\n", checks, fails);
     return fails != 0;

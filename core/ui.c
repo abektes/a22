@@ -31,6 +31,8 @@ static const char *const O_TIME[]    = {"1/32", "1/16", "1/8T", "1/8", "3/16", "
 static const char *const O_ROOT[]    = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const O_SCALE[]   = {"CHROM", "MAJOR", "MINOR", "PENTA", "MPENT", "BLUES", "DORIAN", "WHOLE"};
 static const char *const O_ONOFF[]   = {"OFF", "ON"};
+static const char *const O_KEYF[]    = {"OFF", "ON"};          /* MIX KEY: a track follows ROOT and SCALE */
+static const char *const O_DRUM[]    = {"DRUM"};               /* (a drum engine never does) */
 static const char *const O_BARS[]    = {"1", "2", "4", "8", "16", "32"};
 static const char *const O_QUANT[]   = {"FREE", "1/16", "1/8"};
 static const char *const O_SEQMODE[] = {"TAPE", "STEP"};
@@ -89,12 +91,18 @@ static int page_nsub(int pg)
 {
     switch (pg) {
     case PG_ARP: return arp_shake() ? 2 : 1;   /* SHAKE: 0 MODE GRAV SPIN BOUNCE, 1 MODE CAGE */
-    case PG_MIX: return 4;   /* 0 VOL, 1 PAN, 2 FX SEND, 3 MASTER EQ/DRIVE */
+    case PG_MIX: return 5;   /* 0 VOL, 1 PAN, 2 FX SEND, 3 MASTER EQ/DRIVE, 4 KEY */
     case PG_ENV: return 2;   /* 0 AMP ADSR, 1 MOD ENV */
     case PG_GLO: return 3;   /* 0 GLOBAL, 1 KEYS, 2 CHORD */
     case PG_SEQ: return 2;   /* 0 TAPE DECK, 1 TAPE EDIT (or STEP) */
     default:     return 1;
     }
+}
+
+static int key_drum_trk(int t)                   /* the track's engine is a drum (the track in hand's is st.inst) */
+{
+    int inst = t == st.track ? st.inst : st.trk[t & 3].inst;
+    return inst == INST_KIT || inst == INST_SKINS;
 }
 
 const ParamDef *page_param(int pg, int i)
@@ -121,7 +129,12 @@ const ParamDef *page_param(int pg, int i)
     }
     if (pg == PG_MIX) {
         dyn_p.min = 0; dyn_p.max = 100; dyn_p.kind = PK_PCT; dyn_p.opts = 0;
-        if (sub == 3) {
+        if (sub == 4) {                          /* KEY: T1..T4, ON or OFF; a drum track's says DRUM */
+            dyn_p.name = O_TRK[i];
+            dyn_p.kind = PK_ENUM; dyn_p.show_off = 0;
+            if (key_drum_trk(i)) { dyn_p.max = 0; dyn_p.opts = O_DRUM; }
+            else { dyn_p.max = 1; dyn_p.opts = O_KEYF; }
+        } else if (sub == 3) {
             dyn_p.name = MAST_N[i];
             dyn_p.show_off = (i < 3) ? -50 : 0;
         } else {
@@ -195,6 +208,11 @@ uint8_t *page_value(int pg, int i)
         if (sub == 0) return &st.trk[i].vol;
         if (sub == 1) return &st.trk[i].pan;
         if (sub == 2) return &st.trk[i].send;
+        if (sub == 4) {
+            static uint8_t none;
+            if (key_drum_trk(i)) { none = 0; return &none; }
+            return &st.trk[i].rsv;
+        }
         return &st.master[i];
     case PG_ENV: return sub == 1 ? &ip->menv[i] : &ip->env[i];
     case PG_LFO: return &ip->lfo[i];
@@ -1440,10 +1458,17 @@ static void draw_lfo_page(void)
 
 static void draw_mix_page(void)
 {
-    static const char *const SUBT[4] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER"};
+    static const char *const SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER", "KEY"};
     int sub = subpage[PG_MIX], i;
     char buf[16];
-    draw_topbar(O_TRK[st.track], SUBT[sub & 3], sub == 3 ? "EQ+DRV" : "4-TRK");
+    draw_topbar(O_TRK[st.track], SUBT[sub < 5 ? sub : 0], sub == 3 ? "EQ+DRV" : (sub == 4 ? "FOLLOW" : "4-TRK"));
+
+    if (sub == 4) {                              /* each track follows ROOT and SCALE, or not */
+        g_color(GC_SLATE);
+        fit_text(120.0f, 90.0f, "TAPE FOLLOWS ROOT + SCALE", 10.0f, 200.0f, 0.8f);
+        draw_bottom_cols(PG_MIX, 130.0f);
+        return;
+    }
 
     if (sub == 3) {
         /* Master 3-Band EQ Curve + Shaded Vertical Gradient + Tape Drive Gauge */
