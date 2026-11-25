@@ -83,6 +83,25 @@ static int first_on(int from)                    /* where the first note-on at o
             return i;
     return -1;
 }
+static int exact(void)                           /* every channel's every note: exactly as many offs as ons (no
+                                                  * stray off on a channel, which would cut another note there) */
+{
+    static int open[16][128];
+    int i, c, k;
+    memset(open, 0, sizeof open);
+    for (i = 0; i < nmo; i++) {
+        int t = mo[i][0] & 0xF0, ch = mo[i][0] & 15, n = mo[i][1] & 127;
+        if (t == 0x90 && mo[i][2]) open[ch][n]++;
+        else if (t == 0x80 || t == 0x90) open[ch][n]--;
+    }
+    for (c = 0; c < 16; c++)
+        for (k = 0; k < 128; k++)
+            if (open[c][k]) {
+                printf("  channel %d note %d: %+d ons over offs\n", c + 1, k, open[c][k]);
+                return 0;
+            }
+    return 1;
+}
 static int balanced(void)                        /* every channel's every note: no on left without its off (a
                                                   * spare off is harmless, and the arpeggiator sends one today) */
 {
@@ -129,6 +148,7 @@ static void keys_on_t2(void)
     note(7, 100);
     CHECK(mo_n(0x91, 60) == 1 && mo_n(0x81, 60) == 1, "a key on T2 goes out on channel 2");
     CHECK(mo_n(0x90, -1) == 0, "and nothing on channel 1");
+    CHECK(exact(), "each on with its one off");
 }
 
 static void key_held_across_track_change(void)
@@ -142,6 +162,7 @@ static void key_held_across_track_change(void)
     go(100);
     CHECK(mo_n(0x90, 60) == 1 && mo_n(0x80, 60) == 1, "a key held across a track change ends on its own channel");
     CHECK(mo_n(0x81, 60) == 0, "not on the new one");
+    CHECK(exact(), "and nothing else left open or ended twice");
 }
 
 static void arp_across_track_change(void)
@@ -157,7 +178,7 @@ static void arp_across_track_change(void)
     h1_key(11, 0);
     go(500);
     CHECK(mo_n(0x90, -1) > 0, "the arpeggiator played on channel 1");
-    CHECK(balanced(), "the arpeggiator's notes end on the channel they began on");
+    CHECK(balanced(), "the arpeggiator's notes end on the channel they began on");   /* (a spare off: see balanced) */
 }
 
 /* The same pitch live on two channels at once: T1's key still held when T2's arpeggiator or Riff plays it
@@ -177,7 +198,7 @@ static void same_pitch_from_arp_on_two_channels(void)
     h1_key(7, 0);
     go(500);
     CHECK(mo_n(0x91, 72) > 0, "T2's arpeggiator played 72 on channel 2");
-    CHECK(balanced(), "T1's held 72 still ends on channel 1");
+    CHECK(balanced(), "T1's held 72 still ends on channel 1");   /* (T2's off after it ended both: spare) */
 }
 
 static void same_pitch_from_riff_on_two_channels(void)
@@ -223,7 +244,7 @@ static void tape_tracks_on_their_channels(void)
     tap(H1_BTN_PLAY);                            /* stopped wherever it was */
     go(200);
     CHECK(mo_n(0x90, -1) > 0 && mo_n(0x91, -1) > 0, "the tape plays T1 on channel 1 and T2 on channel 2");
-    CHECK(balanced(), "every tape note ends on its own channel, stopped mid-note too");
+    CHECK(exact(), "every tape note ends on its own channel, stopped mid-note too, and no stray off");
     CHECK(mo_n(0xB1, 20) > 0 && mo_n(0xB0, 20) == 0, "T2's recorded knob goes out as CC 20 on channel 2");
 }
 
@@ -255,7 +276,7 @@ static void tape_stop_with_voices_taken(void)
     go(300);
     tap(H1_BTN_PLAY);                            /* stopped in the middle of it */
     go(200);
-    CHECK(balanced(), "every note the tape sent ends when it stops, its voice taken or not");
+    CHECK(exact(), "every note the tape sent ends when it stops, its voice taken or not, and no stray off");
 }
 
 /* A knob set over MIDI while recording is on the tape and plays back, but never goes out over MIDI: nothing that
@@ -303,7 +324,7 @@ static void step_notes_on_their_track(void)
     tap(H1_BTN_PLAY);
     go(200);
     CHECK(mo_n(0x92, 60) > 0, "a step on T3 goes out on channel 3");
-    CHECK(balanced(), "with its offs");
+    CHECK(exact(), "with its offs, and no stray off");
 }
 
 static void knob_cc_on_track_channel(void)
