@@ -238,7 +238,7 @@ The exact values are the builder's, tuned by ear within these. The new stages ru
 
 - **0.6.0 loading a tape saved after these phases:**
   - it zeroes `LEv.rsv`, so notes play as recorded;
-  - it never sees a punch or a lane entry. In the saved blob, kinds 3 and 4 are written with their tick plus 15,360 (32 × 480). 0.6.0's loader drops any event at 15,360 or more (`if (tick >= 32u * 480u) continue;`), and the new loader takes 15,360 off again. Otherwise 0.6.0 would play them as notes, in REV as note-ons that are never ended. In memory, the ticks are the real ones;
+  - it never sees a punch or a lane entry. In the saved blob, kinds 3 and 4 are written with their tick plus 15,360 (32 × 480). 0.6.0's loader drops any event at 15,360 or more (`if (tick >= 32u * 480u) continue;`), and the new loader takes 15,360 off again. Otherwise 0.6.0 would play them as notes, in REV as note-ons that are never ended. The tape is saved straight from memory (`eng_loop` returns the event array itself), so they sit at tick + 15,360 in memory too. They then sort after every note and knob move, and the tape's note scans (`tape_play_fwd`/`rev`, which stop at OUT, at most 15,360) never reach them. Punches and lane entries are read from that tail by their own scans, at their tick − 15,360;
   - the lane and punches are lost.
 - **0.6.0 loading a state saved after these phases:** it zeroes `rsv`, and ignores `Track.rsv`, so KEY is lost and nothing else.
 - **These phases loading 0.6.0's tapes and states:** `h[5]` is 0, so notes play as recorded; `rsv` is 0, so KEY is off and the step pattern has no key.
