@@ -835,7 +835,7 @@ static void speak(void)
                     d = say_cat(d, end, ". ");
                 d = say_cat(d, end, name);
                 d = say_cat(d, end, " ");
-                d = say_cat(d, end, text);
+                d = say_cat(d, end, text[0] == '-' && !text[1] ? "NONE" : text);   /* (the LANE page's dash) */
             }
             val_was[k] = v;
         }

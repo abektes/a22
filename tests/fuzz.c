@@ -368,6 +368,17 @@ static void part_state(int rounds)
                         lp[3 + 12u + j * 8u + 3u] = (uint8_t)(3u | (below(4) == 0 ? 0x18u : 0u) | (below(8) == 0 ? 0x80u : 0u));
                         lp[3 + 12u + j * 8u + 6u] = (uint8_t)(below(4) ? below(2) : below(256));      /* d2: start or end */
                     }
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* and a third of those lane entries (kind 4): d1 the ROOT
+                                                              * (0..11, 127 for none, or junk), d2 SCALE | DEG << 4 */
+                    if (below(3) == 0) {
+                        uint32_t tk = below(5) ? 15360u + (uint32_t)below(15360) : (uint32_t)below(65536);
+                        lp[3 + 12u + j * 8u] = (uint8_t)tk;
+                        lp[3 + 12u + j * 8u + 1u] = (uint8_t)(tk >> 8);
+                        lp[3 + 12u + j * 8u + 2u] = (uint8_t)(below(4) ? (below(6) ? below(12) : 127) : below(256));   /* d1: the ROOT */
+                        lp[3 + 12u + j * 8u + 3u] = (uint8_t)(4u | (below(2) ? 0x10u : 0u) | (below(8) == 0 ? 0x80u : 0u));
+                        lp[3 + 12u + j * 8u + 6u] = (uint8_t)(below(4) ? ((below(8) ? below(8) : 15) | (below(8) ? below(7) : 7) << 4) : below(256));   /* d2 */
+                    }
             if (below(8) == 0)
                 lp[3 + (uint32_t)below((int)ln)] ^= (uint8_t)(1u << below(8));
             if (h1_loop_load(lp + 3, below(4) ? ln : ln - (uint32_t)below(9)) == 0)

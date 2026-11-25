@@ -1,0 +1,39 @@
+# LANE in fm1-base's host simulator: the device app, the platform simulated.
+#   ./build.sh --host, then app/build/host/a22_host tests/lane.txt app/build/host
+# SEQ in tape mode, SELECT twice: the LANE subpage. K1 is the BAR, K2 the ROOT, K3 the SCALE, K4 the DEG. Turning a
+# field below its first value leaves it "-" on the screen, and the reader says NONE. Never presses SAVE.
+wait 600
+listen
+tap SEQ
+wait 300
+spin SELECT 1
+wait 400
+spin SELECT 1
+wait 600
+said LANE
+# BAR 1 to begin with; one turn up is bar 2
+spin K1 1
+wait 600
+said BAR 2
+# ROOT: one turn up is C, two more are D
+spin K2 1
+wait 600
+said ROOT C
+spin K2 2
+wait 600
+said ROOT D
+# SCALE and DEG, the same
+spin K3 2
+wait 600
+said SCALE MAJOR
+spin K4 4
+wait 600
+said DEG IV
+# ROOT turned down to no value: the screen shows "-", the reader says NONE
+spin K2 -3
+wait 600
+said ROOT NONE
+spin K4 -4
+wait 600
+said DEG NONE
+unsaid ROOT -

@@ -89,7 +89,7 @@ Each page's four columns are the four knobs. SELECT steps through a page's subpa
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
 | SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE |
-| TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH |
+| TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH; LANE: BAR, ROOT, SCALE, DEG |
 
 ## The tape
 
@@ -116,6 +116,22 @@ semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps 
 others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
 Drum engines (KIT, SKINS) never move, and say DRUM. A tape recorded on 0.6.0 or earlier plays as recorded,
 and so does a track with KEY off. MIDI out sends the notes as they sound.
+
+**LANE.** The key can change from bar to bar. With the tape in view, tap SEQ, then SELECT twice to the third subpage,
+LANE: BAR (K1) picks a bar, and ROOT (K2), SCALE (K3) and DEG (K4) set that bar's entry. Turn a field below its first
+value for "-" (the screen reader says NONE): all three at "-" is no entry. DEG is the chord degree: IV in C major
+plays F, A, C where the tape has C, E, G (DEG does nothing in CHROM). Each field holds until a later entry sets it
+again, one field at a time: bar 1 SCALE MINOR and bar 3 ROOT D plays D minor from bar 3. Fields no entry has set
+come from GLO's ROOT and SCALE, and DEG I; the lane does not wrap. Only tracks with KEY on (above) follow the lane, and
+drums never do. A change applies from the first tick of its bar, and notes already sounding keep their pitch. The
+cells show a bar each, an entry's bars bright, the bars it carries over dim, and a minor degree's numeral underlined;
+the DECK subpage marks entry bars, and while the tape plays over a lane its header says the key in force, for
+example D MAJ . IV. Live keys and chord memory's SCALE mode snap to the root and scale in force while the tape
+plays (not to DEG), and to GLO's key when it is stopped; STEP mode ignores the lane. Recording over a bar with a
+DEG on a KEY track stores the note moved back down, so it plays as played and follows later changes. The lane
+belongs to the whole tape: CUT, PASTE and holding REC leave it, CLEAR ALL clears it, and turning BARS down keeps
+entries past the new end. A tape saved with a lane loads on 0.6.0 without the lane and without its punches (it drops
+what it does not know), and its notes play as recorded.
 
 The tape and every setting are saved by themselves and come back after a restart.
 

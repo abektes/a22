@@ -61,6 +61,8 @@ out=app/build/host
 "$out/a22_host" tests/keyfollow.txt "$out"
 # PUNCH: hold FX and a snapshot key (said PUNCH, then the name; no note, no FX page), a second key replaces the first
 "$out/a22_host" tests/punch.txt "$out"
+# LANE: SEQ, SELECT twice is the LANE subpage (said), BAR 2, ROOT D, and a field turned past its first value is said NONE
+"$out/a22_host" tests/lane.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host

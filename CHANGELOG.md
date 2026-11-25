@@ -17,6 +17,20 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   punch ends at stop and at the wrap. One held by hand wins over the tape's. Punches do not go over MIDI.
 - Tapes saved with punches load in 0.6.0 without them (it drops what it does not know).
 
+**LANE**
+- TAPE has a third subpage, LANE (SEQ, then SELECT twice): BAR, ROOT, SCALE and DEG, one entry at most a bar, 32 bars.
+  Tracks with KEY on play the tape in the key in force and move each note DEG - 1 steps up the scale (IV: C E G in
+  C major plays F A C; DEG does nothing in CHROM). A field no entry has set comes from GLO's ROOT and SCALE, and
+  DEG I: each field holds from the latest entry that sets it, from bar 1, with no wrap. Drums never follow.
+- A change applies from its bar's first tick; sounding notes keep their pitch. Live keys and chord memory's SCALE
+  mode snap to the key in force while the tape plays (not DEG), GLO's when it is stopped; STEP ignores the lane.
+- Recording over a DEG bar on a KEY-on track stores the note moved down DEG - 1 steps, so it plays as played.
+- Entries belong to the whole tape: CUT, PASTE and holding REC leave them, CLEAR ALL clears them, a tape with only
+  entries is not empty, an entry keeps its tick when METER changes, and BARS turned down keeps entries past the end.
+- The cells show a bar each (entry bars bright, inherited bars dim, a minor degree's numeral underlined), the DECK
+  subpage marks entry bars and shows the key in force while playing (D MAJ . IV). The screen reader says NONE for "-".
+- Tapes saved with a lane load in 0.6.0 without it and without punches; their notes play as recorded.
+
 **The tape follows the key**
 - MIX has a fifth subpage, KEY (SEL, then SELECT four times): T1 to T4, OFF or ON (DRUM on a KIT or SKINS
   track). A track with KEY on plays its tape in GLO's KEYS ROOT and SCALE, from the key each note was recorded in:
