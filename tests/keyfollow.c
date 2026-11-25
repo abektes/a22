@@ -551,6 +551,67 @@ static void shared_pitch(void)
     go(300);
 }
 
+/* two overlapping tape notes on one pitch, one track: E on at 0, E again at +400 (a second take over the first),
+ * the offs at +800 and +1200 */
+static void overlap_take(int key2)
+{
+    static uint8_t b[LEV_HEAD + 8 * 4];
+    int i;
+    const uint16_t ticks[4] = {0, 200, 400, 600}; /* (about a tick a millisecond) */
+    const uint8_t kinds[4] = {1, 1, 0, 0};
+    fresh();
+    memset(b, 0, sizeof b);
+    b[0] = 'A'; b[1] = '2'; b[2] = '2'; b[3] = 'T';
+    b[4] = 1; b[5] = 1; b[6] = 4;
+    b[8] = 0x00; b[9] = 0x06;
+    for (i = 0; i < 4; i++) {
+        uint8_t *e = b + LEV_HEAD + i * 8;
+        e[0] = (uint8_t)(ticks[i] & 255); e[1] = (uint8_t)(ticks[i] >> 8);
+        e[2] = 60;
+        e[3] = kinds[i];
+        e[6] = 90;
+        e[7] = key_byte(0, 1);
+    }
+    (void)key2;
+    CHECK(h1_loop_load(b, sizeof b) == 0, "the overlapping take loads");
+}
+static int max_gated;
+static void watch(int msec)
+{
+    int i;
+    for (i = 0; i < msec / 20; i++) {
+        int g = gated();
+        go(20);
+        if (g > max_gated) max_gated = g;
+    }
+}
+static void on_again(void)
+{
+    int pass_;
+    for (pass_ = 0; pass_ < 2; pass_++) {
+        overlap_take(0);
+        st.trk[0].rsv = pass_;                   /* KEY off, then on */
+        st.keys[0] = 0;
+        st.keys[1] = 1;
+        nmo = 0;
+        max_gated = 0;
+        tap(H1_BTN_PLAY);
+        if (pass_) {                             /* ROOT moves between the two ons */
+            watch(100);
+            st.keys[0] = 2;
+        }
+        watch(5000);
+        tap(H1_BTN_PLAY);
+        go(300);
+        CHECK(exact() && gated() == 0, pass_ ? "KEY on, ROOT between the ons: every note ends"
+                                              : "KEY off: every note ends, none left gated");
+        if (!pass_)
+            CHECK(max_gated == 1, "KEY off: the second on starts the voice again in place (one voice)");
+        else
+            CHECK(mo_n(0x90, 60) >= 1 && mo_n(0x90, 62) >= 1, "KEY on: both pitches sounded");
+    }
+}
+
 static void key_subpage(void)
 {
     const char *tx = 0, *nm = 0;
@@ -561,6 +622,8 @@ static void key_subpage(void)
     h1_encoder(H1_ENC_SELECT, 1);
     h1_encoder(H1_ENC_SELECT, 1);
     CHECK(ui_subpage() == 4, "SEL, SELECT four times: MIX's fifth subpage");
+    h1_control(H1_ENC_SELECT, 0, 0, &nm, &tx);
+    CHECK(strstr(tx, "KEY") != 0, "the screen reader names it KEY");
     h1_control(H1_ENC_K2, 0, 0, &nm, &tx);
     CHECK(!strcmp(nm, "T2") && !strcmp(tx, "OFF"), "K2 is T2, OFF");
     h1_encoder(H1_ENC_K2, 1);
@@ -588,6 +651,7 @@ int main(void)
     stop_wrap_cut_clear_mid_note();
     two_keys_overdub();
     shared_pitch();
+    on_again();
     key_subpage();
     h1_midi_out(0);
     printf("keyfollow: %d checks, %d failed\n", checks, fails);

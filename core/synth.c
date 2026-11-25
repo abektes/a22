@@ -991,8 +991,16 @@ static void tape_fire_ev(const LEv *e, int reverse)
             return;
         if (on) {
             int p = eng_follows(trk, part) ? key_map(d, e->rsv, eng_key_play()) : d;
-            if (tape_sent[trk][d] != 0xFF) {     /* (an on again with no off between: the first one ends) */
-                int q = tape_sent[trk][d];
+            int q = tape_sent[trk][d];
+            if (q == p) {                        /* (an on again with no off between, at the pitch that sounds: the
+                                                  * voice starts again in place, and the DAW gets an off, then the on;
+                                                  * the first off ends it, the later one finds nothing) */
+                voice_on_ex(p, part, trk, 1, vel);
+                mout_trk(trk, 0, p, 0);
+                mout_trk(trk, 1, p, vel);
+                return;
+            }
+            if (q != 0xFF) {                     /* (at another pitch, the key moved between: the first one ends) */
                 tape_sent[trk][d] = 0xFF;
                 if (--tape_pitch_n[trk][q] == 0) {
                     voice_off_ex(q, trk, 1);

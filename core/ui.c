@@ -87,6 +87,9 @@ static int arp_shake(void) { return st.ip[st.inst].arp[0] == ARP_SHAKE; }
 static int arp_sub(void)   { return arp_shake() && subpage[PG_ARP] == 1; }
 int ui_subpage(void) { return page == PG_ARP ? arp_sub() : subpage[page]; }
 
+/* MIX's subpage names: drawn as its title, and spoken as SELECT turns to it */
+static const char *const MIX_SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER", "KEY"};
+
 static int page_nsub(int pg)
 {
     switch (pg) {
@@ -1076,7 +1079,9 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
         } else if (page == PG_HOME) {
             v = st.glo[0]; a = 40; b = 240; nm = "TEMPO"; put_s(put_i(d, v), " BPM");
         } else {
-            v = ui_subpage(); a = 0; b = page_nsub(page) - 1; nm = "SUBPAGE"; put_i(d, v + 1);
+            v = ui_subpage(); a = 0; b = page_nsub(page) - 1; nm = "SUBPAGE";
+            d = put_i(d, v + 1);
+            if (page == PG_MIX && v < 5) put_s(put_s(d, " "), MIX_SUBT[v]);
         }
         break;
     default: {
@@ -1458,10 +1463,9 @@ static void draw_lfo_page(void)
 
 static void draw_mix_page(void)
 {
-    static const char *const SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER", "KEY"};
     int sub = subpage[PG_MIX], i;
     char buf[16];
-    draw_topbar(O_TRK[st.track], SUBT[sub < 5 ? sub : 0], sub == 3 ? "EQ+DRV" : (sub == 4 ? "FOLLOW" : "4-TRK"));
+    draw_topbar(O_TRK[st.track], MIX_SUBT[sub < 5 ? sub : 0], sub == 3 ? "EQ+DRV" : (sub == 4 ? "FOLLOW" : "4-TRK"));
 
     if (sub == 4) {                              /* each track follows ROOT and SCALE, or not */
         g_color(GC_SLATE);
