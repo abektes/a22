@@ -115,6 +115,12 @@ static f32 glue_env = 0.0f;
 static uint32_t tfx_w;                       /* the ring's write frame, 0..TFX_FRAMES-1 */
 static int tfx_prev;
 static f32 tfx_rpos, tfx_spd = 1.0f, tfx_stut_len = 5512.0f, tfx_stut_pos, tfx_stut_anchor;
+/* A punch's change of trick (TRICK_SMOOTH) is faded: the old trick goes out to the dry mix over 10 ms, then the new
+ * one comes in over 10 ms. A change on the TRICK knob is at once, as before. */
+static int tfx_want;                         /* the trick a fade is going to (tfx_prev when none) */
+static f32 tfx_wet = 1.0f;                   /* the trick's level over the dry mix, 0..1 */
+#define TFX_FADE 100.0f                      /* a fade's rate a second: 10 ms from 0 to 1 */
+static void punch_reset(void);
 
 static f32 SRf = 44100.0f, ISRf = 1.0f / 44100.0f;
 static uint32_t fx_n;                            /* fx_send_block's calls, one a block */
@@ -153,9 +159,11 @@ void fx_reset(void)
     eq_lo[0] = eq_lo[1] = eq_hi[0] = eq_hi[1] = 0.0f;
     eq_mid[0][0] = eq_mid[0][1] = eq_mid[1][0] = eq_mid[1][1] = 0.0f;
     glue_env = 0.0f;
-    tfx_prev = TRICK_OFF;
+    tfx_prev = tfx_want = TRICK_OFF;
+    tfx_wet = 1.0f;
     tfx_spd = 1.0f;
     tfx_w = 0;
+    punch_reset();
 }
 
 void fx_init(f32 sr)
@@ -781,6 +789,23 @@ H1_HOT static void master_eq(f32 *l, f32 *r, const Svf *fm, int eq_on, f32 klo, 
     }
 }
 
+/* a trick starting: the brake from the tape's speed, a stutter on the ring's last 1/8, 1/16 or 1/32 */
+static void tfx_enter(int trick, f32 bpm)
+{
+    if (trick == TRICK_BRAKE) {
+        tfx_rpos = 0.0f;
+        tfx_spd = 1.0f;
+    } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
+        static const f32 SDIV[3] = {0.5f, 0.25f, 0.125f};
+        f32 len = SDIV[trick - TRICK_STUT8] * 60.0f / maxf(40.0f, bpm) * SRf;
+        while (len > (f32)(TFX_FRAMES - 64u)) len *= 0.5f;   /* (in time: clamped, 1/8 was 277 ms below 108 BPM) */
+        tfx_stut_len = maxf(len, 256.0f);
+        tfx_stut_anchor = (f32)((tfx_w % TFX_FRAMES + TFX_FRAMES - (uint32_t)tfx_stut_len) % TFX_FRAMES);
+        tfx_stut_pos = 0.0f;
+    }
+    tfx_prev = trick;
+}
+
 void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
 {
     f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
@@ -793,7 +818,7 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
     f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
     Svf fmid;
     int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
-    int n;
+    int n, smooth, fading = 0;
 
     if (eq_on)
         svf_set(&fmid, 1100.0f, 0.9f, ISRf);
@@ -803,29 +828,35 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
         H1_FAR(master_eq)(l, r, &fmid, eq_on, klo, khi, lo_g, md_g, hi_g, drv, drive, comp_g);
 
     /* Live RAM Tape Performance FX: Brake & Beat Stutter (48 KB stereo ring) */
-    if (trick != tfx_prev) {
-        if (trick == TRICK_BRAKE) {
-            tfx_rpos = 0.0f;
-            tfx_spd = 1.0f;
-        } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
-            static const f32 SDIV[3] = {0.5f, 0.25f, 0.125f};
-            f32 len = SDIV[trick - TRICK_STUT8] * 60.0f / maxf(40.0f, bpm) * SRf;
-            while (len > (f32)(TFX_FRAMES - 64u)) len *= 0.5f;   /* (in time: clamped, 1/8 was 277 ms below 108 BPM) */
-            tfx_stut_len = maxf(len, 256.0f);
-            tfx_stut_anchor = (f32)((tfx_w % TFX_FRAMES + TFX_FRAMES - (uint32_t)tfx_stut_len) % TFX_FRAMES);
-            tfx_stut_pos = 0.0f;
-        }
-        tfx_prev = trick;
+    smooth = trick & TRICK_SMOOTH;
+    trick &= ~TRICK_SMOOTH;
+    if (smooth || tfx_want != tfx_prev || tfx_wet < 1.0f) {
+        tfx_want = trick;                        /* (a punch's change, or one while a fade runs: faded) */
+        fading = 1;
+    } else if (trick != tfx_prev) {
+        tfx_enter(trick, bpm);
+        tfx_want = trick;
     }
 
     for (n = 0; n < CTRL; n++) {
         uint32_t wi = tfx_w;                     /* (kept below TFX_FRAMES: no division a sample) */
-        if (trick < TRICK_STUT8) {
+        f32 dl = l[n], dr = r[n];
+        if (fading) {
+            if (tfx_want != tfx_prev) {          /* the old trick out, then the new one in from 0 */
+                tfx_wet -= TFX_FADE * ISRf;
+                if (tfx_prev == TRICK_OFF || tfx_wet <= 0.0f) {
+                    tfx_enter(tfx_want, bpm);
+                    tfx_wet = tfx_want == TRICK_OFF ? 1.0f : 0.0f;
+                }
+            } else if (tfx_wet < 1.0f)
+                tfx_wet = minf(1.0f, tfx_wet + TFX_FADE * ISRf);
+        }
+        if (tfx_prev < TRICK_STUT8) {
             tfx_buf[wi * 2u]     = f_to_i16(l[n]);
             tfx_buf[wi * 2u + 1] = f_to_i16(r[n]);
             tfx_w = wi + 1u >= TFX_FRAMES ? 0u : wi + 1u;
         }
-        if (trick == TRICK_BRAKE) {
+        if (tfx_prev == TRICK_BRAKE) {
             uint32_t back, i0, i1, curw = tfx_w % TFX_FRAMES;
             f32 fr, al, ar, bl, br;
             tfx_spd = maxf(0.0f, tfx_spd - 2.3f * ISRf);
@@ -840,7 +871,7 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
             bl = i16_to_f(tfx_buf[i1 * 2u]);     br = i16_to_f(tfx_buf[i1 * 2u + 1]);
             l[n] = (al + (bl - al) * fr) * sat(tfx_spd * 6.0f);
             r[n] = (ar + (br - ar) * fr) * sat(tfx_spd * 6.0f);
-        } else if (trick >= TRICK_STUT8 && trick <= TRICK_STUT32) {
+        } else if (tfx_prev >= TRICK_STUT8 && tfx_prev <= TRICK_STUT32) {
             uint32_t idx = ((uint32_t)(tfx_stut_anchor + tfx_stut_pos)) % TFX_FRAMES;
             f32 win = 1.0f;
             if (tfx_stut_pos < 64.0f) win = tfx_stut_pos * (1.0f / 64.0f);
@@ -851,5 +882,119 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
             if (tfx_stut_pos >= tfx_stut_len)
                 tfx_stut_pos -= tfx_stut_len;
         }
+        if (fading && tfx_wet < 1.0f && tfx_prev != TRICK_OFF) {
+            l[n] = dl + (l[n] - dl) * tfx_wet;
+            r[n] = dr + (r[n] - dr) * tfx_wet;
+        }
     }
+}
+
+/* ---- PUNCH 5-8: LPF, HPF, CRUSH and GATE on the whole mix, after TRICK, while a punch is held ---- */
+/* A punch comes in over 10 ms and goes out over 10 ms (dry to wet); one punch replacing another goes out first. The
+ * sweeps count from the punch's start, a bar of TEMPO from open to where they hold. */
+#define PCH_LPF_HI 18000.0f                  /* LPF: from fully open ... */
+#define PCH_LPF_OCT (-6.17f)                 /* ... down 6.17 octaves, to 250 Hz */
+#define PCH_HPF_LO 20.0f                     /* HPF: from 20 Hz ... */
+#define PCH_HPF_OCT 6.64f                    /* ... up 6.64 octaves, to 2 kHz */
+#define PCH_Q 1.0f                           /* (a touch of resonance at the cutoff) */
+#define PCH_LEVELS 32.0f                     /* CRUSH: 6 bits, 64 levels over -1..1 */
+#define PCH_HOLD 6u                          /* CRUSH: a sample held for 6, the rate down to 1/6 */
+#define PCH_EDGE 0.002f                      /* GATE: its edges, in seconds */
+static int pch_cur, pch_in, pch_out;         /* the effect running (0 none), the punch last asked for, going out */
+static f32 pch_wet, pch_t, pch_ph, pch_g;    /* the level over dry, the sweep 0..1 in bars, the gate's phase, gain */
+static f32 pch_s[2][2], pch_hl, pch_hr;      /* the filters' state, CRUSH's held samples */
+static uint32_t pch_cnt;
+
+static void punch_reset(void)
+{
+    pch_cur = pch_in = pch_out = 0;
+    pch_wet = pch_t = pch_ph = pch_g = 0.0f;
+    pch_s[0][0] = pch_s[0][1] = pch_s[1][0] = pch_s[1][1] = pch_hl = pch_hr = 0.0f;
+    pch_cnt = 0;
+}
+
+static void punch_start(int p, f32 phase16)
+{
+    pch_cur = p;
+    pch_wet = pch_t = 0.0f;
+    pch_s[0][0] = pch_s[0][1] = pch_s[1][0] = pch_s[1][1] = 0.0f;
+    pch_cnt = 0;
+    pch_ph = phase16;
+    pch_g = phase16 < 0.5f ? 1.0f : 0.0f;
+}
+
+void fx_punch_block(f32 *l, f32 *r, int punch, f32 bpm, f32 phase16)
+{
+    int want = punch >= PUNCH_LPF && punch <= PUNCH_GATE ? punch : 0, n;
+    f32 dw = TFX_FADE * ISRf, dph = 0.0f, edge = 0.0f, ph;
+    Svf f;
+
+    if (punch != pch_in) {                       /* (a new punch, or the end: the one running goes out first) */
+        pch_in = punch;
+        pch_out = pch_cur != 0;
+    }
+    if (pch_out && pch_wet <= 0.0f) {
+        pch_out = 0;
+        pch_cur = 0;
+    }
+    if (!pch_cur) {
+        if (!want)
+            return;                              /* no punch: the mix as it was, to the bit */
+        punch_start(want, phase16);
+    }
+
+    if (pch_cur == PUNCH_LPF || pch_cur == PUNCH_HPF) {
+        f32 fc = pch_cur == PUNCH_LPF ? PCH_LPF_HI * exp2fx(pch_t * PCH_LPF_OCT)
+                                      : PCH_HPF_LO * exp2fx(pch_t * PCH_HPF_OCT);
+        svf_set(&f, fc, PCH_Q, ISRf);
+        pch_t = minf(1.0f, pch_t + (f32)CTRL * ISRf * bpm * (96.0f / 60.0f) / (f32)seq_bar_ticks());
+    } else {
+        f.g = f.k = f.a1 = f.a2 = f.a3 = 0.0f;   /* (not read: no filter) */
+    }
+    if (pch_cur == PUNCH_GATE) {
+        /* the phase from where it was a block ago to where it is now, a sample at a time (REV, 1/2 and 2X too);
+         * a jump (the tape started or moved) is taken at once, and the gain's slew keeps it from clicking */
+        f32 d = phase16 - pch_ph;
+        d -= (f32)ifloor(d + 0.5f);
+        if (d > 0.25f || d < -0.25f) {
+            pch_ph = phase16;
+            d = 0.0f;
+        }
+        dph = d * (1.0f / (f32)CTRL);
+        edge = absf(dph) * PCH_EDGE * SRf;       /* (the edge, in phase: 2 ms at the speed it moves) */
+    }
+
+    ph = pch_ph;
+    for (n = 0; n < CTRL; n++) {
+        f32 xl = l[n], xr = r[n], wl, wr;
+        if (pch_out) pch_wet = maxf(0.0f, pch_wet - dw);
+        else if (pch_wet < 1.0f) pch_wet = minf(1.0f, pch_wet + dw);
+        if (pch_cur == PUNCH_LPF || pch_cur == PUNCH_HPF) {
+            f32 lp, bp;
+            SVF_TICK(f, pch_s[0], xl, lp, bp);
+            wl = pch_cur == PUNCH_LPF ? lp : xl - f.k * bp - lp;
+            SVF_TICK(f, pch_s[1], xr, lp, bp);
+            wr = pch_cur == PUNCH_LPF ? lp : xr - f.k * bp - lp;
+        } else if (pch_cur == PUNCH_CRUSH) {
+            if (pch_cnt == 0) {
+                pch_hl = (f32)ifloor(xl * PCH_LEVELS + 0.5f) * (1.0f / PCH_LEVELS);
+                pch_hr = (f32)ifloor(xr * PCH_LEVELS + 0.5f) * (1.0f / PCH_LEVELS);
+            }
+            pch_cnt = pch_cnt + 1u >= PCH_HOLD ? 0u : pch_cnt + 1u;
+            wl = pch_hl;
+            wr = pch_hr;
+        } else {
+            /* GATE: open from the 1/16's start, closed by its middle, both edges inside the open half */
+            f32 to;
+            ph += dph;
+            ph -= (f32)ifloor(ph);
+            to = ph < 0.5f - edge ? 1.0f : 0.0f;
+            pch_g += clampf(to - pch_g, -1.0f / (PCH_EDGE * SRf), 1.0f / (PCH_EDGE * SRf));
+            wl = xl * pch_g;
+            wr = xr * pch_g;
+        }
+        l[n] = xl + (wl - xl) * pch_wet;
+        r[n] = xr + (wr - xr) * pch_wet;
+    }
+    pch_ph = ph;
 }

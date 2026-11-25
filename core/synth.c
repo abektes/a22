@@ -75,6 +75,8 @@ static uint32_t stamp_ctr;
 static f32 last_pitch = 60.0f;
 static volatile uint32_t note_count, hand_count;
 static volatile f32 hand_pitch, level_out, lfo_out, beat_out;
+static int punch_hand, punch_tape, punch_was;   /* the punch held by hand, the tape's (0 none), last block's */
+int eng_punch(void) { return punch_hand ? punch_hand : punch_tape; }
 static volatile uint32_t silent_blocks;          /* blocks the output has been silent (eng_quiet) */
 
 static f32 scope[SCOPE_N];
@@ -1712,6 +1714,10 @@ static void handle(uint32_t e)
         if (phys_down > 0) phys_down--;
         if (!st.keys[3]) chord_key(a, 0, 0, from_midi);
         break;
+    case EV_PUNCH:                               /* (bit 23: the tape's) */
+        if (from_midi) punch_tape = a <= 8 ? a : 0;
+        else punch_hand = a <= 8 ? a : 0;
+        break;
     case EV_MIDI_OFF: {
         /* MIDI's all notes off, which a DAW sends on stop and a USB keyboard unplugged sends here: the notes MIDI
          * holds, or HOLD keeps for it, end. The tape, the pattern and the panel's own keys go on; it was a full hush
@@ -2122,6 +2128,16 @@ static void clock_tick(f32 dticks)
     }
 }
 
+/* where GATE chops, 0..1 in the 1/16 (24 ticks): the tape's place while it plays, the step pattern's while it plays,
+ * else the free-running beat */
+static f32 punch_phase16(void)
+{
+    if (st.seq[0] == SEQ_STEP ? !step_playing
+                              : loop_state != LOOP_REC && loop_state != LOOP_PLAY && loop_state != LOOP_DUB)
+        return fractf(beat_out * 4.0f);
+    return fractf((st.seq[0] == SEQ_STEP ? (f32)(step_at * seq_grid_ticks()) + step_acc : loop_pos) * (1.0f / 24.0f));
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 sl[CTRL], sr[CTRL], tl[CTRL], tr[CTRL];
@@ -2282,7 +2298,13 @@ static void block(f32 *L, f32 *R)
     /* 8-Engine Selectable FX Rack + Master Bus (EQ + Tape Drive + Tape Brake/Stutter) */
     fx_send_block(sl, sr, L, R, st.fx_type, st.fx_p[st.fx_type < NFX ? st.fx_type : 0], bpm, st.fx_on);
     stg_mark(H1_STG_FX);
-    fx_master_block(L, R, st.master, st.tape[3], bpm);
+    {
+        /* a punch held replaces TRICK (1-4 are TRICK's own, 5-8 come after it), and when it ends TRICK is back */
+        int p = eng_punch(), trick = p ? (p <= TRICK_STUT32 ? p : TRICK_OFF) : st.tape[3];
+        fx_master_block(L, R, st.master, p || punch_was ? trick | TRICK_SMOOTH : trick, bpm);
+        fx_punch_block(L, R, p, bpm, punch_phase16());
+        punch_was = p;
+    }
 
     /* Scope & master meter */
     {
@@ -2469,6 +2491,7 @@ SMALL void eng_init(uint32_t sample_rate)
     click_at = -1;
     ev_r = ev_w;
     sub_l = sub_r = 0.0f;
+    punch_hand = punch_tape = punch_was = 0;
 }
 
 /* ---- main-loop introspection ---------------------------------------------------------- */
