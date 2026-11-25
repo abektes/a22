@@ -167,10 +167,11 @@ void dsp_init(void)
 
 /* ---- scales --------------------------------------------------------------------------- */
 
-int scale_snap(int note)
+int scale_snap(int note)                         /* (to the lane's key while the tape plays: eng_key_live) */
 {
-    uint32_t mask = SCALE_MASK[st.keys[1] < 8 ? st.keys[1] : 0];
-    int root = st.keys[0] % 12, i;
+    uint8_t k = eng_key_live();
+    uint32_t mask = SCALE_MASK[key_scale(k)];
+    int root = key_root(k), i;
     for (i = 0; i < 12; i++) {
         int pc = ((note - i - root) % 12 + 12) % 12;
         if (mask & (1u << pc))
@@ -838,17 +839,18 @@ static void route(int note, int on, int vel, int from_midi)
 }
 
 /* ---- 4-Track Virtual Tape Deck (notes + velocity + K1-K4 motion + Cut/Paste) ---------- */
-enum { LEV_OFF = 0, LEV_ON = 1, LEV_AUTO = 2, LEV_PUNCH = 3 };
-/* Punches (and later the key lane) sit in the tape's tail: at their tick + LEV_TAIL, in memory and in the blob. They
+enum { LEV_OFF = 0, LEV_ON = 1, LEV_AUTO = 2, LEV_PUNCH = 3, LEV_KEY = 4 };
+/* Punches and the key lane's entries sit in the tape's tail: at their tick + LEV_TAIL, in memory and in the blob. They
  * sort after every note and knob move, the note scans (which stop at 15,360 at most) never reach them, and 0.6.0's
  * loader, which drops any event at 15,360 or more, loses them and nothing else. */
 #define LEV_TAIL 15360u
-static int lev_tail_kind(int kind) { return kind == LEV_PUNCH; }   /* (the kinds that live in the tail) */
+static int lev_tail_kind(int kind) { return kind == LEV_PUNCH || kind == LEV_KEY; }   /* (the kinds in the tail) */
 #define LEV_MIDI 0x08u                           /* (flags) a knob move that came in over MIDI: never sent back out */
+#define LEV_GLOBAL 0x10u                         /* (flags) the whole tape's, no track's: a lane entry */
 typedef struct LEv {
     uint16_t tick;
     uint8_t d1;      /* note (0..127) or knob (0..3) */
-    uint8_t flags;   /* bits 0..2 kind, bit 3 LEV_MIDI, bit 7 fresh */
+    uint8_t flags;   /* bits 0..2 kind, bit 3 LEV_MIDI, bit 4 LEV_GLOBAL, bit 7 fresh */
     uint8_t trk;     /* 0..3 */
     uint8_t part;    /* PART(inst, algo) */
     uint8_t d2;      /* vel or knob value */
@@ -868,6 +870,7 @@ static volatile uint32_t loop_gen, loop_full;
 static volatile int loop_state = LOOP_EMPTY;
 static volatile f32 loop_pos, loop_len = 1536.0f;
 static uint8_t rec_part[128], rec_trk[128], rec_key[128];   /* (an off takes its on's key too) */
+                                                 /* (rec_trk: bits 0-1 the track, 2-4 the DEG its on was stored under) */
 static f32 rec_shift[128];                       /* SNAP's move of an open note's on: its off moves as much */
 static uint32_t rec_open[4];
 static int nopen, loop_fresh;
@@ -951,9 +954,122 @@ static void tape_offs(int trk)                   /* the offs of what the tape le
     }
 }
 
-uint8_t eng_key_play(void)                       /* the key the tape plays in */
+/* ---- the key lane: a ROOT, SCALE and DEG a bar, which KEY-on tracks follow --------------------------------------
+ * An entry is a LEV_KEY event in the tail, at its bar's first tick + LEV_TAIL, LEV_GLOBAL, track 0, part 0: d1 the
+ * ROOT (0-11, 127 none), d2 the SCALE (0-7, 15 none) in bits 0-3 and the DEG (0-6, 7 none) in bits 4-6. It keeps its
+ * tick when METER changes, and applies from the bar it then falls in; two in one bar: the later tick's.
+ * lane_rs and lane_dg are each bar's fields in force, each from the latest entry at or before the bar that sets it
+ * (no wrap): root | scale << 4 (15: none, GLO's), and DEG (0 = I). GLO fills in as they are read, so turning GLO's
+ * ROOT or SCALE needs no rebuild; an entry set, the tape loaded or cleared, or METER moved does (lane_build). */
+static uint8_t lane_rs[32], lane_dg[32];
+static int lane_bt;                              /* the bar length they were built for */
+
+static int lane_bar(f32 t)                       /* the bar a tick of the tape is in, 0..31 */
 {
-    return eng_key_glo();
+    return iclamp((int)(t / (f32)seq_bar_ticks()), 0, 31);
+}
+static int lane_find(int bar)                    /* the entry that starts at BAR (the latest in it), or -1 */
+{
+    int i, ne = nlev, bt = seq_bar_ticks(), at = -1;
+    for (i = lev_tail_find(0.0f); i < ne; i++)
+        if ((lev[i].flags & 7) == LEV_KEY && (int)(lev[i].tick - LEV_TAIL) / bt == bar)
+            at = i;
+    return at;
+}
+static void lane_build(void)
+{
+    int i, b, ne = nlev, bt = seq_bar_ticks(), r = 15, s = 15, d = 0;
+    for (b = 0; b < 32; b++) {
+        lane_rs[b] = 0xFF;
+        lane_dg[b] = 7;
+    }
+    for (i = lev_tail_find(0.0f); i < ne; i++) {  /* (by tick: the later entry in a bar wins) */
+        const LEv *e = &lev[i];
+        if ((e->flags & 7) != LEV_KEY) continue;
+        b = ((int)e->tick - (int)LEV_TAIL) / bt;
+        if (b < 0 || b >= 32) continue;          /* (past bar 32 after a METER change: never reached) */
+        lane_rs[b] = (uint8_t)((e->d1 < 12 ? e->d1 : 15) | ((e->d2 & 15) < 8 ? (e->d2 & 15) : 15) << 4);
+        lane_dg[b] = (uint8_t)((e->d2 >> 4) & 7);
+    }
+    for (b = 0; b < 32; b++) {                   /* each field from the last bar that set it */
+        if ((lane_rs[b] & 15) != 15) r = lane_rs[b] & 15;
+        if ((lane_rs[b] >> 4) != 15) s = lane_rs[b] >> 4;
+        if (lane_dg[b] != 7) d = lane_dg[b];
+        lane_rs[b] = (uint8_t)(r | s << 4);
+        lane_dg[b] = (uint8_t)d;
+    }
+    lane_bt = bt;
+}
+uint8_t eng_key_at(int bar)
+{
+    int v = lane_rs[iclamp(bar, 0, 31)], r = v & 15, s = v >> 4;
+    return key_byte(r == 15 ? st.keys[0] % 12 : r, s == 15 ? st.keys[1] & 7 : s);
+}
+int eng_deg_at(int bar) { return lane_dg[iclamp(bar, 0, 31)]; }
+int eng_lane_get(int bar, int field)
+{
+    int i = lane_find(bar), v;
+    if (i < 0) return -1;
+    v = field == 0 ? lev[i].d1 : field == 1 ? (lev[i].d2 & 15) : (lev[i].d2 >> 4 & 7);
+    return v < (field == 0 ? 12 : field == 1 ? 8 : 7) ? v : -1;
+}
+/* EV_LANE: a field of BAR's entry (V 31: none). The first field set makes the entry, at the bar's first tick; the
+ * last one cleared takes it away. */
+static void lane_set(int bar, int field, int v)
+{
+    static const uint8_t TOP[3] = {12, 8, 7};    /* (each field's first value that is none) */
+    int i = lane_find(bar), r, s, d;
+    if (field > 2) return;
+    if (v > TOP[field]) v = TOP[field];
+    if (i < 0) {
+        uint16_t tick = (uint16_t)(bar * seq_bar_ticks() + (int)LEV_TAIL);
+        LEv *e;
+        if (v == TOP[field]) return;
+        if (nlev + nopen + 1 > NLEV) {           /* (room left for the open notes' offs) */
+            loop_full++;
+            return;
+        }
+        e = lev_insert(tick);
+        e->tick = tick;
+        e->d1 = 127;
+        e->flags = LEV_KEY | LEV_GLOBAL;
+        e->trk = 0;
+        e->part = 0;
+        e->d2 = 15 | 7 << 4;
+        e->rsv = 0;
+        i = (int)(e - lev);
+    }
+    r = lev[i].d1;
+    s = lev[i].d2 & 15;
+    d = lev[i].d2 >> 4 & 7;
+    if (field == 0) r = v < 12 ? v : 127;
+    else if (field == 1) s = v < 8 ? v : 15;
+    else d = v;
+    if (r == 127 && s == 15 && d == 7) {         /* (all none: no entry) */
+        for (; i + 1 < nlev; i++) lev[i] = lev[i + 1];
+        nlev--;
+    } else {
+        lev[i].d1 = (uint8_t)r;
+        lev[i].d2 = (uint8_t)(s | d << 4);
+    }
+    if (nlev && loop_state == LOOP_EMPTY) loop_state = LOOP_IDLE;
+    else if (!nlev && (loop_state == LOOP_IDLE || loop_state == LOOP_PLAY)) loop_state = LOOP_EMPTY;
+    lane_build();
+    loop_gen++;
+}
+void eng_post_lane(int bar, int field, int value)
+{
+    post(((uint32_t)EV_LANE << 8) | ((uint32_t)bar & 31u) | ((uint32_t)field & 3u) << 16 | ((uint32_t)value & 31u) << 18);
+}
+
+uint8_t eng_key_play(void)                       /* the key in force at the playhead (STEP ignores the lane) */
+{
+    return st.seq[0] == SEQ_TAPE ? eng_key_at(lane_bar(loop_pos)) : eng_key_glo();
+}
+uint8_t eng_key_live(void)                       /* the keys' key: the tape's while it plays, else GLO's */
+{
+    int s = loop_state;
+    return st.seq[0] == SEQ_TAPE && (s == LOOP_PLAY || s == LOOP_REC || s == LOOP_DUB) ? eng_key_play() : eng_key_glo();
 }
 
 int eng_follows(int trk, int part)               /* a track's KEY on, and the note not a drum's */
@@ -1010,8 +1126,15 @@ static void tape_fire_ev(const LEv *e, int reverse)
         if (on && track_muted(trk))              /* (muted: no new notes, but offs still end what sounds) */
             return;
         if (on) {
-            int p = eng_follows(trk, part) ? key_map(d, e->rsv, eng_key_play()) : d;
-            int q = tape_sent[trk][d];
+            int p = d, q;
+            if (eng_follows(trk, part)) {        /* (the key in force where it fires, not where the block began) */
+                int b = lane_bar((f32)e->tick);
+                uint8_t k = eng_key_at(b);
+                p = key_map(d, e->rsv, k);
+                if (lane_dg[b] && (e->rsv & KEY_VALID))   /* (DEG: up the scale; a note with no key stays put) */
+                    p = key_steps(p, k, lane_dg[b]);
+            }
+            q = tape_sent[trk][d];
             if (q == p) {                        /* (an on again with no off between, at the pitch that sounds: the
                                                   * voice starts again in place, and the DAW gets an off, then the on;
                                                   * the first off ends it, the later one finds nothing) */
@@ -1213,7 +1336,7 @@ static void tape_record_note(int note, int on, int vel)
 {
     static const f32 Q[3] = {0.0f, 24.0f, 48.0f};
     f32 in_t, out_t, t = loop_pos, q = Q[st.seq[3] < 3 ? st.seq[3] : 0];
-    int part, trk, kept;
+    int part, trk, kept, deg, stored;
     LEv *e;
     if (st.tape[0] == TAPE_SPD_REV)              /* (not in REV: its ons and offs would come out swapped) */
         return;
@@ -1230,8 +1353,6 @@ static void tape_record_note(int note, int on, int vel)
         part = live_part();
         trk = cur_trk;
         rec_part[note] = (uint8_t)part;
-        rec_trk[note] = (uint8_t)trk;
-        rec_key[note] = eng_key_glo();
         track_snap_live(trk);
     } else {
         part = rec_part[note] ? rec_part[note] : live_part();
@@ -1243,6 +1364,15 @@ static void tape_record_note(int note, int on, int vel)
         rec_shift[note] = q > 0.0f ? (f32)ifloor(t / q + 0.5f) * q - t : 0.0f;
     t += rec_shift[note];
     if (t >= out_t) t -= out_t - in_t;
+    if (on) {
+        /* its key: the one in force where it starts. Over a DEG, a KEY-on track's note is stored as many steps down,
+         * so it plays back as it was heard (and an off is stored as its on was) */
+        int b = lane_bar(t);
+        rec_key[note] = eng_key_at(b);
+        rec_trk[note] = (uint8_t)(trk | (eng_follows(trk, part) ? lane_dg[b] : 0) << 2);
+    }
+    deg = rec_trk[note] >> 2 & 7;
+    stored = deg ? key_steps(note, rec_key[note], -deg) : note;
     if (kept) {
         rec_open[note >> 5] &= ~(1u << (note & 31));
         nopen--;
@@ -1250,7 +1380,7 @@ static void tape_record_note(int note, int on, int vel)
     e = lev_insert((uint16_t)clampf(t, 0.0f, loop_len - 1.0f));
     if (!e) return;
     e->tick  = (uint16_t)clampf(t, 0.0f, loop_len - 1.0f);
-    e->d1    = (uint8_t)note;
+    e->d1    = (uint8_t)stored;
     e->flags = (uint8_t)((on ? LEV_ON : LEV_OFF) | 0x80u);
     e->trk   = (uint8_t)trk;
     e->part  = (uint8_t)part;
@@ -1358,7 +1488,7 @@ static void tape_cut(void)
         int kind = e->flags & 7, is_open;
         int tail = lev_tail_kind(kind);
         f32 at = (f32)e->tick - (tail ? (f32)LEV_TAIL : 0.0f);
-        int in = (e->trk & 3) == cur_trk && at >= in_t && at < out_t;
+        int in = !(e->flags & LEV_GLOBAL) && (e->trk & 3) == cur_trk && at >= in_t && at < out_t;
         p = e->d1 & 127;
         if (tail) {                              /* (a punch: like a knob move, but its end stays if its start does) */
             int pun = kind == LEV_PUNCH, pb = e->d1 & 7, start = pun && e->d2;
@@ -1667,8 +1797,9 @@ static uint8_t ch_cnt[128];
 
 static int ch_scale_up(int root, int steps)                  /* the note `steps` scale notes above root */
 {
-    uint32_t mask = SCALE_MASK[st.keys[1] < 8 ? st.keys[1] : 0];
-    int r = st.keys[0] % 12, n = root, k = 0;
+    uint8_t key = eng_key_live();                            /* (the live keys' key) */
+    uint32_t mask = SCALE_MASK[key_scale(key)];
+    int r = key_root(key), n = root, k = 0;
     if (mask == 0xFFFu) mask = SCALE_MASK[1];                /* CHROM has no chords of its own: major */
     while (k < steps && n < 160) {
         n++;
@@ -1855,6 +1986,9 @@ static void handle(uint32_t e)
             punch_hand = a;
         }
         break;
+    case EV_LANE:
+        lane_set(a & 31, (int)(e >> 16 & 3u), (int)(e >> 18 & 31u));
+        break;
     case EV_MIDI_OFF: {
         /* MIDI's all notes off, which a DAW sends on stop and a USB keyboard unplugged sends here: the notes MIDI
          * holds, or HOLD keeps for it, end. The tape, the pattern and the panel's own keys go on; it was a full hush
@@ -1999,8 +2133,8 @@ static void handle(uint32_t e)
             int t = (a - 1) & 3, i, w = 0;
             tape_release_trk(t);                 /* (that track's notes, not every track's) */
             if (t == cur_trk) rec_forget();
-            for (i = 0; i < nlev; i++)
-                if ((lev[i].trk & 3) != t) lev[w++] = lev[i];
+            for (i = 0; i < nlev; i++)          /* (the lane's entries are no track's: they stay) */
+                if ((lev[i].trk & 3) != t || (lev[i].flags & LEV_GLOBAL)) lev[w++] = lev[i];
             nlev = w;
             for (i = 0; i < 4; i++) trun[t].auto_on[i] = 0;
             if (!nlev) { loop_state = LOOP_EMPTY; loop_pos = 0.0f; }
@@ -2009,6 +2143,7 @@ static void handle(uint32_t e)
             int t, k;
             tape_stop();
             nlev = 0;
+            lane_build();
             loop_state = LOOP_EMPTY;
             for (t = 0; t < NTRACK; t++)
                 for (k = 0; k < 4; k++) trun[t].auto_on[k] = 0;
@@ -2293,6 +2428,8 @@ static void block(f32 *L, f32 *R)
     live_blk = *track_set(cur_trk, live, 0);
     lfo_out = live_blk.lfo;
 
+    if (lane_bt != seq_bar_ticks())             /* (METER moved: the entries fall in other bars) */
+        lane_build();
     while (ev_r != ev_w) {
         uint32_t e = evq[ev_r];
         ev_r = (ev_r + 1u) & 63u;
@@ -2616,6 +2753,7 @@ SMALL void eng_init(uint32_t sample_rate)
     loop_state = LOOP_EMPTY;
     nlev = nclip = 0;
     rec_forget();
+    lane_build();
     clk_acc = 0.0f;                              /* (stopped, no Start owed; no note's channel kept) */
     xport_was = clk_jump = clk_resync = clk_started = 0;
     clk_from = -1.0f;
@@ -2827,7 +2965,7 @@ int eng_seq_has(int trk)
         return 0;
     }
     for (i = 0; i < ne && i < NLEV; i++)
-        if ((lev[i].trk & 3) == (trk & 3)) return 1;
+        if ((lev[i].trk & 3) == (trk & 3) && !(lev[i].flags & LEV_GLOBAL)) return 1;
     return 0;
 }
 
@@ -2886,6 +3024,10 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
         d->flags = e[3] & (7u | LEV_MIDI);
         d->trk   = e[4] & 3u;
         d->part  = part_ok(e[5]) ? e[5] : PART(st.trk[d->trk].inst, st.trk[d->trk].algo);
+        if ((d->flags & 7u) == LEV_KEY) {        /* (a lane entry: the whole tape's) */
+            d->flags = LEV_KEY | LEV_GLOBAL;
+            d->trk = d->part = 0;
+        }
         d->d2    = e[6] & 127u;
         /* a key is kept only if the blob says its events carry them, and it is a valid one */
         d->rsv   = ((b[5] & 1u) && (e[7] & KEY_VALID) && (e[7] & 15u) <= 11u) ? e[7] : 0;
@@ -2893,6 +3035,7 @@ int eng_loop_load(const uint8_t *b, uint32_t n)
     }
     nlev = (int)k;
     rec_forget();
+    lane_build();
     loop_len = (f32)len;
     loop_pos = 0.0f;
     loop_state = nlev ? LOOP_IDLE : LOOP_EMPTY;

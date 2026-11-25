@@ -296,7 +296,9 @@ enum {
     EV_SNAP_SAVE,                /* save patch to snapshot 0..7 */
     EV_SNAP_LOAD,                /* load patch from snapshot 0..7 */
     EV_MIDI_OFF,                 /* MIDI's all notes off (CC 123): the notes MIDI plays end, the tape plays on */
-    EV_PUNCH                     /* a punch 1-8 starts, 0 ends it; bit 23: the tape's (the hand's wins) */
+    EV_PUNCH,                    /* a punch 1-8 starts, 0 ends it; bit 23: the tape's (the hand's wins) */
+    EV_LANE                      /* the key lane: a = the bar 0-31, bits 16-17 the field (0 ROOT, 1 SCALE, 2 DEG),
+                                  * bits 18-22 its value (ROOT 0-11, SCALE 0-7, DEG 0-6; 31: none) (eng_post_lane) */
 };
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 
@@ -323,6 +325,10 @@ void eng_post(int type, int a);
 void eng_post_note(int on, int note, int vel, int from_midi);
 void eng_post_auto(int knob, int val);
 void eng_post_auto_in(int knob, int val);  /* the same, set over MIDI in: on the tape, never sent back out */
+void eng_post_lane(int bar, int field, int value);   /* EV_LANE: a lane entry's ROOT, SCALE or DEG (31: none) */
+int eng_lane_get(int bar, int field);    /* the entry starting at BAR: its ROOT, SCALE or DEG, or -1 for none */
+uint8_t eng_key_at(int bar);             /* the key in force at BAR (GLO's where the lane has none) */
+int eng_deg_at(int bar);                 /* the DEG in force at BAR: 0 (I) to 6 */
 int eng_punch(void);                     /* the punch playing, 0-8: the hand's if held, else the tape's */
 void eng_midi_resync(void);              /* a new listener on MIDI out: Stop and Start at the next loop start */
 extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
@@ -365,7 +371,8 @@ int key_scale(uint8_t k);
 int key_map(int note, uint8_t from, uint8_t to);
 int key_steps(int note, uint8_t key, int steps);
 uint8_t eng_key_glo(void);                      /* GLO's ROOT and SCALE as a key byte (synth.c) */
-uint8_t eng_key_play(void);                     /* the key the tape plays in (synth.c) */
+uint8_t eng_key_play(void);                     /* the key in force at the tape's playhead; GLO's in STEP (synth.c) */
+uint8_t eng_key_live(void);                     /* the keys' key: eng_key_play's while the tape plays, else GLO's */
 int eng_follows(int trk, int part);             /* KEY on for the track, and not a drum part (synth.c) */
 #define INST_KIT 8                              /* the drum engines: their notes never follow the key */
 #define INST_SKINS 13
