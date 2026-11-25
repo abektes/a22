@@ -5,10 +5,19 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## 0.6.0
 
-Identity `FM-1_4122000600`. Not released yet: built on the branch `cpu-headroom`, not yet timed on an FM-1. More
-room for the audio in a dense loop jam (`docs/PLAN-cpu-headroom.md`), and the sound otherwise the same to the bit
-(the two-core and corestat hashes are unchanged from 0.5.0, and `tests/sleep.c` holds the two savings below that
-could have changed it). Settings and the tape saved by 0.1.0 to 0.5.0 load as before: the state is still version 5.
+Identity `FM-1_4122000600`. Released 2026-11-25. More room for the audio in a dense loop jam
+(`docs/PLAN-cpu-headroom.md`), and the sound otherwise the same to the bit (the two-core and corestat hashes are
+unchanged from 0.5.0, and `tests/sleep.c` holds the two savings below that could have changed it). Timed and run on
+one FM-1 (CI's test package of the same code, 2660a1e), no crash recorded:
+- eight-note chords on all 112 algorithms with PLATE: 47.7% of the audio time on average, 72% at the peak, 45 frames a
+  second (0.5.0: 50%, 75%, 42);
+- the dense loop jam (`tools/fm1_profile.py jam`), which missed 35 and 22 halves on 0.5.0 at 104 and 106%: no half
+  missed and no voice let go in two runs, 84 and 87% at the peak with four keys held on top, and none in 18 minutes
+  of its tape playing (65% on average);
+- DELAY, SHIFT, CHORUS and TANK with nothing playing: 10% each, as PLATE (13 to 15% on 0.5.0).
+
+Settings and the tape saved by 0.1.0 to 0.5.0 load as before: the state is still version 5, and a tape saved while
+the jam played came back after a power-off.
 
 **Audio time**
 - PLATE's two halves, the master bus's EQ and drive, each voice's gain, pan and declick, and the output now run from

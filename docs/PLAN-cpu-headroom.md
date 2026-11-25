@@ -3,18 +3,23 @@
 Written 2026-11-24, after 0.5.0. It takes up `docs/PLAN-after-sprints.md`'s Phase G and the tactics in
 `docs/RESEARCH-cpu-ram.md`, put in order for the case that drops audio. The release that carries it is 0.6.0.
 
-## Status (2026-11-24, branch `cpu-headroom`)
+## Status (2026-11-25: released as 0.6.0)
 
-Built and held on the host: J0 to J5, J6's first step, and J7. Every hash is unchanged from 0.5.0; `tests/sleep.c`
-holds J2 and J7 against the code switched back, `tests/echo.c` holds J5. Not done yet:
+J0 to J5, J6's first step and J7 are in 0.6.0. Every hash is unchanged from 0.5.0; `tests/sleep.c` holds J2 and J7
+against the code switched back, `tests/echo.c` holds J5.
 
-- [ ] A CI build of the branch, which also runs fm1-base's check that the RAM code (J6) calls nothing in the flash.
-- [ ] J0's baseline on the FM-1: two jam runs on 0.5.0 as released, then two on the 0.6.0 test package, with the
-      chords table (`tools/fm1_profile.py all --fx PLATE`) and `idle` for J7.
-- [ ] J1's comparison with the saves held off, if the jam still runs late while FLASH counts writes.
-- [ ] J4's input scan at 5 kHz checked by hand: keys, a fast knob, the glow.
-- [ ] J6's second step (the engines' renders in RAM), only if STAGE shows the voices as the peak. About 70 KB of
-      SRAM should be free after J5 and J6's first step (0.5.0's 29 KB, 48 back, 5 used); the build's line says for sure.
+- [x] CI (45498687913): host tests, both firmware builds, fm1-base's RAM-code check (4,352 B, 5 functions). Image
+      567,836 B of 581,564 (13.7 KB left; main had 16.7); SRAM 73,848 B free (main had 29,304).
+- [x] On the FM-1 (0.6.0-test): chords on all 112 algorithms 47.7% average, 72% peak, 45 FPS; the jam twice with no
+      half missed and no voice shed, 84 and 87% at the peak; 18 minutes of its tape the same; idle 10% for every
+      echo effect. The 0.5.0 jam numbers are the CHANGELOG's (35 and 22 late, 104 and 106%), not run again.
+- [x] J1: a tape saved while the jam played came back after a power-off. Not compared with the saves held off: the
+      jam no longer runs late with them on. FLASH's longest (6.3 ms) is wall time and likely includes a render that
+      ran just after the page program.
+- [x] J4's input scan at 5 kHz checked by hand: nothing reported.
+- [ ] J6's second step (the engines' renders in RAM): the voices are the largest stage in the jam (up to 47% of a
+      block), so this is where more headroom comes from next, in the release after 0.6.0.
+- [ ] The jam's peak with four keys held on top (84 to 89%) is still over this plan's 80%.
 
 ## The case to fix
 
