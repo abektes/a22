@@ -653,7 +653,8 @@ static void tape_tests(void)
 
     /* tape_punch_across_wrap: held to the loop's end, it ends at the wrap and starts again next pass */
     ttake(0, 3, 1700.0, -1.0);
-    CHECK(tblob(LEV_PUNCH, tick, d1, d2) == 1 && d2[0] == 1, "wrap: a punch held to the end leaves its start alone");
+    CHECK(tblob(LEV_PUNCH, tick, d1, d2) == 2 && d2[0] == 1 && d2[1] == 0 && tick[1] >= 15360 + 380,
+          "wrap: a punch held to the end gets its end at the last tick");
     tz = trestart();
     tuntil(tz + 4100);
     CHECK(pat(tz + 1850) == 3, "wrap: punch 3 plays to the end");
@@ -721,6 +722,70 @@ static void tape_tests(void)
     eng_post(EV_PUNCH, 0);
     tuntil(tnow() + 20);
     CHECK(eng_punch() == 0, "stop: and ends with its key");
+
+
+    /* an end ends its own punch only: two tracks' punches overlap, 3 on T1 100-300 and 5 on T2 200-400 */
+    tfresh(0);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + 100);
+    eng_post(EV_PUNCH, 3);
+    tuntil(t0 + 300);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 2100);
+    h1_button(H1_BTN_EDIT, 1); h1_encoder(H1_ENC_PRESET, 1); h1_button(H1_BTN_EDIT, 0);   /* to T2 */
+    tuntil(t0 + 3800);
+    ttap(H1_BTN_REC);                            /* dub on T2 */
+    tuntil(t0 + 4200);
+    eng_post(EV_PUNCH, 5);
+    tuntil(t0 + 4400);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 4600);
+    ttap(H1_BTN_REC);
+    tz = trestart();
+    tuntil(tz + 2000);
+    CHECK(pat(tz + 150) == 3 && pat(tz + 250) == 5, "overlap: 5 replaces 3 where T2 starts it");
+    CHECK(pat(tz + 350) == 5, "overlap: T1's end of 3 does not cut T2's 5");
+    CHECK(pat(tz + 450) == 0, "overlap: 5 ends at its own end");
+
+    /* a punch held across a DUB wrap: its end at the last tick, its start at the next pass's first */
+    tfresh(0);
+    ttap(H1_BTN_REC);
+    t0 = tnow() + 50;
+    tkey(4, t0, 100);
+    tuntil(t0 + 2100);
+    ttap(H1_BTN_REC);                            /* dub */
+    tuntil(t0 + 3900);
+    eng_post(EV_PUNCH, 4);
+    tuntil(t0 + 4200);
+    eng_post(EV_PUNCH, 0);
+    tuntil(t0 + 4400);
+    ttap(H1_BTN_REC);
+    n = tblob(LEV_PUNCH, tick, d1, d2);
+    CHECK(n == 4 && d2[0] == 1 && d2[1] == 0 && d2[2] == 1 && d2[3] == 0 && tick[0] <= 15360 + 6,
+          "dub wrap: start at the first tick, end, start, end at the last: no end before its start");
+    tz = trestart();
+    tuntil(tz + 2000);
+    CHECK(pat(tz + 100) == 4 && pat(tz + 300) == 0 && pat(tz + 1000) == 0 && pat(tz + 1950) == 4,
+          "dub wrap: it plays as it was held, round the wrap");
+
+    /* mute or solo while its punch plays ends it */
+    ttake(0, 3, 400.0, 1400.0);
+    tz = trestart();
+    tuntil(tz + 700);
+    CHECK(eng_punch() == 3, "mute: the tape's punch plays");
+    st.trk[0].mute = 1;
+    tuntil(tnow() + 8);
+    CHECK(eng_punch() == 0, "mute: muted mid-span: 0 within a block");
+    st.trk[0].mute = 0;
+    tz = trestart();
+    tuntil(tz + 700);
+    CHECK(eng_punch() == 3, "solo: the tape's punch plays again");
+    st.trk[1].mute = 2;
+    tuntil(tnow() + 8);
+    CHECK(eng_punch() == 0, "solo: another track soloed mid-span: 0");
+    st.trk[1].mute = 0;
 
     /* no_midi */
     ttake(0, 3, 600.0, 900.0);

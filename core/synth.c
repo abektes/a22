@@ -871,7 +871,8 @@ static uint8_t rec_part[128], rec_trk[128], rec_key[128];   /* (an off takes its
 static f32 rec_shift[128];                       /* SNAP's move of an open note's on: its off moves as much */
 static uint32_t rec_open[4];
 static int nopen, loop_fresh;
-static int rec_punch;                            /* the punch (1-8) whose start the take holds, its end to come */
+static int rec_punch, rec_punch_trk;             /* the punch (1-8) whose start the take holds, its end to come, and the
+                                                  * track that has the start (the end goes there too) */
 
 static void rec_forget(void)
 {
@@ -1051,8 +1052,10 @@ static void tape_fire_tail(const LEv *e, int reverse)
     if ((e->flags & 7) == LEV_PUNCH) {
         int on = e->d2 != 0;
         if (reverse) on = !on;
-        if (!on)
-            punch_tape = 0;
+        if (!on) {                               /* (an end ends its own punch: same number, same track) */
+            if (punch_tape == (e->d1 & 7) + 1 && punch_tape_trk == (e->trk & 3))
+                punch_tape = 0;
+        }
         else if (!punch_hand && !track_muted(e->trk & 3)) {
             punch_tape = (e->d1 & 7) + 1;
             punch_tape_trk = e->trk & 3;
@@ -1135,6 +1138,8 @@ static f32 tp_move(f32 d)                        /* + forwards, - backwards: whe
     return (f32)tp_i + tp_f;
 }
 
+static int tape_put_tail(int kind, int d1, int d2, int trk, f32 t);
+
 static void tape_tick(f32 dticks)
 {
     f32 in_t, out_t, a, b;
@@ -1182,6 +1187,13 @@ static void tape_tick(f32 dticks)
             tape_release_seq();
             clock_round(b - in_t);
             for (i = 0; i < nlev; i++) lev[i].flags &= 0x7Fu;
+            if (rec_punch && (s == LOOP_REC || s == LOOP_DUB)) {
+                /* a punch held round the loop: its end at the pass's last tick and (dubbing) its start at the next
+                 * pass's first, so a pair never straddles the wrap */
+                tape_put_tail(LEV_PUNCH, rec_punch - 1, 0, rec_punch_trk, out_t - 1.0f);
+                if (s != LOOP_DUB || !tape_put_tail(LEV_PUNCH, rec_punch - 1, 1, rec_punch_trk, in_t))
+                    rec_punch = 0;
+            }
             if (s == LOOP_REC) { loop_state = LOOP_PLAY; rec_forget(); track_snap_live(cur_trk); }
             click_at = -1;
             tape_play_fwd(in_t, b);              /* (a take just closed too: the first key started it at IN, and that
@@ -1274,7 +1286,7 @@ static void tape_record_auto(int knob, int val, int from_midi)
     loop_gen++;
 }
 
-static int tape_put_tail(int kind, int d1, int d2, f32 t)
+static int tape_put_tail(int kind, int d1, int d2, int trk, f32 t)
 {
     uint16_t tick = (uint16_t)(clampf(t, 0.0f, loop_len - 1.0f) + (f32)LEV_TAIL);
     LEv *e = lev_insert(tick);
@@ -1282,7 +1294,7 @@ static int tape_put_tail(int kind, int d1, int d2, f32 t)
     e->tick  = tick;
     e->d1    = (uint8_t)d1;
     e->flags = (uint8_t)(kind | 0x80u);
-    e->trk   = (uint8_t)cur_trk;
+    e->trk   = (uint8_t)trk;
     e->part  = live_part();
     e->d2    = (uint8_t)d2;
     e->rsv   = 0;
@@ -1298,7 +1310,7 @@ static void tape_record_punch(int p)
     if (st.seq[0] != SEQ_TAPE || (loop_state != LOOP_REC && loop_state != LOOP_DUB) || st.tape[0] == TAPE_SPD_REV)
         return;
     if (rec_punch) {
-        tape_put_tail(LEV_PUNCH, rec_punch - 1, 0, t);
+        tape_put_tail(LEV_PUNCH, rec_punch - 1, 0, rec_punch_trk, t);
         rec_punch = 0;
     }
     if (p) {
@@ -1306,8 +1318,10 @@ static void tape_record_punch(int p)
             loop_full++;
             return;
         }
-        if (tape_put_tail(LEV_PUNCH, p - 1, 1, t))
+        if (tape_put_tail(LEV_PUNCH, p - 1, 1, cur_trk, t)) {
             rec_punch = p;
+            rec_punch_trk = cur_trk;
+        }
     }
 }
 
@@ -2423,7 +2437,11 @@ static void block(f32 *L, f32 *R)
     stg_mark(H1_STG_FX);
     {
         /* a punch held replaces TRICK (1-4 are TRICK's own, 5-8 come after it), and when it ends TRICK is back */
-        int p = eng_punch(), trick = p ? (p <= TRICK_STUT32 ? p : TRICK_OFF) : st.tape[3];
+        int p, trick;
+        if (punch_tape && track_muted(punch_tape_trk))
+            punch_tape = 0;                      /* (muted, or another track soloed, while its punch plays) */
+        p = eng_punch();
+        trick = p ? (p <= TRICK_STUT32 ? p : TRICK_OFF) : st.tape[3];
         if (punch_gen != punch_gen_seen) {      /* (a punch started: the same one again starts over, not on) */
             punch_gen_seen = punch_gen;
             fx_punch_restart();
