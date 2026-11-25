@@ -54,23 +54,48 @@ static void string_block(const Blk *b)
     ST.tens  = b->k[3];
 }
 
+/* How far behind its write position a new note can read before it has written there itself: its delay at the lowest
+ * pitch it can reach meanwhile, plus a margin for the interpolation. string_render reads only behind the write
+ * position, never further than that delay (the taps and the comb are shorter), so the rest of the row is never heard
+ * before this note writes over it, and a note clears or damps only this much (it used to be all 2,048 samples, eight
+ * times over on a chord's attack). The lowest pitch: the lower of where a glide starts and where it goes, less room
+ * for the LFO on pitch (two semitones either way) and the tune; a note the tape plays also has room for the tape's
+ * speed turned from 2X to 0.5X while it sounds. The sound is the same to the bit. */
+#ifdef H1_DEVICE
+#define wire_whole_row 0
+#else
+static int wire_whole_row;
+void wire_test_whole_row(int on) { wire_whole_row = on; }   /* (tests/sleep.c: every note clears all 2,048, as before) */
+#endif
+static uint32_t string_reach(const Voice *v, const Blk *b, const StrAlgo *a)
+{
+    f32 low = minf(v->pitch, v->target) + (f32)(a->oct * 12) + b->bend - (v->seq ? 29.0f : 5.0f);
+    f32 f = clampf(mtof(low), 24.0f, 5200.0f);
+    uint32_t n = (uint32_t)(b->sr / f) + 8u;
+    return n < KS_MAX && !wire_whole_row ? n : KS_MAX;
+}
+
 static void string_note(Voice *v, const Blk *b)
 {
     const StrAlgo *a = &SA[ST.algo];
     int16_t *ks = ks_buf[v->idx & 7];
     f32 f = mtof(v->pitch + (f32)(a->oct * 12));
     uint32_t period = (uint32_t)iclamp((int)(b->sr / maxf(f, 24.0f)), 24, 900);
-    uint32_t i;
+    uint32_t i, reach = string_reach(v, b, a), wp;
 
     if (!v->u[0]) v->u[0] = 0x57A10001u + (uint32_t)v->idx * 4099u;
     if (v->env < 0.001f) {
-        for (i = 0; i < KS_MAX; i++) ks[i] = 0;
+        for (i = KS_MAX - reach; i < KS_MAX; i++) ks[i] = 0;     /* (behind 0, where it starts writing) */
         for (i = 0; i < 16; i++) v->s[i] = 0.0f;
         for (i = 0; i < 6; i++) v->ph[i] = 0.0f;
         v->u[1] = 0;
     } else {
         /* Dampen residual string slightly for natural legato re-pluck */
-        for (i = 0; i < KS_MAX; i++) ks[i] = (int16_t)((int32_t)ks[i] >> 2);
+        wp = v->u[1];
+        for (i = 1; i <= reach; i++) {
+            int16_t *s = &ks[(wp - i) & KS_MASK];
+            *s = (int16_t)((int32_t)*s >> 2);
+        }
     }
     v->u[2] = a->bowed ? 128u : period;      /* exciter burst countdown */
     v->u[3] = v->u[2];                       /* exciter total length */

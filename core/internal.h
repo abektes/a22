@@ -251,6 +251,9 @@ extern const InstDef inst_skins;
 f32 perc_mode_ratio(int algo, int m);    /* PERC's mode table (tests/perc.c) */
 #ifndef H1_DEVICE
 void perc_test_modes(int n);             /* tests/perc.c: PERC with only its first n modes */
+void fx_test_no_sleep(int on);           /* tests/sleep.c: DELAY, SHIFT, CHORUS and TANK never asleep */
+uint32_t fx_test_slept(int fx);          /* tests/sleep.c: the blocks an effect has slept */
+void wire_test_whole_row(int on);        /* tests/sleep.c: WIRE clears its whole row on every note */
 #endif
 extern const InstDef *const insts[];
 
@@ -332,6 +335,8 @@ void eng_late(int late);
 uint32_t eng_saved_n(void);
 uint32_t eng_clock_steps(int inst);       /* blocks an engine's own clocks have moved (tests) */
 uint32_t eng_shed_count(void);
+void eng_stage_clock(uint32_t (*clock)(void));
+uint32_t eng_stages(uint32_t out[H1_NSTG]);
 void eng_snapshot(Vis *vis);
 uint32_t eng_sounding_lo(void);
 int eng_seq_leds(uint32_t *out, int page_open, int blink);

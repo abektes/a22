@@ -2,3 +2,8 @@ build/
 node_modules/
 __pycache__/
 .impeccable/
+
+# local media and scratch, kept out of the repository (the showreel is 40 MB)
+local/
+*.mp4
+.DS_Store

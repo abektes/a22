@@ -1744,6 +1744,7 @@ static struct {
     const InstDef *def;
     const Blk *b;
     f32 att, kd, sus, kr, mkd, kg, dt;
+    f32 gain, panmod;                            /* the part's gain (engine, track LFO, algorithm) and pan LFO */
 } vj;
 static int (*c2_run)(void (*fn)(uint32_t), uint32_t arg);
 static int (*c2_wait)(void);
@@ -1753,6 +1754,49 @@ void eng_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(v
     c2_run = run;
     c2_wait = wait;
     fx_two_cores(run, wait);                    /* (PLATE's two halves: fx.c) */
+}
+
+/* A voice's output as it goes into its track: its envelope ramped across the block, its gain (velocity) and pan, the
+ * declick of a voice taken over, written back over vt_l / vt_r. Run by the core that rendered the voice, so the first
+ * core only adds the voices up, in voice order (block): the sum is the same to the bit as when it did all of it. */
+H1_HOT static void voice_out(Voice *v, int i)
+{
+    f32 e0 = v->env_prev, e1 = v->env, de, g, gl, gr, pan, pl, pr, tail_l, tail_r, sll = 0.0f, srr = 0.0f;
+    f32 *ol = vt_l[i], *or_ = vt_r[i];
+    int n;
+    de = (e1 - e0) * (1.0f / (f32)CTRL);
+    /* velocity dynamics curve: expressive but retains low-velocity presence */
+    g = vj.gain * (0.22f + 0.78f * v->vel_f * v->vel_f);
+    pan = clampf(v->pan + vj.panmod, -1.0f, 1.0f);
+    pan_gains(pan, &pl, &pr);
+    gl = g * pl;
+    gr = g * pr;
+    if (v->declick) {
+        v->tail_l = v->last_l - ol[0] * e0 * gl;
+        v->tail_r = v->last_r - or_[0] * e0 * gr;
+        v->declick = 0;
+    }
+    tail_l = v->tail_l;
+    tail_r = v->tail_r;
+    for (n = 0; n < CTRL; n++) {
+        sll = ol[n] * e0 * gl + tail_l;
+        srr = or_[n] * e0 * gr + tail_r;
+        e0 += de;
+        tail_l *= 0.984f;
+        tail_r *= 0.984f;
+        ol[n] = sll;
+        or_[n] = srr;
+    }
+    if (absf(tail_l) < 1e-6f) tail_l = 0.0f;
+    if (absf(tail_r) < 1e-6f) tail_r = 0.0f;
+    v->tail_l = tail_l;
+    v->tail_r = tail_r;
+    v->last_l = sll;
+    v->last_r = srr;
+    if (v->stage == 4 && v->env <= 0.0f) {
+        v->stage = 0;
+        v->last_l = v->last_r = v->tail_l = v->tail_r = 0.0f;
+    }
 }
 
 static void voice_block(int i)
@@ -1783,6 +1827,7 @@ static void voice_block(int i)
     v->pitch += (v->target - v->pitch) * vj.kg;
     vj.def->render(v, vj.b, vt_l[i], vt_r[i], CTRL);
     v->age += vj.dt;
+    H1_FAR(voice_out)(v, i);                     /* (from RAM: H1_HOT) */
 }
 
 /* Whether the port's last audio half went out late (rendered after the DMA had moved on), told once a render from where
@@ -1833,12 +1878,42 @@ static void voices_job(uint32_t mask)
 static f32 sub_l, sub_r;
 #define SUB_K (H1_TAU * 18.0f * ISR)
 
+/* ---- where a render's time goes (h1_stages) -------------------------------------------------------------------
+ * stg_mark(k) gives the time since the last mark to stage k. A render's stages add up in stg_acc; the render with the
+ * largest total keeps its stages in stg_worst until h1_stages takes them. Nothing is read without a clock. */
+static uint32_t (*stg_clock)(void);
+static uint32_t stg_t0, stg_acc[H1_NSTG], stg_worst[H1_NSTG], stg_worst_total;
+
+static inline void stg_mark(int k)
+{
+    if (stg_clock) {
+        uint32_t t = stg_clock();
+        stg_acc[k] += t - stg_t0;
+        stg_t0 = t;
+    }
+}
+
+void eng_stage_clock(uint32_t (*clock)(void)) { stg_clock = clock; }
+
+uint32_t eng_stages(uint32_t out[H1_NSTG])
+{
+    uint32_t total = stg_worst_total;
+    int k;
+    for (k = 0; k < H1_NSTG; k++) {
+        out[k] = stg_worst[k];
+        stg_worst[k] = 0;
+    }
+    stg_worst_total = 0;
+    return total;
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 sl[CTRL], sr[CTRL], tl[CTRL], tr[CTRL];
     f32 dt = (f32)CTRL * ISR, bpm, dticks, kg, peak = 0.0f;
     int i, n, t, live;
 
+    stg_mark(H1_STG_MASTER);                    /* (the limiter and output since the last block) */
     blkno++;
     bpm = (f32)iclamp(st.glo[0], 40, 240);
     dticks = bpm * (96.0f / 60.0f) * dt;
@@ -1862,6 +1937,7 @@ static void block(f32 *L, f32 *R)
     free_tick(dticks);
     arp_tick(&st.ip[cur_i], dticks, dt);
 
+    stg_mark(H1_STG_SEQ);
     kg = st.keys[2] ? onepole_k(0.004f * exp2fx((f32)st.keys[2] * 0.08f), SR / (f32)CTRL) : 1.0f;
 
     for (n = 0; n < CTRL; n++)
@@ -1903,13 +1979,21 @@ static void block(f32 *L, f32 *R)
             int inst = PART_INST(part), algo = PART_ALGO(part);
             const InstDef *def = insts[inst];
             const Blk *b = track_set(t, part, is_seq);
-            uint32_t mine = 0, other = 0;
-            int nv = 0;
+            uint32_t mine = 0, other = 0, all = 0;
+            int nv = 0, odd;
 
             for (i = 0; i < NVOICE; i++)
                 if (voices[i].stage && voices[i].trk == t &&
                     voices[i].part == part && voices[i].seq == is_seq) {
-                    if (c2_run && (nv & 1)) other |= 1u << i;
+                    all |= 1u << i;
+                    nv++;
+                }
+            /* every other voice to the second core, and of an odd number the larger half (this core also hands out
+             * the job, waits for it and adds everything up); a voice alone stays here */
+            odd = nv & 1;
+            for (i = 0, nv = 0; i < NVOICE; i++)
+                if (all >> i & 1u) {
+                    if (c2_run && all != (1u << i) && (nv & 1) != odd) other |= 1u << i;
                     else mine |= 1u << i;
                     nv++;
                 }
@@ -1923,53 +2007,27 @@ static void block(f32 *L, f32 *R)
             vj.mkd = r->m.mkd;
             vj.kg  = kg;
             vj.dt  = dt;
+            vj.gain = def->gain * r->m.vol * algo_gain[inst][algo];
+            vj.panmod = r->m.panmod;
 
+            stg_mark(H1_STG_MIX);
             if (other) {
                 int on2 = c2_run(voices_job, other);
                 voices_job(mine);
+                stg_mark(H1_STG_VOICES);
                 if (!on2 || c2_wait() != 0) voices_job(other);
+                stg_mark(H1_STG_WAIT);
             } else {
                 voices_job(mine);
+                stg_mark(H1_STG_VOICES);
             }
 
-            for (i = 0; i < NVOICE; i++) {
-                Voice *v = &voices[i];
-                f32 e0, e1, de, g, gl, gr, pan, pl, pr, tail_l, tail_r, sll = 0.0f, srr = 0.0f;
-                if (!((mine | other) >> i & 1u)) continue;
-                e0 = v->env_prev;
-                e1 = v->env;
-                de = (e1 - e0) * (1.0f / (f32)CTRL);
-                /* velocity dynamics curve: expressive but retains low-velocity presence */
-                g = def->gain * r->m.vol * algo_gain[inst][algo] * (0.22f + 0.78f * v->vel_f * v->vel_f);
-                pan = clampf(v->pan + r->m.panmod, -1.0f, 1.0f);
-                pan_gains(pan, &pl, &pr);
-                gl = g * pl;
-                gr = g * pr;
-                if (v->declick) {
-                    v->tail_l = v->last_l - vt_l[i][0] * e0 * gl;
-                    v->tail_r = v->last_r - vt_r[i][0] * e0 * gr;
-                    v->declick = 0;
-                }
-                tail_l = v->tail_l;
-                tail_r = v->tail_r;
+            for (i = 0; i < NVOICE; i++) {           /* the voices into the track, in voice order (voice_out) */
+                const f32 *vl = vt_l[i], *vr = vt_r[i];
+                if (!(all >> i & 1u)) continue;
                 for (n = 0; n < CTRL; n++) {
-                    sll = vt_l[i][n] * e0 * gl + tail_l;
-                    srr = vt_r[i][n] * e0 * gr + tail_r;
-                    e0 += de;
-                    tail_l *= 0.984f;
-                    tail_r *= 0.984f;
-                    tl[n] += sll;
-                    tr[n] += srr;
-                }
-                if (absf(tail_l) < 1e-6f) tail_l = 0.0f;
-                if (absf(tail_r) < 1e-6f) tail_r = 0.0f;
-                v->tail_l = tail_l;
-                v->tail_r = tail_r;
-                v->last_l = sll;
-                v->last_r = srr;
-                if (v->stage == 4 && v->env <= 0.0f) {
-                    v->stage = 0;
-                    v->last_l = v->last_r = v->tail_l = v->tail_r = 0.0f;
+                    tl[n] += vl[n];
+                    tr[n] += vr[n];
                 }
             }
         }
@@ -2004,8 +2062,10 @@ static void block(f32 *L, f32 *R)
         R[n] = y - sub_r;
     }
 
+    stg_mark(H1_STG_MIX);
     /* 8-Engine Selectable FX Rack + Master Bus (EQ + Tape Drive + Tape Brake/Stutter) */
     fx_send_block(sl, sr, L, R, st.fx_type, st.fx_p[st.fx_type < NFX ? st.fx_type : 0], bpm, st.fx_on);
+    stg_mark(H1_STG_FX);
     fx_master_block(L, R, st.master, st.tape[3], bpm);
 
     /* Scope & master meter */
@@ -2091,25 +2151,47 @@ static void lim_block(f32 *L, f32 *R)
 uint32_t h1_fuzz_nan;
 #endif
 
+/* the limited mix out as 24-bit samples (eng_render): from RAM */
+H1_HOT static void eng_out(int32_t *lr, const f32 *L, const f32 *R, uint32_t take)
+{
+    uint32_t i;
+    for (i = 0; i < take; i++) {
+#ifdef H1_FUZZ
+        if (L[i] != L[i] || R[i] != R[i])
+            h1_fuzz_nan++;                       /* (tests/fuzz.c: a sound that stopped being numbers) */
+#endif
+        lr[0] = (int32_t)(limit(L[i]) * 7549747.0f);
+        lr[1] = (int32_t)(limit(R[i]) * 7549747.0f);
+        lr += 2;
+    }
+}
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
+    int k;
+    if (stg_clock) {
+        stg_t0 = stg_clock();
+        for (k = 0; k < H1_NSTG; k++) stg_acc[k] = 0;
+    }
     while (n) {
-        uint32_t take, i;
+        uint32_t take;
         if (!eng_have) { lim_block(L, R); eng_have = CTRL; eng_pos = 0; }
         take = eng_have < n ? eng_have : n;
-        for (i = 0; i < take; i++) {
-#ifdef H1_FUZZ
-            if (L[eng_pos + i] != L[eng_pos + i] || R[eng_pos + i] != R[eng_pos + i])
-                h1_fuzz_nan++;                   /* (tests/fuzz.c: a sound that stopped being numbers) */
-#endif
-            lr[0] = (int32_t)(limit(L[eng_pos + i]) * 7549747.0f);
-            lr[1] = (int32_t)(limit(R[eng_pos + i]) * 7549747.0f);
-            lr += 2;
-        }
+        H1_FAR(eng_out)(lr, L + eng_pos, R + eng_pos, take);
+        lr += 2u * take;
         eng_pos += take;
         eng_have -= take;
         n -= take;
+    }
+    if (stg_clock) {
+        uint32_t total = 0;
+        stg_mark(H1_STG_MASTER);
+        for (k = 0; k < H1_NSTG; k++) total += stg_acc[k];
+        if (total > stg_worst_total) {
+            stg_worst_total = total;
+            for (k = 0; k < H1_NSTG; k++) stg_worst[k] = stg_acc[k];
+        }
     }
 }
 
@@ -2216,6 +2298,12 @@ void eng_snapshot(Vis *vis)
     vis->tomb_angle = tomb_angle;
 }
 
+/* The tape's picture and its white keys read every event, twice a frame, on the main loop. What they read only
+ * changes with what is recorded (loop_gen and the count) and the tape's length, so each keeps its last answer and
+ * reads the events again only when one of those has moved. */
+static struct { uint32_t gen; int n; f32 len; uint8_t dens[NTRACK][32]; } seq_dens = {0xFFFFFFFFu, -1, -1.0f, {{0}}};
+static struct { uint32_t gen; int n; f32 len; uint32_t m; } seq_keys = {0xFFFFFFFFu, -1, -1.0f, 0};
+
 void eng_seq_info(SeqInfo *si)
 {
     f32 in_t, out_t;
@@ -2257,13 +2345,25 @@ void eng_seq_info(SeqInfo *si)
                     if (*d < 15) (*d)++;
                 }
     } else if (loop_len > 0.0f) {
-        for (i = 0; i < ne && i < NLEV; i++) {
-            if ((lev[i].flags & 7) == LEV_ON) {
-                int col = iclamp((int)((f32)lev[i].tick * 32.0f / loop_len), 0, 31);
-                uint8_t *d = &si->trk_dens[lev[i].trk & 3][col];
-                if (*d < 15) (*d)++;
+        uint32_t gen = loop_gen;
+        if (gen != seq_dens.gen || ne != seq_dens.n || loop_len != seq_dens.len) {
+            for (t = 0; t < NTRACK; t++)
+                for (c = 0; c < 32; c++)
+                    seq_dens.dens[t][c] = 0;
+            for (i = 0; i < ne && i < NLEV; i++) {
+                if ((lev[i].flags & 7) == LEV_ON) {
+                    int col = iclamp((int)((f32)lev[i].tick * 32.0f / loop_len), 0, 31);
+                    uint8_t *d = &seq_dens.dens[lev[i].trk & 3][col];
+                    if (*d < 15) (*d)++;
+                }
             }
+            seq_dens.gen = gen;
+            seq_dens.n = ne;
+            seq_dens.len = loop_len;
         }
+        for (t = 0; t < NTRACK; t++)
+            for (c = 0; c < 32; c++)
+                si->trk_dens[t][c] = seq_dens.dens[t][c];
     }
 }
 
@@ -2304,9 +2404,17 @@ int eng_seq_leds(uint32_t *out, int page_open, int blink)
             return 0;
         n = imax(1, (int)loop_len / 24);
         per = (n + 15) / 16;
-        for (i = 0; i < ne; i++)
-            if ((lev[i].flags & 7u) == LEV_ON)
-                m |= 1u << WKEY[imin(lev[i].tick / 24, n - 1) / per];
+        if (loop_gen != seq_keys.gen || ne != seq_keys.n || loop_len != seq_keys.len) {   /* (seq_dens) */
+            uint32_t gen = loop_gen;
+            for (i = 0; i < ne; i++)
+                if ((lev[i].flags & 7u) == LEV_ON)
+                    m |= 1u << WKEY[imin(lev[i].tick / 24, n - 1) / per];
+            seq_keys.gen = gen;
+            seq_keys.n = ne;
+            seq_keys.len = loop_len;
+            seq_keys.m = m;
+        }
+        m = seq_keys.m;
         if (s != LOOP_IDLE)
             at = imin((int)loop_pos / 24, n - 1) / per;
     }

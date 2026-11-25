@@ -288,7 +288,7 @@ Files: `core/inst_perc.c`, `core/internal.h`.
       The five specialised engines should be lower than the sprint plan's numbers, the rest within a point.
       2026-11-23: every algorithm under 80%; all 112 average 49%, peak 74% (PERC GAMELAN). With their
       renders FM-4 peaks 71% (was 75% without), SHAPER 70% (was 77%). WIRE BOWED 63% against 59% in
-      `HANDOFF-perf-audio.md`'s table, nothing in WIRE changed; the rest within a point. (`all` skipped ELECTRIC, timed
+      `docs/notes/HANDOFF-perf-audio.md`'s table, nothing in WIRE changed; the rest within a point. (`all` skipped ELECTRIC, timed
       alone at 50%: its listing counted an engine twice when a PRESET turn did not land; fixed.)
 - [x] `tools/fm1_profile.py PERC --fx PLATE --knob 3=100 --knob 4=100`: RING and SPACE at their tops
       together (the sprint plan timed SPACE 100 alone). `--max 80` is the pass mark.
@@ -385,7 +385,7 @@ The effects are eight again, so what says "eight effects" is right as it stands.
       while drawing, every note kept) 35 and 22, peaks 104 and 106%. Each engine alone costs what it did
       (SHAPER, ELECTRIC, STACK within a point of C1). In the CHANGELOG.*
 - [ ] With the owner's word: merge to `main` (the website republishes from `dist/a22.rfm1` and
-      `tools/build_site.py`), tag, and the Hub's submission as `SUBMIT-0.4.0.md` did it.
+      `tools/build_site.py`), tag, and the Hub's submission as `docs/notes/SUBMIT-0.4.0.md` did it.
 
 ## Phase F: later, only inside what D1 leaves
 
@@ -397,6 +397,8 @@ The effects are eight again, so what says "eight effects" is right as it stands.
 - Any change to PERC is timed again with C1's commands.
 
 ## Phase G: loop jams, more headroom (the release after 0.5.0)
+
+*Taken up, with the stage timers that rank it, in `docs/PLAN-cpu-headroom.md` (J0 to J7).*
 
 0.5.0 holds the tester's jam (E3), but at full density it peaks at 87 to 91% with one late half, and the
 screen falls to 15 to 25 frames a second. Each change below is measured with `tools/fm1_profile.py jam

@@ -25,6 +25,7 @@
 #   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
+#   sleep      DELAY, SHIFT, CHORUS and TANK asleep, and WIRE's shorter clear, sound the same to the bit as before
 #   lines      g_line, g_poly and g_arc against a distance worked out in floats
 # The release workflow runs this after the build; a failure stops it. tests/run_fuzz.sh is the crash hunt;
 # tests/corestat.c (not run here) counts how the voices are shared between the two cores, scenario by scenario.
@@ -88,6 +89,17 @@ if cmp -s build/cores1.txt build/cores2.txt; then
 else
     echo "FAIL cores: two cores sound different from one, in these sections:"
     diff build/cores1.txt build/cores2.txt | head -20
+    exit 1
+fi
+# 0.6.0's savings: the echo effects asleep and WIRE's shorter clear, the same to the bit as without them
+$CC -std=c99 -O2 -ffp-contract=off -w core/*.c tests/sleep.c -o build/a22sleep -lm
+build/a22sleep > build/sleep1.txt
+build/a22sleep before > build/sleep2.txt
+if cmp -s build/sleep1.txt build/sleep2.txt; then
+    echo "sleep: $(wc -l < build/sleep1.txt | tr -d ' ') sections, the same asleep and awake"
+else
+    echo "FAIL sleep: the effects asleep or WIRE's clear changed the sound, in these sections:"
+    diff build/sleep1.txt build/sleep2.txt | head -20
     exit 1
 fi
 $CC -std=c99 $SAN core/gfx.c tests/lines.c -o build/a22lines -lm

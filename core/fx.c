@@ -2,9 +2,9 @@
  * + 48 KB RAM Tape Performance FX (Tape Brake & Beat Stutter).
  *
  * Pool RAM budget:
- *   echo_buf:    32768 x int16 = 64 KB (shared by DELAY, SHIFT, CHORUS, TANK)
- *   rev_buf:     24576 x int16 = 48 KB (true Dattorro modulated stereo plate for PLATE)
- *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop) */
+ *   fx_arena:    64 KB, the effect in hand's: echo_buf, 32768 x int16 (DELAY, SHIFT, CHORUS, TANK), or rev_buf, the
+ *                first 24576 of the same memory (the Dattorro plate for PLATE). One effect runs at a time
+ *   tape_fx_buf: 24576 x int16 = 48 KB (live Tape Stop brake & Beat Stutter loop), apart: it runs under any effect */
 #include "internal.h"
 #include "dsp.h"
 
@@ -38,8 +38,12 @@ const uint8_t FX_DEFAULTS[NFX][4] = {
 #define ECHO_N 32768u
 #define REV_N  24576u
 #define TFX_FRAMES 12288u
-static int16_t echo_buf[ECHO_N] H1_POOL;
-static int16_t rev_buf[REV_N] H1_POOL;
+/* One effect runs in a block (fx_send_block), and one that starts again after a block without it clears its own
+ * buffer first (fx_resume), so PLATE's tank and the echo line share one arena: 64 KB instead of 112 (0.6.0). Whatever
+ * the other effect left there is never read. */
+static union { int16_t echo[ECHO_N]; int16_t rev[REV_N]; } fx_arena H1_POOL;
+#define echo_buf fx_arena.echo
+#define rev_buf fx_arena.rev
 static int16_t tfx_buf[TFX_FRAMES * 2u] H1_POOL;
 
 /* ---- Dattorro Plate Reverb layout inside rev_buf (22,534 <= 24,576 int16 samples) ----- */
@@ -65,6 +69,39 @@ static uint32_t echo_w;
 static f32 echo_t = 4000.0f, echo_tr = 6000.0f, echo_lpl, echo_lpr, echo_ol, echo_or, wow_ph, ch_ph;
 static f32 shf_ph, shf_i1[4], shf_q1[4], shf_fb_l, shf_fb_r;
 static f32 spr_ap[4], spr_lp;
+/* DELAY, SHIFT, CHORUS and TANK asleep, as PLATE sleeps: echo_quiet counts the steps of echo_w since a sample other than
+ * 0 went into echo_buf. Once it has gone round the whole line an effect reads (echo_asleep), nothing comes in and the
+ * effect's own filters hold exactly 0, what it would add is exactly 0, and what it would write is 0 over 0: it only
+ * moves its clocks (echo_w, its LFO, DELAY's glide to a new time), the same way, and the sound is the same to the bit. */
+static uint32_t echo_quiet;
+#define ECHO_QUIET_MAX (1u << 20)
+static inline void echo_wrote(int16_t a, int16_t b)
+{
+    if (a | b) echo_quiet = 0;
+    else if (echo_quiet < ECHO_QUIET_MAX) echo_quiet++;
+}
+#ifdef H1_DEVICE
+#define echo_no_sleep 0
+#define ECHO_SLEPT()
+#else
+static int echo_no_sleep;
+static uint32_t echo_slept[NFX];
+#define ECHO_SLEPT() (echo_slept[fx_now]++)
+void fx_test_no_sleep(int on) { echo_no_sleep = on; }   /* (tests/sleep.c: the same playing, awake throughout) */
+uint32_t fx_test_slept(int t) { return (uint32_t)t < NFX ? echo_slept[t] : 0u; }   /* (blocks it slept) */
+#endif
+static int fx_now;                               /* (the effect echo_asleep is asked for) */
+static int echo_asleep(const f32 *sl, const f32 *sr, uint32_t line)
+{
+    int n;
+    if (echo_quiet < line || echo_no_sleep)
+        return 0;
+    for (n = 0; n < CTRL; n++)
+        if (sl[n] != 0.0f || sr[n] != 0.0f)
+            return 0;
+    ECHO_SLEPT();
+    return 1;
+}
 
 /* ---- FILTER / LOFI / THUMP state ------------------------------------------------------ */
 static f32 filt_l[4], filt_r[4], filt_env;
@@ -97,6 +134,7 @@ void fx_reset(void)
     for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
     for (i = 0; i < REV_N; i++) rev_buf[i] = 0;
     for (i = 0; i < TFX_FRAMES * 2u; i++) tfx_buf[i] = 0;
+    echo_quiet = 0;
     for (i = 0; i < D_NSEG; i++) d_pos[i] = 0;
     d_inlp = d_dampa = d_dampb = d_lfo1 = d_lfo2 = 0.0f;
     pl_quiet = 0;
@@ -198,7 +236,7 @@ static uint32_t pl_nz_a, pl_nz_b;
 #define PL_TAP(seg, len, q, delay) i16_to_f(D_AT(D_O##seg, len, q, delay))
 #define PL_STEP(q, len) ((q) = (q) + 1u >= (len) ? 0u : (q) + 1u)
 
-static void plate_half_a(uint32_t arg)
+H1_HOT static void plate_half_a(uint32_t arg)
 {
     uint32_t p4 = pl_p0[4], p5 = pl_p0[5], p6 = pl_p0[6], p7 = pl_p0[7], nz = 0;
     uint32_t q9 = pl_p0[9], q10 = pl_p0[10], q11 = pl_p0[11];
@@ -231,7 +269,7 @@ static void plate_half_a(uint32_t arg)
     pl_nz_a = nz;
 }
 
-static void plate_half_b(void)
+H1_HOT static void plate_half_b(void)
 {
     uint32_t p8 = pl_p0[8], p9 = pl_p0[9], p10 = pl_p0[10], p11 = pl_p0[11], nz = 0;
     uint32_t q5 = pl_p0[5], q6 = pl_p0[6], q7 = pl_p0[7];
@@ -311,13 +349,13 @@ static void fx_plate(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
         pl_x11[n] = i16_to_f(rev_buf[D_O11 + x11]);
     }
 
-    if (fx_c2_run && fx_c2_run(plate_half_a, 0)) {
-        plate_half_b();
+    if (fx_c2_run && fx_c2_run(H1_FAR(plate_half_a), 0)) {   /* (both halves run from RAM: H1_HOT) */
+        H1_FAR(plate_half_b)();
         if (fx_c2_wait() != 0)
-            plate_half_a(0);                 /* (the second core gave up: the job was dropped) */
+            H1_FAR(plate_half_a)(0);         /* (the second core gave up: the job was dropped) */
     } else {
-        plate_half_a(0);
-        plate_half_b();
+        H1_FAR(plate_half_a)(0);
+        H1_FAR(plate_half_b)();
     }
     if (heard || nz || pl_nz_a || pl_nz_b)
         pl_quiet = 0;
@@ -355,6 +393,15 @@ static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     tgt_r = tgt * 1.5f + 40.0f < 16383.0f ? tgt * 1.5f : tgt * 0.75f;
     if (mix <= 0.001f)
         return;
+    if (echo_lpl == 0.0f && echo_lpr == 0.0f && echo_ol == 0.0f && echo_or == 0.0f && echo_asleep(sl, sr, 16384u)) {
+        for (n = 0; n < CTRL; n += 2) {          /* asleep (echo_quiet) */
+            wow_ph += 0.62f * 2.0f * ISRf; if (wow_ph >= 1.0f) wow_ph -= 1.0f;
+            echo_t += (tgt - echo_t) * 0.0018f;
+            echo_tr += (tgt_r - echo_tr) * 0.0018f;
+            echo_w++;
+        }
+        return;
+    }
 
     for (n = 0; n < CTRL; n += 2) {
         f32 inl = (sl[n] + sl[n + 1]) * 0.5f * mix;
@@ -372,6 +419,7 @@ static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
         echo_lpr += (tl * fb - echo_lpr) * lp_k;
         echo_buf[echo_w & 16383u] = f_to_i16(softclip((inl + echo_lpl) * (1.0f + 0.5f * tape)));
         echo_buf[16384u + (echo_w & 16383u)] = f_to_i16(softclip((inr + echo_lpr) * (1.0f + 0.5f * tape)));
+        echo_wrote(echo_buf[echo_w & 16383u], echo_buf[16384u + (echo_w & 16383u)]);
         echo_w++;
 
         dl[n]     += (echo_ol + tl) * 0.5f;
@@ -429,10 +477,21 @@ static void fx_shift(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     f32 fb = (f32)p[2] * 0.01f * 0.84f;
     f32 mix = (f32)p[3] * 0.01f;
     f32 dph = shift_hz * ISRf;
-    int n, j;
+    int n, j, quiet = shf_fb_l == 0.0f && shf_fb_r == 0.0f;
 
     if (mix <= 0.001f)
         return;
+    for (j = 0; j < 4; j++)
+        quiet &= shf_i1[j] == 0.0f && shf_q1[j] == 0.0f;
+    if (quiet && echo_asleep(sl, sr, 16384u)) {
+        for (n = 0; n < CTRL; n++) {             /* asleep (echo_quiet) */
+            shf_ph += dph;
+            if (shf_ph >= 1.0f) shf_ph -= 1.0f;
+            if (shf_ph < 0.0f) shf_ph += 1.0f;
+            echo_w++;
+        }
+        return;
+    }
 
     for (n = 0; n < CTRL; n++) {
         f32 in = (sl[n] + sr[n]) * 0.5f + 0.5f * (shf_fb_l + shf_fb_r) * fb;
@@ -457,6 +516,7 @@ static void fx_shift(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
 
         echo_buf[echo_w & 16383u] = f_to_i16(softclip(up));
         echo_buf[16384u + (echo_w & 16383u)] = f_to_i16(softclip(dn));
+        echo_wrote(echo_buf[echo_w & 16383u], echo_buf[16384u + (echo_w & 16383u)]);
         yl = echo_read_frac(16383u, 0u, echo_w, dly_samp);
         yr = echo_read_frac(16383u, 16384u, echo_w, dly_samp * 1.03f);
         echo_w++;
@@ -480,11 +540,20 @@ static void fx_chorus(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint
 
     if (mix <= 0.001f)
         return;
+    if (echo_asleep(sl, sr, 4096u)) {
+        for (n = 0; n < CTRL; n++) {             /* asleep (echo_quiet) */
+            ch_ph += rate * ISRf;
+            if (ch_ph >= 1.0f) ch_ph -= 1.0f;
+            echo_w++;
+        }
+        return;
+    }
 
     for (n = 0; n < CTRL; n++) {
         f32 t1, t2, t3, wl, wr;
         echo_buf[echo_w & 4095u] = f_to_i16(sl[n]);
         echo_buf[4096u + (echo_w & 4095u)] = f_to_i16(sr[n]);
+        echo_wrote(echo_buf[echo_w & 4095u], echo_buf[4096u + (echo_w & 4095u)]);
 
         ch_ph += rate * ISRf;
         if (ch_ph >= 1.0f) ch_ph -= 1.0f;
@@ -512,6 +581,11 @@ static void fx_tank(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_
 
     if (mix <= 0.001f)
         return;
+    if (spr_lp == 0.0f && spr_ap[0] == 0.0f && spr_ap[1] == 0.0f && spr_ap[2] == 0.0f && spr_ap[3] == 0.0f
+        && echo_asleep(sl, sr, 8192u)) {
+        echo_w += CTRL;                          /* asleep (echo_quiet) */
+        return;
+    }
 
     for (n = 0; n < CTRL; n++) {
         f32 in = (sl[n] + sr[n]) * 0.45f;
@@ -528,6 +602,7 @@ static void fx_tank(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_
         spr_lp += (x - spr_lp) * tone;
         echo_buf[echo_w & 8191u] = f_to_i16(softclip(spr_lp));
         echo_buf[8192u + (echo_w & 8191u)] = f_to_i16(softclip(in * 0.8f + d1 * dec * 0.9f - d2 * 0.25f));
+        echo_wrote(echo_buf[echo_w & 8191u], echo_buf[8192u + (echo_w & 8191u)]);
         echo_w++;
 
         dl[n] += (d1 * 0.8f + d2 * 0.3f) * mix;
@@ -629,6 +704,7 @@ static void fx_resume(int t)
         for (i = 0; i < ECHO_N; i++) echo_buf[i] = 0;
         echo_lpl = echo_lpr = echo_ol = echo_or = spr_lp = shf_fb_l = shf_fb_r = 0.0f;
         for (i = 0; i < 4; i++) shf_i1[i] = shf_q1[i] = spr_ap[i] = 0.0f;
+        echo_quiet = ECHO_QUIET_MAX;             /* (all 0: it starts asleep) */
         break;
     case FX_FILTER:
         for (i = 0; i < 4; i++) filt_l[i] = filt_r[i] = 0.0f;
@@ -655,6 +731,7 @@ void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, 
     if (fx_ran_at[fx_type] != fx_n - 1u)
         fx_resume(fx_type);
     fx_ran_at[fx_type] = fx_n;
+    fx_now = fx_type;
     switch (fx_type) {
     case FX_PLATE: fx_plate(sl, sr, dl, dr, p); break;
     case FX_DELAY:  fx_delay(sl, sr, dl, dr, p, bpm); break;
@@ -669,23 +746,13 @@ void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, 
 }
 
 /* ---- Master Bus: 3-Band Master EQ + Tape Drive/Glue + RAM Tape Performance FX ---- */
-void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
+/* the master bus's EQ and drive, every sample of every block (fx_master_block): from RAM */
+H1_HOT static void master_eq(f32 *l, f32 *r, const Svf *fm, int eq_on, f32 klo, f32 khi, f32 lo_g, f32 md_g,
+                             f32 hi_g, f32 drv, f32 drive, f32 comp_g)
 {
-    f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
-    f32 md_g = ((f32)master[1] - 50.0f) * 0.02f;
-    f32 hi_g = ((f32)master[2] - 50.0f) * 0.02f;
-    f32 drv  = (f32)master[3] * 0.01f;
-    f32 klo = onepole_k(1.0f / (H1_TAU * 130.0f), SRf);
-    f32 khi = onepole_k(1.0f / (H1_TAU * 4800.0f), SRf);
-    f32 drive = 1.0f + 2.8f * drv * drv;
-    f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
     Svf fmid;
-    int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
     int n;
-
-    if (eq_on)
-        svf_set(&fmid, 1100.0f, 0.9f, ISRf);
-
+    fmid.g = fm->g; fmid.k = fm->k; fmid.a1 = fm->a1; fmid.a2 = fm->a2; fmid.a3 = fm->a3;   /* (no struct copy: memcpy) */
     for (n = 0; n < CTRL; n++) {
         f32 xl = l[n], xr = r[n];
         /* 3-band EQ */
@@ -712,6 +779,28 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
         l[n] = xl;
         r[n] = xr;
     }
+}
+
+void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm)
+{
+    f32 lo_g = ((f32)master[0] - 50.0f) * 0.02f;   /* -1..+1 -> ~-6..+8 dB */
+    f32 md_g = ((f32)master[1] - 50.0f) * 0.02f;
+    f32 hi_g = ((f32)master[2] - 50.0f) * 0.02f;
+    f32 drv  = (f32)master[3] * 0.01f;
+    f32 klo = onepole_k(1.0f / (H1_TAU * 130.0f), SRf);
+    f32 khi = onepole_k(1.0f / (H1_TAU * 4800.0f), SRf);
+    f32 drive = 1.0f + 2.8f * drv * drv;
+    f32 comp_g = 1.0f / (1.0f + 0.55f * (drive - 1.0f));
+    Svf fmid;
+    int eq_on = (master[0] != 50 || master[1] != 50 || master[2] != 50);
+    int n;
+
+    if (eq_on)
+        svf_set(&fmid, 1100.0f, 0.9f, ISRf);
+    else
+        fmid.g = fmid.k = fmid.a1 = fmid.a2 = fmid.a3 = 0.0f;   /* (not read: the EQ is off) */
+    if (eq_on || drv > 0.01f)
+        H1_FAR(master_eq)(l, r, &fmid, eq_on, klo, khi, lo_g, md_g, hi_g, drv, drive, comp_g);
 
     /* Live RAM Tape Performance FX: Brake & Beat Stutter (48 KB stereo ring) */
     if (trick != tfx_prev) {

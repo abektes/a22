@@ -183,6 +183,8 @@ void h1_frame(uint32_t now_ms) { ui_frame(now_ms); }
 void h1_render(int32_t *lr, uint32_t n) { eng_render(lr, n); }
 void h1_late(int late) { eng_late(late); }
 uint32_t h1_voices_shed(void) { return eng_shed_count(); }
+void h1_stage_clock(uint32_t (*clock)(void)) { eng_stage_clock(clock); }
+uint32_t h1_stages(uint32_t out[H1_NSTG]) { return eng_stages(out); }
 
 const void *h1_state(uint32_t *size)
 {

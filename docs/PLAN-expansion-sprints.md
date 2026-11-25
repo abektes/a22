@@ -1,7 +1,7 @@
 # Plan: what the spare flash goes to
 
 Written 2026-11-22, after 0.4.0. Each sprint is a branch (1 and 2 share `dice`; 3 is `akwf`, cut from it), tested on the host (`tests/run_tests.sh`), and,
-where it touches the audio, built by CI and timed on the FM-1 (CC 119, `HANDOFF-perf-audio.md`'s profiler)
+where it touches the audio, built by CI and timed on the FM-1 (CC 119, `docs/notes/HANDOFF-perf-audio.md`'s profiler)
 before it is merged.
 
 ## The budget (0.4.0, CI run 45036222031)
@@ -165,7 +165,7 @@ with GAMELAN against GRAIN the closest (79%).
 CI's build of `virtuosity` at 52bd8db (sprints 1–6, `main`'s one render per algorithm, GRAIN out, phase B's
 fixes; image 563,692 B), timed on the FM-1 on 2026-11-23 with `tools/fm1_profile.py all --fx PLATE`
 (ELECTRIC on its own: the `all` listing then skipped an engine when a PRESET turn did not land; fixed since).
-Eight-note chords, 2.2 s each, every algorithm. Before: the "after" column of `HANDOFF-perf-audio.md`'s
+Eight-note chords, 2.2 s each, every algorithm. Before: the "after" column of `docs/notes/HANDOFF-perf-audio.md`'s
 table (0.4.0's audio work, same chord and timing; a different run from this plan's budget line, which has
 0.4.0's peak at 73%). Engines with one render per algorithm (ed6544f, 6494cf7, 4c0eb47) marked *.
 

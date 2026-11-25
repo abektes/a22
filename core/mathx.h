@@ -8,6 +8,27 @@ typedef float f32;
 #define H1_PI 3.14159265f
 #define H1_TAU 6.28318531f
 
+/* ---- code the device keeps in RAM (0.6.0) -------------------------------------------------------------------------
+ * H1_HOT: a function that runs in every audio block whatever plays, placed in RAM out of the way of the flash's
+ * instruction cache, which both cores share and the main loop's drawing keeps pushing the sound out of (fm1-base's
+ * PLAT_RAM_CODE: section .app_ram, copied at boot). It may call nothing in the flash and nothing through a pointer
+ * (fm1-base's build checks the disassembly: tools/ramcode.py), so it is flattened: every helper it calls is inlined
+ * into it, there and only there (the helpers themselves stay plain static inline, so the engines in the flash are
+ * built as before). Code in the flash calls it through H1_FAR, since a direct call does not reach that far. In the
+ * host simulator, the browser's and the tests: plain functions and plain calls. */
+#if defined(H1_DEVICE) && !defined(PLAT_HOST)
+#define H1_HOT __attribute__((section(".app_ram"), noinline, flatten))
+static inline __attribute__((always_inline)) void *h1_far_ptr(void *fn)
+{
+    void *volatile held = fn;                    /* (read back: the compiler no longer knows the target) */
+    return held;
+}
+#define H1_FAR(fn) ((__typeof__(&(fn)))h1_far_ptr((void *)&(fn)))
+#else
+#define H1_HOT
+#define H1_FAR(fn) (&(fn))
+#endif
+
 static inline f32 clampf(f32 x, f32 lo, f32 hi) { return x < lo ? lo : (x > hi ? hi : x); }
 static inline f32 sat(f32 x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
 static inline f32 lerpf(f32 a, f32 b, f32 t) { return a + (b - a) * t; }
