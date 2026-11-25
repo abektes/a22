@@ -28,6 +28,7 @@
 #include "../core/h1.h"
 
 #define FR 44100
+#define PUNCH_PI 3.14159265358979323846          /* (not M_PI: C99 has none) */
 #define MAXS (FR * 4)
 static int fails, checks;
 #define CHECK(c, what) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, what); } } while (0)
@@ -137,7 +138,7 @@ static double slope(const Take *t, int a, int b)    /* the energy of the first d
 }
 static double low(const Take *t, int a, int b)      /* the energy under ~200 Hz (a one-pole low-pass) */
 {
-    double y = 0.0, e = 0.0, k = 1.0 - exp(-2.0 * M_PI * 200.0 / FR);
+    double y = 0.0, e = 0.0, k = 1.0 - exp(-2.0 * PUNCH_PI * 200.0 / FR);
     int i;
     for (i = 0; i < b; i++) {
         y += k * ((double)t->s[i] - y);
