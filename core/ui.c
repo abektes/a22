@@ -31,6 +31,9 @@ static const char *const O_TIME[]    = {"1/32", "1/16", "1/8T", "1/8", "3/16", "
 static const char *const O_ROOT[]    = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const O_SCALE[]   = {"CHROM", "MAJOR", "MINOR", "PENTA", "MPENT", "BLUES", "DORIAN", "WHOLE"};
 static const char *const O_ONOFF[]   = {"OFF", "ON"};
+static const char *const O_LROOT[]   = {"-", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};   /* LANE: - is no entry's */
+static const char *const O_LSCALE[]  = {"-", "CHROM", "MAJOR", "MINOR", "PENTA", "MPENT", "BLUES", "DORIAN", "WHOLE"};
+static const char *const O_LDEG[]    = {"-", "I", "II", "III", "IV", "V", "VI", "VII"};
 static const char *const O_KEYF[]    = {"OFF", "ON"};          /* MIX KEY: a track follows ROOT and SCALE */
 static const char *const O_DRUM[]    = {"DRUM"};               /* (a drum engine never does) */
 static const char *const O_BARS[]    = {"1", "2", "4", "8", "16", "32"};
@@ -90,6 +93,24 @@ int ui_subpage(void) { return page == PG_ARP ? arp_sub() : subpage[page]; }
 /* MIX's subpage names: drawn as its title, and spoken as SELECT turns to it */
 static const char *const MIX_SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER", "KEY"};
 
+/* LANE (TAPE's third subpage): BAR is the cursor, a UI value that is not saved. The three fields are a mirror of the
+ * cursor bar's entry (0 for a dash, else the engine's value + 1): a turn posts to the engine, which writes the tape
+ * a moment later, so the knob would lag a frame; the mirror is held for a few frames after a turn, and is read from
+ * the engine otherwise (so it follows a tape load, CLEAR ALL, a take) */
+static uint8_t lane_bar, lane_m[3], lane_pend;
+static char lane_head[16];
+const char *ui_lane_head(void) { return lane_head; }
+static int lane_bars(void) { return 1 << (st.seq[1] < 6 ? st.seq[1] : 2); }
+static int lane_on(void) { return st.seq[0] == SEQ_TAPE && subpage[PG_SEQ] == 2; }
+static void lane_read(void)
+{
+    int f;
+    if (lane_bar >= lane_bars()) lane_bar = (uint8_t)(lane_bars() - 1);
+    if (lane_pend) return;
+    for (f = 0; f < 3; f++)
+        lane_m[f] = (uint8_t)(eng_lane_get(lane_bar, f) + 1);
+}
+
 static int page_nsub(int pg)
 {
     switch (pg) {
@@ -97,7 +118,7 @@ static int page_nsub(int pg)
     case PG_MIX: return 5;   /* 0 VOL, 1 PAN, 2 FX SEND, 3 MASTER EQ/DRIVE, 4 KEY */
     case PG_ENV: return 2;   /* 0 AMP ADSR, 1 MOD ENV */
     case PG_GLO: return 3;   /* 0 GLOBAL, 1 KEYS, 2 CHORD */
-    case PG_SEQ: return 2;   /* 0 TAPE DECK, 1 TAPE EDIT (or STEP) */
+    case PG_SEQ: return st.seq[0] == SEQ_TAPE ? 3 : 2;   /* 0 TAPE DECK, 1 TAPE EDIT, 2 LANE (or STEP) */
     default:     return 1;
     }
 }
@@ -189,6 +210,15 @@ const ParamDef *page_param(int pg, int i)
             else { dyn_p.name = "GRID"; dyn_p.kind = PK_ENUM; dyn_p.max = 2; dyn_p.opts = O_GRID; }
             return &dyn_p;
         }
+        if (sub == 2) {
+            static const char *const LANE_N[4] = {"BAR", "ROOT", "SCALE", "DEG"};
+            dyn_p.name = LANE_N[i]; dyn_p.min = 0; dyn_p.show_off = 0; dyn_p.opts = 0;
+            if (i == 0) { dyn_p.kind = PK_INT; dyn_p.max = lane_bars() - 1; }
+            else if (i == 1) { dyn_p.kind = PK_ENUM; dyn_p.max = 12; dyn_p.opts = O_LROOT; }
+            else if (i == 2) { dyn_p.kind = PK_ENUM; dyn_p.max = 8; dyn_p.opts = O_LSCALE; }
+            else { dyn_p.kind = PK_ENUM; dyn_p.max = 7; dyn_p.opts = O_LDEG; }
+            return &dyn_p;
+        }
         if (sub == 1) {
             dyn_p.name = TEDIT_N[i]; dyn_p.min = 0; dyn_p.show_off = 0; dyn_p.opts = 0;
             if (i == 0) { dyn_p.kind = PK_INT; dyn_p.max = 31; }
@@ -237,6 +267,10 @@ uint8_t *page_value(int pg, int i)
             if (i == 1) return &st.seq[1];
             if (i == 2) return &st.track;
             return &st.seq[4];
+        }
+        if (sub == 2) {
+            lane_read();
+            return i == 0 ? &lane_bar : &lane_m[i - 1];
         }
         if (sub == 1) {
             if (i == 0) return &st.tape[1];
@@ -365,7 +399,7 @@ static APART void value_text(int pg, int i, char *out)
         out[0] = 0;
         return;
     }
-    if (pg == PG_SEQ && st.seq[0] == SEQ_TAPE && subpage[pg] == 1 && i == 0) {
+    if (pg == PG_SEQ && st.seq[0] == SEQ_TAPE && (subpage[pg] == 1 || subpage[pg] == 2) && i == 0) {
         put_i(out, v + 1);                       /* IN BAR: bars counted from 1, as its toast and the tape's */
         return;
     }
@@ -474,6 +508,7 @@ static void set_seq_mode(int m)
 {
     if (m == st.seq[0]) return;
     st.seq[0] = (uint8_t)(m & 1);
+    if (m == SEQ_STEP && subpage[PG_SEQ] > 1) subpage[PG_SEQ] = 1;   /* (STEP has no LANE) */
     eng_post(EV_SEQ_MODE, 0);
     if (page == PG_SEQ) sync_cols(PG_SEQ);
     mark_dirty();
@@ -1004,6 +1039,15 @@ static APART void set_param(int i, int v)
     v = iclamp(v, p->min, p->max);
     if (p->name[0]) active_col = i;              /* (an empty column is never the one in hand) */
     if (v == *q) return;
+    if (page == PG_SEQ && lane_on()) {
+        *q = (uint8_t)v;
+        if (i == 0) { lane_pend = 0; lane_read(); }
+        else {
+            lane_pend = 6;
+            eng_post_lane(lane_bar, i - 1, v ? v - 1 : 31);
+        }
+        return;
+    }
     if (page == PG_SEQ && st.seq[0] == SEQ_STEP && i == 0) { set_seq_mode(v); return; }
     if (page == PG_SEQ && ((st.seq[0] == SEQ_TAPE && subpage[PG_SEQ] == 0 && i == 0) ||
                            (st.seq[0] == SEQ_STEP && i == 2))) {
@@ -1115,6 +1159,7 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
             v = ui_subpage(); a = 0; b = page_nsub(page) - 1; nm = "SUBPAGE";
             d = put_i(d, v + 1);
             if (page == PG_MIX && v < 5) put_s(put_s(d, " "), MIX_SUBT[v]);
+            if (page == PG_SEQ && v == 2 && st.seq[0] == SEQ_TAPE) put_s(put_s(d, " "), "LANE");
         }
         break;
     default: {
@@ -1586,6 +1631,87 @@ static void draw_mix_page(void)
     g_color(GC_WHITE);
 }
 
+/* DEG's numeral for bar b, lower case when the triad on that degree in the key in force has a minor third
+ * (three semitones above its root); upper case otherwise, and in CHROM, where DEG does nothing */
+static void lane_numeral(int b, char *out)
+{
+    static const char *const NUM[7] = {"I", "II", "III", "IV", "V", "VI", "VII"};
+    uint8_t key = eng_key_at(b);
+    int deg = eng_deg_at(b), minor = 0;
+    const char *s = NUM[deg < 0 ? 0 : (deg > 6 ? 6 : deg)];
+    if (key_scale(key)) {
+        int p0 = key_steps(60 + key_root(key), key, deg);
+        minor = key_steps(p0, key, 2) - p0 == 3;
+    }
+    for (; *s; s++)
+        *out++ = (char)(minor ? *s + 32 : *s);
+    *out = 0;
+}
+static int lane_entry(int b)                     /* an entry starts at bar b */
+{
+    return eng_lane_get(b, 0) >= 0 || eng_lane_get(b, 1) >= 0 || eng_lane_get(b, 2) >= 0;
+}
+static int lane_first(int bars)                  /* the first bar with an entry, bars if none */
+{
+    int b;
+    for (b = 0; b < bars; b++)
+        if (lane_entry(b)) return b;
+    return bars;
+}
+
+/* the deck's header while the tape plays over a lane: the key in force at the playhead, "D MAJ . IV" */
+static void lane_head_update(void)
+{
+    static const char *const SC[8] = {"CHR", "MAJ", "MIN", "PEN", "MPN", "BLU", "DOR", "WHL"};
+    int play = seq.loop_state == LOOP_PLAY || seq.loop_state == LOOP_REC || seq.loop_state == LOOP_DUB;
+    lane_head[0] = 0;
+    if (st.seq[0] == SEQ_TAPE && play && lane_first(32) < 32) {
+        uint8_t key;
+        int b = (int)(seq.loop_pos * (f32)seq.bars);
+        char *d;
+        b = iclamp(b, 0, seq.bars - 1);
+        key = eng_key_at(b);
+        d = put_s(lane_head, O_ROOT[key_root(key) % 12]);
+        d = put_s(put_s(d, " "), SC[key_scale(key) & 7]);
+        if (key_scale(key)) {
+            d = put_s(d, " . ");
+            lane_numeral(b, d);
+        }
+    }
+}
+
+static void draw_lane_cells(void)
+{
+    int bars = seq.bars, n = bars < 8 ? bars : 8, first = lane_first(bars), b0, i;
+    int play = seq.loop_state == LOOP_PLAY || seq.loop_state == LOOP_REC || seq.loop_state == LOOP_DUB;
+    int head = iclamp((int)(seq.loop_pos * (f32)bars), 0, bars - 1);
+    f32 cw = 224.0f / (f32)n;
+    b0 = iclamp((int)lane_bar - 3, 0, bars - n);          /* (more than eight bars: a window that follows the cursor) */
+    for (i = 0; i < n; i++) {
+        int b = b0 + i, cur = b == lane_bar, own = lane_entry(b);
+        f32 x = 8.0f + (f32)i * cw, a = own ? 1.0f : 0.35f;
+        char num[8];
+        if (b < first) { num[0] = '-'; num[1] = 0; }
+        else lane_numeral(b, num);
+        g_color(own ? GC_GOLD : GC_SLATE);
+        if (cur) g_rect(x + 2.0f, 56.0f, cw - 4.0f, 62.0f, 0.28f);
+        g_color(cur ? GC_WHITE : GC_SLATE);
+        g_box(x + 2.0f, 56.0f, cw - 4.0f, 62.0f, cur ? 1.6f : 1.0f, cur ? 0.9f : 0.3f);
+        if (play && b == head) {                          /* the playhead's cell is outlined, apart from the cursor's */
+            g_color(GC_CYAN);
+            g_box(x + 0.5f, 54.5f, cw - 1.0f, 65.0f, 1.8f, 1.0f);
+        }
+        g_color(own ? GC_GOLD : GC_WHITE);
+        fit_text(x + cw * 0.5f, 78.0f, num, 18.0f, cw - 8.0f, a);
+        g_color(GC_SLATE);
+        {
+            char nb[6];
+            put_i(nb, b + 1);
+            g_text(x + cw * 0.5f, 104.0f, nb, 7.0f, 1.0f, 0.7f, 1);
+        }
+    }
+}
+
 static void draw_tape_page(void)
 {
     int sub = subpage[PG_SEQ], t, c, i;
@@ -1595,7 +1721,15 @@ static void draw_tape_page(void)
 
     if (moving) reel_ph = fractf(reel_ph + vis.dt * 0.42f * spd_mul + 2.0f);
 
-    draw_topbar(O_TRK[st.track], st.seq[0] == SEQ_STEP ? "PATTERN" : (sub == 1 ? "TAPE EDIT" : "4-TRACK TAPE"),
+    if (st.seq[0] == SEQ_TAPE && sub == 2) {
+        char pos[8];
+        put_s(put_i(pos, 3), "/3");
+        draw_topbar(O_TRK[st.track], "TAPE LANE", pos);
+        draw_lane_cells();
+        draw_bottom_cols(PG_SEQ, 182.0f);
+        return;
+    }
+    draw_topbar(O_TRK[st.track], st.seq[0] == SEQ_STEP ? "PATTERN" : (sub == 1 ? "TAPE EDIT" : (lane_head[0] ? lane_head : "4-TRACK TAPE")),
                 seq.clip_count ? "CLIP RDY" : O_SPEED[st.tape[0] & 3]);
 
     /* Iconic Spinning Twin Tape Reels! */
@@ -1639,6 +1773,16 @@ static void draw_tape_page(void)
                 g_rect(28.0f + (f32)c * 6.25f, y0 + 7.0f - bh * 0.5f, 5.0f, bh, muted ? 0.3f : 0.9f);
             }
         }
+    }
+    /* the lane under the tracks: a mark at each bar that has an entry (TAPE mode only) */
+    if (st.seq[0] == SEQ_TAPE && sub == 0) {
+        int bars = seq.bars;
+        g_color(GC_SLATE);
+        g_rect(28.0f, 172.5f, 200.0f, 1.0f, 0.25f);
+        g_color(GC_GOLD);
+        for (c = 0; c < bars; c++)
+            if (lane_entry(c))
+                g_rect(28.0f + (f32)c * 200.0f / (f32)bars, 168.0f, 3.0f, 9.0f, 0.95f);
     }
     /* Loop In/Out brackets + Vertical Gold Playhead */
     {
@@ -1962,6 +2106,7 @@ void ui_frame(uint32_t now_ms)
     vis.t = tsec; vis.dt = dt; vis.rng = &vrng;
     vis.algo = st.ip[st.inst].algo;
     vis.algo_t = sat(vis.algo_t + dt / 0.35f);
+    if (lane_pend) lane_pend--;
     name_t += dt; page_t += dt; toast_t += dt; vol_t += dt; ring_t += dt; ring_up += dt;
     if (clear_all_asked) toast_t = 0.0f;         /* CLEAR ALL? stays up until it is answered */
     {   /* the engine wrote what the state saves (a step, a riff, a snapshot): saved as a setting is */
@@ -1970,6 +2115,8 @@ void ui_frame(uint32_t now_ms)
         if (sn != saved_seen) { saved_seen = sn; mark_dirty(); }
     }
 
+    if (st.seq[0] == SEQ_STEP && subpage[PG_SEQ] > 1) subpage[PG_SEQ] = 1;   /* (a loaded state's mode, too) */
+    lane_head_update();
     build_palette();
     g_clear();
     g_mode(G_MAX);

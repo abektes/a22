@@ -8,6 +8,8 @@
  *   following    KEY-on tracks follow bar by bar (I-IV-V-vi on MIDI out), DEG does nothing in CHROM, KEY-off
  *                tracks and STEP mode ignore the lane, a note across a bar change ends on its own pitch
  *   recording    a note played over DEG IV on a KEY-on track is stored three steps down, in the bar's key
+ *   the page     TAPE's third subpage LANE (BAR ROOT SCALE DEG): the knobs set entries, BAR clamps to BARS, the cells
+ *                are drawn, the deck has a mark and a header, STEP mode has no LANE
  *   live keys    snap to the lane's root and scale while the tape plays, GLO's when stopped; chord SCALE too
  */
 #include <stdio.h>
@@ -569,6 +571,162 @@ static void lane_entry_past_bars(void)
     CHECK(eng_key_at(6) == key_byte(5, 1) && eng_lane_get(6, 0) == 5, "BARS 8: it applies again at bar 7");
 }
 
+/* ---- the LANE subpage and the deck ---- */
+static void to_lane(void)                        /* SEQ, then SELECT twice */
+{
+    tap(H1_BTN_SEQ);
+    h1_encoder(H1_ENC_SELECT, 1); go(40);
+    h1_encoder(H1_ENC_SELECT, 1); go(40);
+}
+static const char *ctl(int enc, int *lo, int *hi, const char **name)
+{
+    const char *tx = 0;
+    h1_control(enc, lo, hi, name, &tx);
+    return tx ? tx : "";
+}
+static int same(const char *a, const char *b)
+{
+    while (*a && *a == *b) { a++; b++; }
+    return *a == *b;
+}
+static void lane_subpage(void)
+{
+    const char *nm;
+    int lo, hi;
+    fresh();
+    to_lane();
+    CHECK(ui_subpage() == 2, "SEQ, SELECT x2: subpage 2");
+    ctl(H1_ENC_K1, &lo, &hi, &nm);
+    CHECK(same(nm, "BAR"), "K1 is BAR");
+    ctl(H1_ENC_K2, &lo, &hi, &nm);
+    CHECK(same(nm, "ROOT"), "K2 is ROOT");
+    ctl(H1_ENC_K3, &lo, &hi, &nm);
+    CHECK(same(nm, "SCALE"), "K3 is SCALE");
+    ctl(H1_ENC_K4, &lo, &hi, &nm);
+    CHECK(same(nm, "DEG"), "K4 is DEG");
+    CHECK(same(ctl(H1_ENC_K1, &lo, &hi, &nm), "1"), "BAR 1 to start");
+    CHECK(same(ctl(H1_ENC_K2, &lo, &hi, &nm), "-"), "ROOT shows a dash with no entry");
+    CHECK(same(ctl(H1_ENC_SELECT, &lo, &hi, &nm), "3 LANE"), "SELECT is spoken as 3 LANE");
+}
+static void bar_clamps(void)
+{
+    const char *nm;
+    int lo, hi;
+    fresh();
+    st.seq[1] = 2;                               /* BARS 4 */
+    go(40);
+    to_lane();
+    ctl(H1_ENC_K1, &lo, &hi, &nm);
+    CHECK(hi == 3 && same(ctl(H1_ENC_K1, &lo, &hi, &nm), "1"), "BARS 4: BAR's max is bar 4");
+    h1_control_set(H1_ENC_K1, 3);
+    go(40);
+    CHECK(same(ctl(H1_ENC_K1, &lo, &hi, &nm), "4"), "BAR 4");
+    h1_control_set(H1_ENC_K1, 9);
+    go(40);
+    CHECK(same(ctl(H1_ENC_K1, &lo, &hi, &nm), "4"), "BAR does not go past the tape");
+    st.seq[1] = 1;                               /* BARS 2 */
+    go(40);
+    CHECK(same(ctl(H1_ENC_K1, &lo, &hi, &nm), "2") && hi == 1, "BARS 2: the cursor clamps to bar 2");
+}
+static void knobs_set_entry(void)
+{
+    const char *nm;
+    int lo, hi;
+    fresh();
+    to_lane();
+    h1_control_set(H1_ENC_K1, 2);                /* bar 3 */
+    go(40);
+    h1_control_set(H1_ENC_K2, 3);                /* C, C#, D */
+    go(40);
+    CHECK(eng_lane_get(2, 0) == 2, "ROOT D at bar 3");
+    CHECK(eng_lane_get(2, 1) == -1 && eng_lane_get(2, 2) == -1, "its other fields are dashes");
+    CHECK(same(ctl(H1_ENC_K2, &lo, &hi, &nm), "D"), "the knob shows D at once");
+    h1_control_set(H1_ENC_K3, 2);
+    h1_control_set(H1_ENC_K4, 4);
+    go(40);
+    CHECK(eng_lane_get(2, 1) == 1 && eng_lane_get(2, 2) == 3, "SCALE MAJOR, DEG IV");
+    CHECK(same(ctl(H1_ENC_K3, &lo, &hi, &nm), "MAJOR") && same(ctl(H1_ENC_K4, &lo, &hi, &nm), "IV"), "shown");
+    h1_control_set(H1_ENC_K1, 0);
+    go(40);
+    CHECK(same(ctl(H1_ENC_K2, &lo, &hi, &nm), "-"), "bar 1 has no entry: dashes");
+    h1_control_set(H1_ENC_K1, 2);
+    go(40);
+    CHECK(same(ctl(H1_ENC_K2, &lo, &hi, &nm), "D"), "back on bar 3: D, re-read");
+    h1_control_set(H1_ENC_K2, 1);                /* C */
+    go(40);
+    h1_control_set(H1_ENC_K2, 0);                /* turned down past C */
+    go(40);
+    CHECK(eng_lane_get(2, 0) == -1 && same(ctl(H1_ENC_K2, &lo, &hi, &nm), "-"), "past C is a dash");
+    CHECK(eng_lane_get(2, 1) == 1, "the entry stays with SCALE and DEG");
+    h1_control_set(H1_ENC_K3, 0);
+    h1_control_set(H1_ENC_K4, 0);
+    go(40);
+    CHECK(eng_lane_get(2, 1) == -1 && eng_lane_get(2, 2) == -1, "all three dashes: no entry");
+}
+static long cell_sum(int b, int bars)            /* the lit pixels in bar b's cell (bars up to 8 across) */
+{
+    int cw = 224 / bars, x, y;
+    long sum = 0;
+    for (y = 72; y < 124; y++)
+        for (x = 8 + b * cw + 3; x < 8 + (b + 1) * cw - 3; x++)
+            sum += g_fb[y * FB_W + x];
+    return sum;
+}
+static void cells_drawn(void)
+{
+    fresh();
+    st.seq[1] = 2;                               /* BARS 4 */
+    go(40);
+    to_lane();
+    h1_control_set(H1_ENC_K1, 3);                /* the cursor on bar 4, out of the way */
+    go(40);
+    lane(1, 2, 3);                               /* an entry at bar 2: DEG IV */
+    go(100);
+    CHECK(cell_sum(0, 4) != cell_sum(1, 4), "bar 2's cell (an entry) differs from bar 1's (before any)");
+    CHECK(cell_sum(1, 4) != cell_sum(2, 4), "an entry in full colour differs from the dim inherited bar after it");
+    h1_control_set(H1_ENC_K1, 0);
+    go(100);
+    CHECK(cell_sum(0, 4) != cell_sum(2, 4), "the cursor's cell is lit");
+}
+static void deck_mark_and_header(void)
+{
+    fresh();
+    st.seq[1] = 2;
+    go(40);
+    tap(H1_BTN_SEQ);                             /* the deck */
+    CHECK(ui_subpage() == 0, "the deck");
+    CHECK(same(ui_lane_head(), ""), "no entries: no key in the header");
+    lane(2, 0, 2);                               /* bar 3: D */
+    lane(2, 1, 1);                               /* MAJOR */
+    lane(2, 2, 3);                               /* IV */
+    go(60);
+    CHECK(g_fb[170 * FB_W + 129] != g_fb[170 * FB_W + 90], "the lane band has a mark at bar 3");
+    CHECK(same(ui_lane_head(), ""), "stopped: no key in the header");
+    eng_post(EV_PLAY, 0);
+    go(100);
+    CHECK(same(ui_lane_head(), "- - -") == 0 && ui_lane_head()[0], "playing in bar 1: a header reads");
+    go(2500);                                    /* 240 BPM: a bar is a second, so bar 3 */
+    CHECK(same(ui_lane_head(), "D MAJ . IV"), "bar 3: the key in force, D MAJ . IV");
+    eng_post(EV_PLAY, 0);
+    go(100);
+}
+static void step_mode_has_no_lane(void)
+{
+    const char *nm;
+    int lo, hi;
+    fresh();
+    tap(H1_BTN_SEQ);
+    ctl(H1_ENC_SELECT, &lo, &hi, &nm);
+    CHECK(hi == 2, "tape mode: three subpages");
+    h1_control_set(H1_ENC_SELECT, 2);
+    go(40);
+    st.seq[0] = SEQ_STEP;
+    eng_post(EV_SEQ_MODE, 0);
+    go(40);
+    ctl(H1_ENC_SELECT, &lo, &hi, &nm);
+    CHECK(hi == 1 && ui_subpage() <= 1, "STEP mode: SEQ keeps its two pages, the open LANE is left");
+}
+
 int main(void)
 {
     lane_set_and_clear();
@@ -588,6 +746,12 @@ int main(void)
     lane_survives();
     lane_only_tape_overdubs();
     lane_entry_past_bars();
+    lane_subpage();
+    bar_clamps();
+    knobs_set_entry();
+    cells_drawn();
+    deck_mark_and_header();
+    step_mode_has_no_lane();
     printf("lane: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

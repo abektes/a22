@@ -280,6 +280,7 @@ extern const PageDef pages[NPAGE];
 const ParamDef *page_param(int page, int i);
 uint8_t *page_value(int page, int i);
 int ui_subpage(void);
+const char *ui_lane_head(void);          /* the deck's header key while the tape plays over a lane ("D MAJ . IV"), else "" */
 
 /* ---- engine (synth.c) ----------------------------------------------------------------- */
 enum {
