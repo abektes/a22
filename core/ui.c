@@ -462,6 +462,14 @@ static APART void open_page(int pg)
     sync_cols(pg);
 }
 
+/* PUNCH: hold FX and one of SAVE's eight snapshot keys. fx_hand is FX held on its own (EDIT + FX is bypass);
+ * punch_key is the key holding the punch, -1 for none, and punch_n the punch it holds, 1-8 */
+static const char *const PUNCH_NAMES[8] = {"BRAKE", "ST 1/8", "ST 1/16", "ST 1/32", "LPF", "HPF", "CRUSH", "GATE"};
+static int fx_hand, punch_key = -1, punch_n;
+int h1_fx_held(void) { return fx_hand; }
+int h1_punch(void) { return punch_key >= 0 ? punch_n : 0; }
+const char *h1_punch_name(int p) { return p >= 1 && p <= 8 ? PUNCH_NAMES[p - 1] : ""; }
+
 static void set_seq_mode(int m)
 {
     if (m == st.seq[0]) return;
@@ -493,6 +501,25 @@ void h1_key(int key, int down)
                 return;
             }
         }
+    }
+    if (down && fx_hand && !key_down[key]) {
+        for (i = 0; i < NSNAP; i++) {
+            if (key == SNAP_KEYS[i]) {
+                btn_fired[H1_BTN_FX] = 3;        /* (FX was used: no page when it is let go) */
+                if (key == punch_key) return;
+                punch_key = key;
+                punch_n = i + 1;
+                eng_post(EV_PUNCH, punch_n);
+                toast("PUNCH ", 0, 0, PUNCH_NAMES[i], -1);
+                return;
+            }
+        }
+    }
+    if (!down && key == punch_key) {             /* (the key that holds the punch: no note was played) */
+        punch_key = -1;
+        punch_n = 0;
+        eng_post(EV_PUNCH, 0);
+        return;
     }
     if (down) {
         int note = scale_snap(53 + key + 12 * st.octave);
@@ -643,11 +670,13 @@ SMALL void h1_button(int btn, int down)
     if (btn < 0 || btn >= H1_NBTN) return;
     if (!down) {
         btn_held &= ~(1u << btn);
+        if (btn == H1_BTN_FX) fx_hand = 0;
         if (btn == H1_BTN_REC && clear_all_asked == 1) {   /* the hold that asked let go: 3 s to tap REC */
             clear_all_asked = 2;
             clear_all_ms = now;
         }
         if (btn_fired[btn]) return;
+        if (btn == H1_BTN_FX) open_page(PG_FX);
         if (btn == H1_BTN_REC) {
             if (page == PG_ARP && st.ip[st.inst].arp[0] == ARP_RIFF)
                 eng_post(EV_RIFF_REC, 0);
@@ -678,6 +707,10 @@ SMALL void h1_button(int btn, int down)
                 mark_dirty();
             }
         }
+        return;
+    }
+    if (fx_hand && (btn == H1_BTN_SAVE || btn == H1_BTN_EDIT)) {
+        btn_fired[btn] = 3;                      /* (FX held on its own: SAVE and EDIT do nothing, up or down) */
         return;
     }
     if (btn == H1_BTN_EDIT) edit_at = master_raw;
@@ -778,7 +811,7 @@ SMALL void h1_button(int btn, int down)
     }
 
     switch (btn) {
-    case H1_BTN_FX:    open_page(PG_FX); break;
+    case H1_BTN_FX:    fx_hand = 1; break;       /* (its page opens when it is let go, unless a punch was played) */
     case H1_BTN_SEL:   open_page(PG_MIX); break;
     case H1_BTN_ENV:   open_page(PG_ENV); break;
     case H1_BTN_LFO:   open_page(PG_LFO); break;
@@ -1760,6 +1793,35 @@ static void draw_toast(void)
     g_color(GC_WHITE);
 }
 
+/* FX held: the eight punches along the bottom third, over the knob strip, the one held lit */
+static void draw_punch_strip(void)
+{
+    static const char *const LABEL[8] = {"BRK", "ST8", "ST16", "ST32", "LPF", "HPF", "CRSH", "GATE"};
+    static const char *const KEYN[8] = {"F", "G", "A", "B", "C", "D", "E", "F"};
+    int i;
+    g_mode(G_PAINT);
+    g_rect(0.0f, 160.0f, 240.0f, 76.0f, 0.0f);
+    g_mode(G_MAX);
+    g_color(GC_SLATE);
+    g_line(0.0f, 160.5f, 240.0f, 160.5f, 1.0f, 0.5f);
+    for (i = 0; i < 8; i++) {
+        f32 cx = 15.0f + 30.0f * (f32)i;
+        int lit = i + 1 == h1_punch();
+        if (lit) {
+            g_color(GC_CYAN);
+            g_rect(cx - 13.0f, 168.0f, 26.0f, 58.0f, 0.3f);
+            g_box(cx - 13.0f, 168.0f, 26.0f, 58.0f, 1.4f, 0.95f);
+        } else {
+            g_color(GC_SLATE);
+            g_box(cx - 13.0f, 168.0f, 26.0f, 58.0f, 1.0f, 0.4f);
+        }
+        g_color(lit ? GC_CYAN : GC_SLATE);
+        fit_text(cx, 178.0f, KEYN[i], 8.5f, 24.0f, 0.8f);
+        fit_text(cx, 200.0f, LABEL[i], 8.5f, 24.0f, 1.0f);
+    }
+    g_color(GC_WHITE);
+}
+
 static void draw_name(void)
 {
     const char *name = insts[st.inst]->name;
@@ -1971,6 +2033,7 @@ void ui_frame(uint32_t now_ms)
         draw_seq_mark();
         draw_toast();
     }
+    if (fx_hand) draw_punch_strip();
     draw_volume(dt);
     vis.fresh = 0;
     vis.enter += dt;
@@ -2115,7 +2178,7 @@ uint32_t h1_button_leds(void)
     if (page != PG_HOME) m |= 1u << PAGE_BTN[page];
     if (st.ip[st.inst].arp[0] && (page == PG_ARP || vis.beat < 0.25f)) m |= 1u << H1_BTN_ARP;
     if (st.hud) m |= 1u << H1_BTN_EDIT;
-    if (st.fx_on) m |= 1u << H1_BTN_FX;
+    if (st.fx_on || (btn_held & (1u << H1_BTN_FX))) m |= 1u << H1_BTN_FX;
     if (s == LOOP_PLAY || s == LOOP_DUB || s == LOOP_REC) m |= 1u << H1_BTN_PLAY;
     if (s == LOOP_REC || s == LOOP_DUB || (s == LOOP_ARMED && blink) || seq.riff_rec) m |= 1u << H1_BTN_REC;
     if (seq.mode == SEQ_STEP) {

@@ -212,6 +212,199 @@ static void t_trick(int unused)
     rec(900);
 }
 
+/* ---- the hand: FX and a white key (the panel's gesture), the strip, and FX's tap ---- */
+static const int WHITE[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* (SAVE's snapshot keys, punches 1-8) */
+static uint8_t mo[256][3];
+static int nmo;
+static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
+{
+    if (s < 0xF8 && nmo < 256) { mo[nmo][0] = s; mo[nmo][1] = a; mo[nmo][2] = b; nmo++; }
+}
+static int ons(void)
+{
+    int i, n = 0;
+    for (i = 0; i < nmo; i++) if ((mo[i][0] & 0xF0) == 0x90 && mo[i][2]) n++;
+    return n;
+}
+static int offs(void)
+{
+    int i, n = 0;
+    for (i = 0; i < nmo; i++) if ((mo[i][0] & 0xF0) == 0x80 || ((mo[i][0] & 0xF0) == 0x90 && !mo[i][2])) n++;
+    return n;
+}
+static void go(int msec)
+{
+    static int32_t out[512];
+    int blocks = msec * 441 / 2560 + 1, i;
+    for (i = 0; i < blocks; i++) {
+        h1_render(out, 256);
+        if (i % 3 == 0) h1_frame(ms += 17);
+    }
+}
+static void hand(void)
+{
+    int k;
+    for (k = 0; k < H1_NKEYS; k++) h1_key(k, 0);
+    h1_button(H1_BTN_FX, 0);
+    h1_init(44100);
+    ms = 0;
+    nmo = 0;
+    st.fx_on = 0;
+    h1_midi_out(mo_fn);
+    go(100);
+}
+static void btn(int b, int down) { h1_button(b, down); go(40); }
+static void key(int k, int down) { h1_key(k, down); go(40); }
+static uint32_t band_sum(void)                   /* the bottom third's pixels, summed with their places */
+{
+    const uint8_t *fb = h1_framebuffer();
+    uint32_t sum = 0, i;
+    for (i = 160u * H1_W; i < (uint32_t)H1_W * 236u; i++) sum = sum * 31u + fb[i];
+    return sum;
+}
+
+static void hand_tests(void)
+{
+    uint32_t without, with;
+    int k, was, hud;
+
+    hand();                                              /* fx_key_starts_and_ends */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    CHECK(eng_punch() == 3, "FX + key 3: punch 3 starts");
+    key(WHITE[2], 0);
+    CHECK(eng_punch() == 0, "its key up ends it, FX still held");
+    btn(H1_BTN_FX, 0);
+
+    for (k = 0; k < 8; k++) {                            /* all eight keys */
+        char what[64];
+        hand();
+        btn(H1_BTN_FX, 1);
+        key(WHITE[k], 1);
+        snprintf(what, sizeof what, "FX + white key %d is punch %d", k + 1, k + 1);
+        CHECK(eng_punch() == k + 1, what);
+        key(WHITE[k], 0);
+        btn(H1_BTN_FX, 0);
+    }
+
+    hand();                                              /* key_holds_after_fx_up */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    btn(H1_BTN_FX, 0);
+    CHECK(eng_punch() == 3, "FX let go first: the key still holds the punch");
+    key(WHITE[2], 0);
+    CHECK(eng_punch() == 0, "and its key up ends it");
+
+    hand();                                              /* second_key_replaces */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    key(WHITE[4], 1);
+    CHECK(eng_punch() == 5, "a second key replaces the first");
+    key(WHITE[2], 0);
+    CHECK(eng_punch() == 5, "letting go of the first changes nothing");
+    key(WHITE[4], 0);
+    CHECK(eng_punch() == 0, "letting go of the second ends it, the first does not come back");
+    btn(H1_BTN_FX, 0);
+
+    hand();                                              /* a punch key plays no note, and no note-off */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    key(WHITE[2], 0);
+    btn(H1_BTN_FX, 0);
+    CHECK(ons() == 0 && offs() == 0, "a punch key sends no note-on and no note-off");
+
+    hand();                                              /* other_keys_play */
+    btn(H1_BTN_FX, 1);
+    key(1, 1);
+    CHECK(ons() == 1, "FX held: a key that is no punch plays a note out over MIDI");
+    key(1, 0);
+    CHECK(offs() == 1 && eng_punch() == 0, "and its note ends, with no punch");
+    btn(H1_BTN_FX, 0);
+
+    hand();                                              /* a key down before FX still ends normally */
+    key(WHITE[2], 1);
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 0);
+    btn(H1_BTN_FX, 0);
+    CHECK(ons() == 1 && offs() == 1 && eng_punch() == 0, "a note held before FX ends with its key");
+
+    hand();                                              /* fx_tap_opens_on_release */
+    CHECK(h1_page() == PG_HOME, "starts on HOME");
+    btn(H1_BTN_FX, 1);
+    CHECK(h1_page() == PG_HOME, "FX down: the page is unchanged");
+    btn(H1_BTN_FX, 0);
+    CHECK(h1_page() == PG_FX, "FX up: the FX page opens");
+
+    hand();                                              /* fx_used_no_page */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[0], 1);
+    key(WHITE[0], 0);
+    btn(H1_BTN_FX, 0);
+    CHECK(h1_page() == PG_HOME, "FX used for a punch: no page on release");
+
+    hand();                                              /* bypass is unchanged: EDIT + FX toggles, opens no page */
+    was = st.fx_on;
+    btn(H1_BTN_EDIT, 1);
+    btn(H1_BTN_FX, 1);
+    btn(H1_BTN_FX, 0);
+    btn(H1_BTN_EDIT, 0);
+    CHECK(st.fx_on != was && h1_page() == PG_HOME, "EDIT + FX is bypass and opens no page");
+
+    hand();                                              /* fx_punch_ignores_save_edit */
+    was = st.fx_on;
+    hud = st.hud;
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    btn(H1_BTN_SAVE, 1);
+    key(WHITE[3], 1);                                    /* (SAVE's snapshot 4 key, were SAVE counted) */
+    btn(H1_BTN_SAVE, 0);
+    btn(H1_BTN_EDIT, 1);
+    btn(H1_BTN_EDIT, 0);
+    CHECK(!st.snap[2].used && !st.snap[3].used, "FX held: SAVE makes no snapshot");
+    CHECK(st.fx_on == was && st.hud == hud, "FX held: EDIT toggles nothing");
+    CHECK(eng_punch() == 4, "and the punches go on");
+    btn(H1_BTN_FX, 0);
+    key(WHITE[3], 0);
+    btn(H1_BTN_EDIT, 1);                                 /* (and EDIT works again once FX is up) */
+    btn(H1_BTN_EDIT, 0);
+    CHECK(st.hud != hud, "EDIT works again after FX is let go");
+
+    hand();                                              /* strip_drawn */
+    go(300);
+    without = band_sum();
+    btn(H1_BTN_FX, 1);
+    go(300);
+    with = band_sum();
+    CHECK(with != without, "FX held: the strip changes the bottom third");
+    key(WHITE[4], 1);
+    go(100);
+    CHECK(band_sum() != with, "a held punch is lit on the strip");
+    key(WHITE[4], 0);
+    btn(H1_BTN_FX, 0);
+    go(300);
+    CHECK(band_sum() != with, "the strip goes when FX is let go");
+
+    hand();                                              /* fx_light */
+    CHECK(!(h1_button_leds() & (1u << H1_BTN_FX)), "FX's light is off to start");
+    btn(H1_BTN_FX, 1);
+    CHECK(h1_button_leds() & (1u << H1_BTN_FX), "FX held: its light is on");
+    key(WHITE[0], 1);                                    /* (a tap would open the FX page, which lights it) */
+    key(WHITE[0], 0);
+    btn(H1_BTN_FX, 0);
+    CHECK(!(h1_button_leds() & (1u << H1_BTN_FX)), "let go: it is off");
+
+    hand();                                              /* the toast */
+    btn(H1_BTN_FX, 1);
+    key(WHITE[2], 1);
+    CHECK(strcmp(h1_toast_now(), "PUNCH ST 1/16") == 0, "a toast names the punch");
+    key(WHITE[7], 1);
+    CHECK(strcmp(h1_toast_now(), "PUNCH GATE") == 0, "and the next");
+    key(WHITE[7], 0);
+    key(WHITE[2], 0);
+    btn(H1_BTN_FX, 0);
+}
+
+
 int main(void)
 {
     static const double SECS[3] = {0.25, 0.125, 0.0625};
@@ -364,6 +557,8 @@ int main(void)
         CHECK(during < 0.9, "TRICK back: punch 5 replaces it while held");
         CHECK(after > 0.95, "TRICK back: the 1/8 stutter is back once it's let go");
     }
+
+    hand_tests();
 
     printf("punch: %d checks, %d failed\n", checks, fails);
     return fails != 0;

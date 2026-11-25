@@ -787,7 +787,7 @@ static void say_perf(void)
 
 static void speak(void)
 {
-    static int inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
+    static int fx_was, punch_was, inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
@@ -795,6 +795,10 @@ static void speak(void)
         int where = ann_where();
         if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
             ann_say(lay ? "LAYERS ON" : "LAYERS OFF", 0, ANN_NOW);
+        if (h1_fx_held() && !fx_was)                        /* FX held: the punch strip is up */
+            ann_say("PUNCH", 0, ANN_NOW);
+        if (h1_punch() && h1_punch() != punch_was)          /* a punch starts: its name */
+            ann_say(h1_punch_name(h1_punch()), 0, ANN_NOW);
         if (ask && !ask_was)                                /* REC held: the whole tape, asked first */
             ann_say("CLEAR ALL? TAP REC", 0, ANN_NOW);
         if (answer)                                         /* and its answer (no strcmp: the device has no libc) */
@@ -838,6 +842,8 @@ static void speak(void)
         if (d != t)
             ann_later(t, ANN_NOW, 250u, plat_ms());
     }
+    fx_was = h1_fx_held();
+    punch_was = h1_punch();
     inst_was = inst;
     algo_was = algo;
     page_was = page;
