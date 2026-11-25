@@ -2005,9 +2005,15 @@ static int xport_running(void)
 }
 /* Start or Stop as the tape or the step pattern has just started or stopped: from each block, and from a note-on
  * before it goes out, so a DAW that records from Start has the note that started it. 1: it has just started. */
+/* Where clock, Start and Stop go: the computer only. In USB host the port is a keyboard's, and a keyboard with a
+ * sequencer or an arpeggiator of its own would follow them (its notes then coming back in). */
+static void (*rt_fn(void))(uint8_t, uint8_t, uint8_t)
+{
+    return h1_usb_host() ? 0 : eng_midi_fn;
+}
 static int clock_edge(void)
 {
-    void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    void (*fn)(uint8_t, uint8_t, uint8_t) = rt_fn();
     int run = xport_running();
     if (run == xport_was)
         return 0;
@@ -2022,7 +2028,7 @@ static int clock_edge(void)
 }
 static void clock_tick(f32 dticks)
 {
-    void (*fn)(uint8_t, uint8_t, uint8_t) = eng_midi_fn;
+    void (*fn)(uint8_t, uint8_t, uint8_t) = rt_fn();
     if (clock_edge())
         return;
     clk_acc += dticks;

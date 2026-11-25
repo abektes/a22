@@ -403,6 +403,42 @@ static void start_stop_edges(void)
     CHECK(nrt == 8 && rt_seq[6] == 0xFA && rt_seq[7] == 0xFC, "the step pattern sends Start and Stop");
 }
 
+/* USB host for a keyboard (OCT- and OCT+ held): the keyboard gets no clock, Start or Stop, which would run a
+ * sequencer or an arpeggiator it has (found in code review); back to the computer, the clock comes back */
+static int usb_now;
+static void usb_fn(int on) { usb_now = on; }
+static void usb_swap(void)
+{
+    h1_button(H1_BTN_OCTDN, 1);
+    h1_button(H1_BTN_OCTUP, 1);
+    go(1200);
+    h1_button(H1_BTN_OCTDN, 0);
+    h1_button(H1_BTN_OCTUP, 0);
+    go(100);
+}
+static void host_mode_sends_no_clock(void)
+{
+    fresh();
+    h1_usb_host_fn(usb_fn);
+    usb_swap();
+    CHECK(usb_now == 1 && h1_usb_host(), "OCT- and OCT+ held: USB host");
+    rt_reset();
+    go(2000);
+    tap(H1_BTN_REC);
+    note(7, 150);
+    tap(H1_BTN_REC);
+    go(500);
+    tap(H1_BTN_PLAY);
+    go(200);
+    CHECK(rt_n[0] == 0 && nrt == 0, "a keyboard on USB host gets no clock, Start or Stop");
+    usb_swap();
+    CHECK(usb_now == 0 && !h1_usb_host(), "and back to the computer");
+    rt_reset();
+    go(1000);
+    CHECK(rt_n[0] > 40, "the computer gets the clock again");
+    h1_usb_host_fn(0);
+}
+
 int main(void)
 {
     keys_on_t2();
@@ -424,6 +460,7 @@ int main(void)
     tape_keeps_with_clock(4, 173, TAPE_SPD_HALF, 5);
     tape_keeps_with_clock(5, 120, TAPE_SPD_REV, 5);
     start_stop_edges();
+    host_mode_sends_no_clock();
     h1_midi_out(0);
     printf("midiout: %d checks, %d failed\n", checks, fails);
     return fails != 0;
