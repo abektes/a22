@@ -130,6 +130,8 @@ fi
 $CC -std=c99 -O2 -ffp-contract=off -w core/*.c tests/sleep.c -o build/a22sleep -lm
 build/a22sleep > build/sleep1.txt
 build/a22sleep before > build/sleep2.txt
+# and they do fall asleep with denormals kept, as the FM-1 keeps them (a filter state stuck at the smallest one)
+build/a22sleep denormals
 if cmp -s build/sleep1.txt build/sleep2.txt; then
     echo "sleep: $(wc -l < build/sleep1.txt | tr -d ' ') sections, the same asleep and awake"
 else

@@ -3,6 +3,16 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**Audio time**
+- SHIFT and TANK fall asleep again on the FM-1 once nothing sounds, as 0.6.0 meant them to: about 5 points of the audio
+  time back with nothing playing. The FM-1 keeps denormals, so a filter's state decaying with nothing coming in stopped at
+  the smallest float (1.4e-45, read off an FM-1 for SHIFT) and never reached the 0 their sleep waited for: SHIFT, from
+  every start with it chosen, ran at 16% of the audio time instead of 11% until another effect was chosen and back.
+  States below 1e-20 (-400 dB) are now 0 for the sleep's test, in DELAY, SHIFT and TANK; the sound is otherwise the
+  same. `tests/sleep.c` (`denormals`) runs the four echo effects with denormals kept, as the FM-1 does.
+
 ## 0.7.1
 
 Identity `FM-1_4122000701`. Released 2026-11-26. Fixes from h1's issues that apply to A22 too: SAVE while the music
