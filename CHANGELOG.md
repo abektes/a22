@@ -3,7 +3,21 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.7.0
+
+Identity `FM-1_4122000700`. Released 2026-11-26. MIDI out for a DAW, a tape that follows the key (KEY and LANE), and
+PUNCH. Run on one FM-1 (CI's test packages of the same code, e6c6413 and ce94c90), no crash recorded:
+- the image is 554,608 B of the 581,564 B slot. To make room, STACK and ELECTRIC are back to one render for all
+  their algorithms (0.5.0 gave each algorithm its own): the sound is the same to the bit, the audio time a little
+  higher. With eight-note chords and PLATE, STACK peaks at 70% (CHOIR) and ELECTRIC at 54%, no half missed and no
+  voice let go;
+- each punch held over an eight-note chord on STACK CHOIR with PLATE: 70 to 74% at the peak, none missed or let go;
+- KEY and LANE checked by the notes the FM-1 sends: a part recorded on 0.7.0 moved up 2 for ROOT up 2, and a
+  I-IV-V-vi lane moved it +0, +5, +7 and +8 or +9 bar by bar, pass after pass; a tape from 0.6.0 plays as recorded;
+- MIDI out: each track on its own channel, recorded in Studio One on four tracks; the clock measured at TEMPO, and a
+  4-bar tape coming round within a clock of it for 11 passes.
+
+Settings and the tape saved by 0.1.0 to 0.6.0 load as before: the state is still version 5.
 
 **PUNCH**
 - Hold FX and one of the eight white keys from the lowest F for a punch on the whole mix, while the key is held: BRAKE,
