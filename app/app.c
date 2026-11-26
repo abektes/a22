@@ -681,8 +681,9 @@ void app_frame(void)
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
     /* the state's save erases flash, which stalls the sound for a moment: only when it is silent (h1_quiet: nothing
-     * playing, the tails gone). The loop goes into its ring a page a frame, playing or not (ring_step). */
-    if (h1_state_dirty() && h1_quiet()) {
+     * playing, the tails gone), or at once after SAVE, playing or not (h1_state_asked: one try, so a failing write does
+     * not stall the sound frame after frame). The loop goes into its ring a page a frame, playing or not (ring_step). */
+    if (h1_state_dirty() && (h1_quiet() || h1_state_asked())) {
         uint32_t size;
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)

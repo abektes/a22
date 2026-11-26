@@ -53,6 +53,8 @@ out=app/build/host
 "$out/a22_host" tests/usbhost.txt "$out"
 # the tape kept through a power-off while it plays, and one cut off in the middle of its save
 "$out/a22_host" tests/looppower.txt "$out"
+# settings while the tape plays: written only in silence on their own, at once after SAVE, and kept through a power cut
+"$out/a22_host" tests/statesave.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
 "$out/a22_host" tests/dice.txt "$out"
 # MIDI out to USB as a DAW records it: clock, Start and Stop, T2 on channel 2, HUSH on all four channels

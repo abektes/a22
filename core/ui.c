@@ -326,6 +326,7 @@ static int rq_n, rq_i;
 static uint32_t rq_bytes;
 static int dirty;
 static uint32_t dirty_ms;
+static int save_asked;                           /* SAVE tapped: the state is written at once, playing or not */
 
 static void mark_dirty(void) { dirty = 1; dirty_ms = now; }
 
@@ -729,7 +730,8 @@ SMALL void h1_button(int btn, int down)
         }
         if (btn == H1_BTN_SAVE) {
             dirty = 1; dirty_ms = now - 5000u;
-            toast(eng_quiet() ? "SAVED" : "SAVE WHEN QUIET", 0, 0, 0, -1);   /* (the save waits for silence) */
+            save_asked = 1;                      /* (at once: its erase may stall the sound, which SAVE accepts) */
+            toast("SAVED", 0, 0, 0, -1);
         }
         if (btn == H1_BTN_EDIT) {
             if (seq.riff_rec) {
@@ -2360,4 +2362,5 @@ uint32_t h1_button_leds(void)
 }
 
 int h1_state_dirty(void) { return dirty && now - dirty_ms > 1500u; }
-void h1_state_saved(void) { dirty = 0; }
+void h1_state_saved(void) { dirty = 0; save_asked = 0; }
+int h1_state_asked(void) { int a = save_asked; save_asked = 0; return a; }

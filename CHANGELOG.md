@@ -3,6 +3,15 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**Saving**
+- SAVE saves the settings at once, even while the tape or the step pattern plays, and says SAVED. Since 0.4.0 a save
+  waited for silence, so settings changed while the music kept going were lost if the FM-1 was switched off before it
+  stopped, SAVE or not (the step pattern, the mixer, snapshots, engines and knobs; the tape itself was kept). A save
+  erases flash, which can stall the sound for a moment; after SAVE that now happens at once, playing or not. Changes
+  without SAVE still wait for silence. As h1 0.3.1 does for jakehandy/h1#39's steps. `tests/statesave.txt`.
+
 ## 0.7.0
 
 Identity `FM-1_4122000700`. Released 2026-11-26. MIDI out for a DAW, a tape that follows the key (KEY and LANE), and

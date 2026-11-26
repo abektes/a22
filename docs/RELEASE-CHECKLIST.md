@@ -92,8 +92,9 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
       the tape records is on the tape. *(ears for "runs away")*
 - [ ] Settings saved by 0.4.0 (version 4) load with everything kept: install 0.4.0, change an engine, an
       algorithm, its knobs and an effect, save; install this release over it: they are all as they were.
-- [ ] Saving waits for silence: no stall heard in a reverb tail or under the metronome; SAVE says SAVE
-      WHEN QUIET while something plays, and the setting is there after a restart.
+- [ ] Saving on its own waits for silence: no stall heard in a reverb tail or under the metronome. SAVE while
+      the tape plays saves at once (a short stall is expected), and the setting is there after a power-off with
+      the tape still playing.
 - [ ] PR #2 under load: HAZE with two tape tracks and eight keys. CC 119's PERF says LATE and SHED, no
       full-level static at a low MASTER, and the screen, keys and MASTER keep answering.
 - [ ] The SEQ page (abektes/a22#1): KNOB 1 turns through every mode, into SHAKE and out again. In SHAKE,
