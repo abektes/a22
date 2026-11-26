@@ -899,7 +899,8 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
 
 /* ---- PUNCH 5-8: LPF, HPF, CRUSH and GATE on the whole mix, after TRICK, while a punch is held ---- */
 /* A punch comes in over 10 ms and goes out over 10 ms (dry to wet); one punch replacing another goes out first. The
- * sweeps count from the punch's start, a bar of TEMPO from open to where they hold. */
+ * sweeps count from the punch's start, a beat of TEMPO from open to where they hold (a bar was too slow to hear
+ * at once: at 118 the LPF was still above 2 kHz a second in). */
 #define PCH_LPF_HI 18000.0f                  /* LPF: from fully open ... */
 #define PCH_LPF_OCT (-6.17f)                 /* ... down 6.17 octaves, to 250 Hz */
 #define PCH_HPF_LO 20.0f                     /* HPF: from 20 Hz ... */
@@ -910,7 +911,7 @@ void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm
 #define PCH_EDGE 0.002f                      /* GATE: its edges, in seconds */
 static int pch_rst;                          /* a punch started again: it goes out and starts over */
 static int pch_cur, pch_in, pch_out;         /* the effect running (0 none), the punch last asked for, going out */
-static f32 pch_wet, pch_t, pch_ph, pch_g;    /* the level over dry, the sweep 0..1 in bars, the gate's phase, gain */
+static f32 pch_wet, pch_t, pch_ph, pch_g;    /* the level over dry, the sweep 0..1 in beats, the gate's phase, gain */
 static f32 pch_s[2][2], pch_hl, pch_hr;      /* the filters' state, CRUSH's held samples */
 static uint32_t pch_cnt;
 
@@ -967,7 +968,7 @@ void fx_punch_block(f32 *l, f32 *r, int punch, f32 bpm, f32 phase16)
         f32 fc = pch_cur == PUNCH_LPF ? PCH_LPF_HI * exp2fx(pch_t * PCH_LPF_OCT)
                                       : PCH_HPF_LO * exp2fx(pch_t * PCH_HPF_OCT);
         svf_set(&f, fc, PCH_Q, ISRf);
-        pch_t = minf(1.0f, pch_t + (f32)CTRL * ISRf * bpm * (96.0f / 60.0f) / (f32)seq_bar_ticks());
+        pch_t = minf(1.0f, pch_t + (f32)CTRL * ISRf * bpm * (1.0f / 60.0f));
     } else {
         f.g = f.k = f.a1 = f.a2 = f.a3 = 0.0f;   /* (not read: no filter) */
     }
