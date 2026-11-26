@@ -5,6 +5,11 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## Unreleased
 
+**Panel**
+- The white keys show the tape or the step pattern, with its place running across, only on the SEQ page (and while
+  steps are written). Anywhere else they light the notes that sound, as they do with nothing playing: a pattern's or a
+  tape's place running over the keys was hard to play against (jakehandy/h1#49, as h1 0.3.1 does). `tests/tracks.c`.
+
 **Saving**
 - SAVE saves the settings at once, even while the tape or the step pattern plays, and says SAVED. Since 0.4.0 a save
   waited for silence, so settings changed while the music kept going were lost if the FM-1 was switched off before it

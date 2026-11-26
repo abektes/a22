@@ -192,8 +192,15 @@ static void leds_show_the_pattern(void)
     go(30);
     CHECK(eng_seq_leds(&m, 1, 0) == 1, "the white keys show the step pattern with its page open");
     CHECK((m >> 26) & 1u, "a note on step 64 lights the last white key");
+    /* playing, it shows only on its page: elsewhere the white keys are the player's (jakehandy/h1#49) */
+    h1_button(H1_BTN_PLAY, 1); h1_button(H1_BTN_PLAY, 0);
+    go(100);
+    CHECK(eng_seq_leds(&m, 0, 0) == 0, "a playing step pattern leaves the white keys alone off its page");
+    CHECK(eng_seq_leds(&m, 1, 0) == 1, "a playing step pattern shows on its page");
+    h1_button(H1_BTN_PLAY, 1); h1_button(H1_BTN_PLAY, 0);
+    go(50);
 
-    /* the tape: a take recorded and playing shows on the white keys */
+    /* the tape: a take recorded and playing shows on the white keys on the SEQ page, and only there */
     fresh();
     h1_button(H1_BTN_REC, 1); h1_button(H1_BTN_REC, 0);
     go(50);
@@ -202,8 +209,9 @@ static void leds_show_the_pattern(void)
     h1_button(H1_BTN_REC, 1); h1_button(H1_BTN_REC, 0);
     go(100);
     m = 0;
-    CHECK(eng_seq_leds(&m, 0, 0) == 1, "the white keys show the tape while it plays");
+    CHECK(eng_seq_leds(&m, 1, 0) == 1, "the white keys show the tape while it plays, on the SEQ page");
     CHECK(m != 0u, "the tape's notes light white keys");
+    CHECK(eng_seq_leds(&m, 0, 0) == 0, "off the SEQ page a playing tape leaves the white keys alone");
 }
 
 /* zero crossings of the left channel over msec: a note an octave up crosses twice as often */

@@ -59,7 +59,7 @@ wait 600
 turn ALGO 1
 wait 200
 said ELECTRIC. DX-EP
-# the sequencer has the white keys while it runs: REC arms the loop, a key starts the take
+# a take: REC arms the loop, a key starts it (the white keys show it on the SEQ page only; here they light the notes)
 tap REC
 wait 100
 key 12 down
