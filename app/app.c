@@ -98,10 +98,14 @@ static void send_rest(void)
  * Then STAGE seq voices wait mix fx master: the slowest render since the last PERF, split by h1_stages, each in
  * percent of the block's time (they add up to that render's time in h1_render; AUDIO also counts the port's own
  * MASTER gain after it, so it reads a little higher); and FLASH n max: the tape's flash writes in that time and the
- * longest in microseconds (each holds the interrupts off, the audio's included: ring_write). The stages are timed only
- * from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in its render. */
+ * longest in microseconds (each holds the interrupts off, the audio's included: ring_write); and ERASE n max: the
+ * ring's 4 KiB sector erases from frames in that time, and the most erase time in one frame, in microseconds (one
+ * sector's at most since erases go a sector a frame: ring_erase_some; the start's, before the sound, not counted).
+ * The stages are timed only from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in
+ * its render. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
-static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max; } pf;
+static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max, erase_n, erase_max; } pf;
+static uint32_t erase_us_frame;                 /* this frame's erase time so far (ERASE) */
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
 /* the renders as the tape's flash writes see them (ring_go): one more each render, and the slowest of the last few
  * (each render takes an eighth off it), in microseconds */
@@ -237,6 +241,8 @@ static void input(void)
 #include <string.h>
 static void ring_dump(void);
 static int host_bad_start;                                  /* the tests' "badstart": the next start is one */
+static uint32_t host_er_n, host_er_frame, host_er_max;      /* the ring's sector erases from frames: in all, this
+                                                             * frame's, the most in one frame (expect ring_erases) */
 static void ring_boot_state(void);
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
@@ -253,6 +259,18 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     }
     if (!strcmp(cmd, "ring")) {                  /* ring: where the loop's record is, and each slot's fill */
         ring_dump();
+        return 1;
+    }
+    if (!strcmp(cmd, "expect") && !strcmp(a, "ring_erases")) {   /* expect ring_erases MIN MAX_A_FRAME: the ring's sector
+                                                                  * erases since the start, at least MIN, and at most
+                                                                  * MAX_A_FRAME of them in one frame */
+        uint32_t lo = (uint32_t)strtoul(b, 0, 0), hi = (uint32_t)strtoul(c, 0, 0);
+        if (host_er_n < lo || host_er_max > hi) {
+            printf("FAIL expect ring_erases >= %s, <= %s a frame: got %u, %u a frame\n", b, c,
+                   (unsigned)host_er_n, (unsigned)host_er_max);
+            exit(1);
+        }
+        printf("  ok ring_erases %u, at most %u a frame\n", (unsigned)host_er_n, (unsigned)host_er_max);
         return 1;
     }
     if (strcmp(cmd, "badstart"))
@@ -305,7 +323,7 @@ static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
  * 256-byte page a frame (a page program is short, no erase), with the header written last, so a record whose
  * header reads right holds a whole loop. The newest such record is the loop. A save given up part-way gets a
  * header marked dead, so the records after it can still be found. Slots are erased at start (before the
- * sound) and once the loop is stopped and nothing sounds, all but the one holding the loop.
+ * sound) and once the loop is stopped and nothing sounds, all but the one holding the loop, a sector a frame.
  * Before this the loop was store object OBJ_LOOP: read once, when the ring holds none. */
 #define RING_SECT 5u                     /* sectors a slot */
 #define RING_SLOTS 4u
@@ -336,10 +354,14 @@ static struct {
  * slots. The saved tape is then left alone until a new tape is saved over it: every slot erased first, since an
  * old record's higher number would otherwise win at the next start. (Once ring_step erased all four at once.) */
 static int ring_held;
+/* The slot being erased a sector a frame (ring_erase_some), -1 none, and its next sector */
+static int er_slot = -1;
+static uint32_t er_k;
 #ifdef PLAT_HOST
 static void ring_boot_state(void)
 {
     int i;
+    er_slot = -1;
     ring.cur = ring.to = -1;
     ring.seq = ring.wait = 0;
     for (i = 0; i < (int)RING_SLOTS; i++) ring.fill[i] = RING_FULL;
@@ -405,11 +427,25 @@ static uint32_t ring_scan(int slot, uint32_t *at, uint32_t *len, uint32_t *seq)
     return o;
 }
 
+static int ring_sector_erase(uint32_t off)      /* one 4 KiB sector, timed (ERASE; on the host: expect ring_erases) */
+{
+    uint32_t t0 = plat_ticks24();
+    int rc;
+#ifdef PLAT_HOST
+    host_er_n++;
+    host_er_frame++;
+#endif
+    rc = plat_data_erase(off);
+    erase_us_frame += US(plat_ticks24() - t0);
+    pf.erase_n++;
+    return rc;
+}
+
 static void ring_erase(int slot)
 {
     uint32_t k, at = 0, len = 0, seq = 0;
     for (k = 0; k < RING_SECT; k++)
-        if (plat_data_erase(ring_off(slot) + k * 4096u) != 0)
+        if (ring_sector_erase(ring_off(slot) + k * 4096u) != 0)
             break;
     ring.fill[slot] = ring_scan(slot, &at, &len, &seq);
 }
@@ -419,6 +455,7 @@ static const uint8_t *ring_start(uint32_t *len)
 {
     uint32_t at, n, s, best = 0;
     int i;
+    er_slot = -1;                                /* (an erase cut off by the restart: done below, if anything is left) */
     ring.cur = -1;
     ring.to = -1;                                /* (a save cut off by the restart is not carried on) */
     ring.wait = 0;
@@ -489,16 +526,41 @@ static int ring_go(void)
     return 1;
 }
 
-/* every frame: a page of a save under way, or a save begun, or (stopped and silent) a slot erased */
+/* A slot back to erased, a 4 KiB sector a frame; 1 once the slot is done. Each erase stalls the sound and the input
+ * while it runs (about 17 ms by h1's count, up to 50 by this file's notes), and a whole slot's five in one frame were
+ * a cut long enough to hear and to see in the LEDs, with a key struck meanwhile late (jakehandy/h1#58, #64). A slot
+ * part erased is full until it is done, so no save goes into it. Sector 0, its first header, goes first: a power-off
+ * part way leaves a slot whose scan stops at that blank header (no older record comes back from the sectors after
+ * it), which ring_start erases. Only from ring_step, only in silence. */
+static int ring_erase_some(int slot)
+{
+    uint32_t at = 0, len = 0, seq = 0;
+    if (er_slot != slot) {
+        er_slot = slot;
+        er_k = 0;
+        ring.fill[slot] = RING_FULL;
+    }
+    if (ring_sector_erase(ring_off(slot) + er_k * 4096u) == 0 && ++er_k < RING_SECT)
+        return 0;
+    ring.fill[slot] = ring_scan(slot, &at, &len, &seq);   /* (done, or an erase failed: the slot read again) */
+    er_slot = -1;
+    return 1;
+}
+
+/* every frame: a page of a save under way, or a save begun, or (stopped and silent) a sector of a slot erased */
 static void ring_step(void)
 {
     int i;
     if (ring_held) {
         if (!h1_loop_dirty() || !h1_quiet())
             return;                              /* nothing new to save (or not silent): the old tape stays */
+        if (er_slot >= 0) {
+            (void)ring_erase_some(er_slot);      /* a new tape to save over it: the slots erased first */
+            return;
+        }
         for (i = 0; i < (int)RING_SLOTS; i++)
             if (ring.fill[i] != 0) {
-                ring_erase(i);                   /* a new tape to save over it: the slots erased first */
+                (void)ring_erase_some(i);
                 return;
             }
         ring_held = 0;
@@ -570,12 +632,17 @@ static void ring_step(void)
             }
         }
     }
-    if (h1_quiet())                              /* stopped and silent: one slot back to erased (the sound stalls) */
-        for (i = 0; i < (int)RING_SLOTS; i++)
-            if (ring.fill[i] != 0 && i != ring.cur && i != ring.to) {
-                ring_erase(i);
-                return;
-            }
+    if (!h1_quiet())
+        return;                                  /* stopped and silent: a slot no loop is in back to erased, a sector */
+    if (er_slot >= 0) {                          /* a frame (the sound stalls for each) */
+        (void)ring_erase_some(er_slot);
+        return;
+    }
+    for (i = 0; i < (int)RING_SLOTS; i++)
+        if (ring.fill[i] != 0 && i != ring.cur && i != ring.to) {
+            (void)ring_erase_some(i);
+            return;
+        }
 }
 
 #ifdef PLAT_HOST
@@ -617,6 +684,10 @@ void app_init(void)
         else if ((n = plat_store_load(OBJ_LOOP, blob, sizeof blob)) > 0)
             h1_loop_load(blob, (uint32_t)n);                /* (one saved before the ring: it goes there next) */
     }
+    erase_us_frame = pf.erase_n = 0;                        /* (the start's erases, before the sound, are not a frame's) */
+#ifdef PLAT_HOST
+    host_er_frame = 0;
+#endif
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -681,14 +752,23 @@ void app_frame(void)
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
     /* the state's save erases flash, which stalls the sound for a moment: only when it is silent (h1_quiet: nothing
-     * playing, the tails gone). The loop goes into its ring a page a frame, playing or not (ring_step). */
-    if (h1_state_dirty() && h1_quiet()) {
+     * playing, the tails gone), or at once after SAVE, playing or not (h1_state_asked: one try, so a failing write does
+     * not stall the sound frame after frame). The loop goes into its ring a page a frame, playing or not (ring_step). */
+    if (h1_state_dirty() && (h1_quiet() || h1_state_asked())) {
         uint32_t size;
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)
             h1_state_saved();
     } else
         ring_step();
+    if (erase_us_frame > pf.erase_max)                      /* (ERASE: the most erase time in one frame) */
+        pf.erase_max = erase_us_frame;
+    erase_us_frame = 0;
+#ifdef PLAT_HOST
+    if (host_er_frame > host_er_max)
+        host_er_max = host_er_frame;
+    host_er_frame = 0;
+#endif
 }
 
 void app_input_only(void) { input(); }
@@ -779,9 +859,14 @@ static void say_perf(void)
     d = say_cat(d, end, ". FLASH ");                        /* the tape's flash writes, and the longest (us) */
     d = say_num(d, end, pf.flash_n);
     d = say_cat(d, end, " ");
-    say_num(d, end, pf.flash_max);
+    d = say_num(d, end, pf.flash_max);
+    d = say_cat(d, end, ". ERASE ");                        /* the ring's sector erases, and the most in a frame (us) */
+    d = say_num(d, end, pf.erase_n);
+    d = say_cat(d, end, " ");
+    say_num(d, end, pf.erase_max);
     ann_say(t, 0, ANN_NOW);
     pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = pf.flash_n = pf.flash_max = 0;
+    pf.erase_n = pf.erase_max = 0;
     pf.since_ms = plat_ms();
 }
 

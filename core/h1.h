@@ -113,6 +113,7 @@ const void *h1_state(uint32_t *size);
 int h1_state_load(const void *blob, uint32_t size);   /* 0 = taken */
 int h1_state_dirty(void);
 void h1_state_saved(void);
+int h1_state_asked(void);                        /* 1 once after SAVE: write the state now, silent or not (then 0) */
 /* The loop recorder's loop, as a blob of its own (at most H1_LOOP_MAX bytes: 2,048 events, a note-on
  * and a note-off a note), so that what was recorded is there
  * after a power-off. Load it after h1_state_load (which empties the loop). dirty() is 1 when it changed and no take

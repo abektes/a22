@@ -2949,12 +2949,14 @@ uint32_t eng_sounding_lo(void)
 int eng_seq_leds(uint32_t *out, int page_open, int blink)
 {
     /* 16 white keys in FM-1's 27-key layout (F3..G5): the step pattern, or the tape's notes, with the place
-     * running across. A pattern or tape longer than 16 sixteenths shares a key between ceil(n / 16) of them. */
+     * running across. A pattern or tape longer than 16 sixteenths shares a key between ceil(n / 16) of them.
+     * Only on the SEQ page, or while steps are written (on HOME): elsewhere the keys show the notes sounding, as a
+     * pattern's or a tape's place running over the keys was hard to play against (jakehandy/h1#49). */
     static const uint8_t WKEY[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
     uint32_t m = 0;
     int i, n, per, at = -1, wr = -1;
     if (st.seq[0] == SEQ_STEP) {
-        if (!step_playing && !step_write && !page_open)
+        if (!step_write && !page_open)
             return 0;
         n = step_count();
         per = (n + 15) / 16;
@@ -2967,7 +2969,7 @@ int eng_seq_leds(uint32_t *out, int page_open, int blink)
             wr = imin(step_cursor, n - 1) / per;
     } else {
         int s = loop_state, ne = nlev;
-        if (s != LOOP_REC && s != LOOP_PLAY && s != LOOP_DUB && !(page_open && s == LOOP_IDLE))
+        if (!page_open || (s != LOOP_REC && s != LOOP_PLAY && s != LOOP_DUB && s != LOOP_IDLE))
             return 0;
         n = imax(1, (int)loop_len / 24);
         per = (n + 15) / 16;

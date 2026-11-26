@@ -44,11 +44,13 @@ PERF = re.compile(r"FPS (\d+)\. DRAW (\d+) MAX (\d+).*AUDIO (\d+) MAX (\d+)(?: L
 # (0.6.0 on) the slowest render by stage, in % of the block (seq voices wait mix fx master), and the tape's flash writes
 STAGE = re.compile(r"STAGE (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)")
 FLASH = re.compile(r"FLASH (\d+) (\d+)")
+# (after 0.7.0) the ring's sector erases from frames, and the most erase time in one frame
+ERASE = re.compile(r"ERASE (\d+) (\d+)")
 STAGES = ("seq", "voices", "wait", "mix", "fx", "master")
 
 
 def extra(s):
-    """the STAGE and FLASH parts of a PERF line, as text ("" from a firmware before 0.6.0)"""
+    """the STAGE, FLASH and ERASE parts of a PERF line, as text ("" from a firmware before 0.6.0)"""
     out = []
     m = STAGE.search(s)
     if m:
@@ -56,6 +58,9 @@ def extra(s):
     m = FLASH.search(s)
     if m:
         out.append(f"flash {m.group(1)} writes, max {m.group(2)} us")
+    m = ERASE.search(s)
+    if m:
+        out.append(f"erase {m.group(1)} sectors, max {m.group(2)} us a frame")
     return "  ".join(out)
 
 

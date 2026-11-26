@@ -1,0 +1,49 @@
+# Settings and a playing tape (run by tests/run_tests.sh in fm1-base's host simulator: ./build.sh --host, then
+# app/build/host/a22_host tests/statesave.txt app/build/host). A state save erases a flash sector, which stalls the sound,
+# so on its own it waits until nothing sounds (app.c: h1_quiet). SAVE says when: it saves at once, playing or not.
+wait 600
+listen
+wait 100
+# a take on T1; the tape plays on
+tap REC
+wait 100
+key 12 down
+wait 150
+key 12 up
+wait 300
+tap REC
+wait 1500
+# 1  an engine changed while the tape plays, no SAVE: not written (no stall mid-play), so a power cut loses it
+turn PRESET 1
+wait 200
+said ELECTRIC. RHODES
+wait 5000
+power
+wait 800
+listen
+wait 100
+turn ALGO 1
+wait 300
+said FM-4. BASS
+# (the tape is stopped after the start, so that change is saved in silence)
+wait 3000
+# 2  the tape playing again, an engine changed and SAVE tapped: written at once, and kept through a power cut
+tap PLAY
+wait 1000
+turn PRESET 1
+wait 200
+said ELECTRIC. RHODES
+tap SAVE
+wait 1000
+power
+wait 800
+listen
+wait 100
+turn ALGO 1
+wait 300
+said ELECTRIC. WURLI
+# 3  and the tape itself came through: PLAY plays it
+tap PLAY
+peakreset
+wait 3000
+expect peak_db_min -50
