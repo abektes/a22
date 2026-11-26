@@ -4,8 +4,8 @@
  *   brake       punch 1 on a held note: its zero crossings slow by more than 30%
  *   stutters    punches 2, 3 and 4 at TEMPO 120: the mix's autocorrelation peaks at 1/8, 1/16 and 1/32 (0.25,
  *               0.125, 0.0625 s), and at no shorter lag
- *   lpf         punch 5: open at its start, the mix's brightness down more than 6 dB by the bar's end
- *   hpf         punch 6: open at its start, the mix below 200 Hz down more than 6 dB by the bar's end
+ *   lpf         punch 5: open at its start, the mix's brightness down more than 12 dB by the beat's end, and holding
+ *   hpf         punch 6: open at its start, the mix below 200 Hz down more than 12 dB by the beat's end, and holding
  *   crush       punch 7: the mix differs from the same take without it by more than -30 dB
  *   gate        punch 8 at 120: in each 1/16 (125 ms) the second half under 5% of the first's level
  *   no click    at each punch's start and end no sample steps more than 4x the median step before it; CRUSH,
@@ -964,31 +964,34 @@ int main(void)
         CHECK(rd < 0.5, "stutters: the mix without a punch does not repeat");
     }
 
-    /* lpf: a 1047 Hz sine, brightness against the take without it, at the start and at the bar's end (2 s) */
+    /* lpf: a 1047 Hz sine, brightness against the take without it, at the start, just after the beat's end (500 ms
+     * at 120) and later in the bar */
     taken(&A, t_sweep, PUNCH_LPF << 8 | 84);
     taken(&B, t_sweep, 84);
     {
-        int e = A.on + msx(2000);
+        int e = A.on + msx(500), h = A.on + msx(1500);
         double start = db(slope(&A, A.on + msx(15), A.on + msx(60)), slope(&B, A.on + msx(15), A.on + msx(60)));
-        double end = db(slope(&A, e - msx(200), e), slope(&B, e - msx(200), e));
-        double held = db(slope(&A, e + msx(50), e + msx(250)), slope(&B, e + msx(50), e + msx(250)));
-        printf("lpf: brightness %+.1f dB at the start, %+.1f dB at the bar's end, %+.1f dB after\n", start, end, held);
+        double end = db(slope(&A, e, e + msx(200)), slope(&B, e, e + msx(200)));
+        double held = db(slope(&A, h, h + msx(400)), slope(&B, h, h + msx(400)));
+        printf("lpf: brightness %+.1f dB at the start, %+.1f dB after the beat, %+.1f dB later\n", start, end, held);
         CHECK(start > -1.5, "lpf: open at the punch's start");
-        CHECK(end < -6.0, "lpf: the brightness down more than 6 dB by the bar's end");
-        CHECK(held < -6.0, "lpf: and holding there");
+        CHECK(end < -12.0, "lpf: the brightness down more than 12 dB by the beat's end");
+        CHECK(held < -12.0, "lpf: and holding there");
     }
 
     /* hpf: a 65 Hz sine, the energy under 200 Hz against the take without it */
     taken(&A, t_sweep, PUNCH_HPF << 8 | 36);
     taken(&B, t_sweep, 36);
     {
-        int e = A.on + msx(2000);
+        int e = A.on + msx(500), h = A.on + msx(1500);
         double start = db(low(&A, A.on + msx(15), A.on + msx(60)), low(&B, A.on + msx(15), A.on + msx(60)));
-        double end = db(low(&A, e - msx(200), e), low(&B, e - msx(200), e));
-        printf("hpf: under 200 Hz %+.1f dB at the start, %+.1f dB at the bar's end\n", start, end);
-        CHECK(energy(&B, e - msx(200), e) > 0.0, "hpf: the low note sounds");
+        double end = db(low(&A, e, e + msx(200)), low(&B, e, e + msx(200)));
+        double held = db(low(&A, h, h + msx(400)), low(&B, h, h + msx(400)));
+        printf("hpf: under 200 Hz %+.1f dB at the start, %+.1f dB after the beat, %+.1f dB later\n", start, end, held);
+        CHECK(energy(&B, e, e + msx(200)) > 0.0, "hpf: the low note sounds");
         CHECK(start > -1.5, "hpf: open at the punch's start");
-        CHECK(end < -6.0, "hpf: the energy under 200 Hz down more than 6 dB by the bar's end");
+        CHECK(end < -12.0, "hpf: the energy under 200 Hz down more than 12 dB by the beat's end");
+        CHECK(held < -12.0, "hpf: and holding there");
     }
 
     /* crush: the difference from the take without it */
@@ -1042,7 +1045,7 @@ int main(void)
     }
 
     /* no click: the largest step at each punch's start and end against the median step of the take before it,
-     * held 300 ms (BRAKE still sounding, the sweeps near open) and 1.2 s (BRAKE silent, the sweeps far in) */
+     * held 300 ms (BRAKE still sounding, the sweeps part way) and 1.2 s (BRAKE silent, the sweeps holding) */
     for (p = 1; p <= 8; p++) {
         static double steps[MAXS];
         static const int HOLD[2] = {300, 1200};

@@ -64,8 +64,8 @@ track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix
 The master bus has its own three-band EQ and drive (the MIX page's last subpage).
 
 **PUNCH.** Hold FX and one of the eight white keys from the lowest F, and a punch hits the whole mix for as long as
-you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (opens from a dull sound over
-a bar), 6 HPF (the same from the bottom), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
+you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (closes from bright to dull over
+a beat, then holds), 6 HPF (thins from the bottom up over a beat), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
 replaces the first, and the key holds its punch even after FX is let go. A strip along the bottom of the screen
 shows the eight, the one held lit, and the screen reader says PUNCH (once FX is held, not on a tap), then the punch's name. FX tapped alone opens the
 FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is

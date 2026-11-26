@@ -3,6 +3,15 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+Not released yet.
+
+**PUNCH**
+- LPF and HPF sweep over a beat of TEMPO instead of a bar, so they bite as soon as the key is down: at 118 BPM the LPF
+  is at 250 Hz in half a second (it was still above 2 kHz a second in). The README's LPF said it opened from dull; it
+  closes from bright.
+
 ## 0.7.0
 
 Identity `FM-1_4122000700`. Released 2026-11-26. MIDI out for a DAW, a tape that follows the key (KEY and LANE), and
