@@ -3,7 +3,21 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.7.1
+
+Identity `FM-1_4122000701`. Released 2026-11-26. Fixes from h1's issues that apply to A22 too: SAVE while the music
+plays, the tape's flash made ready a sector at a time, and the white keys left to the player off the SEQ page. Run on
+one FM-1 (CI's test package of the same code, 4f839c3), no crash recorded:
+- the image is 554,928 B of the 581,564 B slot; with nothing playing 11% of the audio time and 63 frames a second, as
+  0.7.0;
+- with a take playing, the white keys lit only the notes sounding on HOME, and the tape's place on the SEQ page;
+- SAVE pressed with the tape playing, after the engine was changed: one audio half late in that moment (none before or
+  after). Switched off and on with the tape still playing, the FM-1 came back on that engine, and the tape played;
+- the ring moved to its next slot over dense overdubs and, stopped, erased the old one: 5 sectors, at most 18.6 ms of
+  erase in one frame (one sector; five in one frame before).
+
+Settings and the tape saved by 0.1.0 to 0.7.0 load as before: the state is still version 5 and the tape's format is
+unchanged.
 
 **Panel**
 - The white keys show the tape or the step pattern, with its place running across, only on the SEQ page (and while
