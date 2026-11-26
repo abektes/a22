@@ -38,12 +38,18 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
 
 ## 1. Install from stock V15
 
-- [ ] Start from official V15 (the Hub's **Back to official V15** puts it there).
-- [ ] Install `a22.fwsc`: `python3 base/tools/fm1_install.py a22.fwsc`. It finishes without an error
+- [x] Start from official V15 (the Hub's **Back to official V15** puts it there).
+      *2026-11-23: M-VAVE's published `FM-1_015.fwsc` (SHA-256 `db1642b2…`, the file the Hub checks),
+      installed with `fm1_install.py` because this browser could not grant Web MIDI. `--info` answered
+      `FM-1_015` and the USB name was `FM-1`.*
+- [x] Install `a22.fwsc`: `python3 base/tools/fm1_install.py a22.fwsc`. It finishes without an error
       and the FM-1 restarts into A22 (FM-4 comes up).
-- [ ] `python3 base/tools/fm1_install.py --info` answers `FM-1_412200`.
-- [ ] The computer shows the USB device as `A22 FM-1` (macOS may keep showing the MIDI port under a
-      name it saw before, such as `Felucca`).
+      *2026-11-23: the released `a22-0.4.0.fwsc` (SHA-256 `96eb3b58…`) from that V15. The installer
+      finished the write; the screen (FM-4) was not looked at.*
+- [x] `python3 base/tools/fm1_install.py --info` answers `FM-1_412200`.
+      *2026-11-23: the release answers `FM-1_4122000400`.*
+- [x] The computer shows the USB device as `A22 FM-1` (macOS may keep showing the MIDI port under a
+      name it saw before, such as `Felucca`). *2026-11-23: USB name `A22 FM-1`, MIDI port still `Felucca`.*
 
 ## 2. It works
 
@@ -117,8 +123,9 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
 
 ## 3. Leave A22 again
 
-- [ ] From A22, install official V15 (the Hub's **Back to official V15**). The FM-1 runs stock
-      again and still works.
+- [x] From A22, install official V15 (the Hub's **Back to official V15**). The FM-1 runs stock
+      again and still works. *2026-11-23: from `FM-1_412200` to `FM-1_015` (USB name `FM-1`).
+      Identity and USB name checked; not listened to.*
 - [ ] From A22, install another custom firmware from the Hub. It starts.
 
 ## 4. Install from another firmware
@@ -159,5 +166,8 @@ so A22 and its update loader, accept both (`base/tests/flash_ok_test.c`; `firmwa
       (identity `FM-1_4122XXYYZZ`: v0.1.0 is `FM-1_4122000100`), tests, attests and publishes the
       release. *v0.1.0: https://github.com/abektes/a22/releases/tag/v0.1.0*
 - [x] Install the released `a22-X.Y.Z.fwsc` once on the FM-1, as a last check of the exact file.
-- [ ] Submit at [thefirmwarehub.com/submit](https://thefirmwarehub.com/submit/) (only once sections 1,
+- [x] Submit at [thefirmwarehub.com/submit](https://thefirmwarehub.com/submit/) (only once sections 1,
       3 and 4 are done: the Hub asks how it was tested, from which firmware and back to which).
+      *2026-11-23: sent as Ahmet Bektes. The Hub's check was all green (source, licence, fmhub.json,
+      sounds, 0.4.0, `FM-1_4122000400`, Felucca loader, both flash chips) and the card went live.
+      Leaving A22 for another custom firmware on the Hub was not part of this pass.*
