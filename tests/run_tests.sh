@@ -5,6 +5,12 @@
 #   a22_test   two cores bit-exact on all 112 presets, MONO mono, the tape saved and loaded from odd
 #              addresses, snapshots, each algorithm's knobs, varispeed, Riff and Shake, a stress run
 #   basics     the limiter on every algorithm, velocity, WAVE's SPREAD, the tape through a power cycle, MIDI out
+#   midiout    MIDI out as a DAW records it: each track on its own channel, a note's off on its on's channel,
+#              knob and tape automation CCs, HUSH on all four channels
+#   keyfollow  KEY FOLLOW's data: recorded notes carry GLO's key (an off its on's), the tape blob's header bit, junk
+#              keys dropped on load, the step pattern's key and each track's KEY bit in the saved state
+#   miditiers  the device's MIDI out queue: what still goes when it is nearly full (app/midi_tiers.h)
+#   keymap     the key mapping (core/keymap.c): a note in one key played in another, by scale steps, clamped
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
@@ -22,6 +28,11 @@
 #              changes, varispeed reaches the track in hand, the white keys show 64 steps and the tape
 #   tape       the tape's edges: SNAP keeps a note's length, mute, BARS turned down while playing, no REC in REV,
 #              CUT and clearing one track let go of the right notes, a take's first note on its first pass
+#   punch      PUNCH's eight effects on the mix (EV_PUNCH): BRAKE slows, the stutters repeat at 1/8, 1/16 and 1/32,
+#              LPF and HPF sweep over a bar, CRUSH, GATE chops each 1/16, no clicks, TRICK back after a punch
+#   lane       the key lane (EV_LANE): entries one a bar, inherited field by field, kept in the tape's tail through a
+#              save, CUT, PASTE and a track's clear, gone with CLEAR ALL; KEY-on tracks follow bar by bar (I-IV-V-vi),
+#              recording over a DEG stores the note down, the live keys and chord SCALE snap to it, STEP ignores it
 #   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
@@ -44,6 +55,14 @@ out=app/build/host
 "$out/a22_host" tests/looppower.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
 "$out/a22_host" tests/dice.txt "$out"
+# MIDI out to USB as a DAW records it: clock, Start and Stop, T2 on channel 2, HUSH on all four channels
+"$out/a22_host" tests/midiclock.txt "$out"
+# KEY FOLLOW: MIX -> KEY turns T1 on (said), a take on T1 plays back two semitones up after ROOT goes up 2
+"$out/a22_host" tests/keyfollow.txt "$out"
+# PUNCH: hold FX and a snapshot key (said PUNCH, then the name; no note, no FX page), a second key replaces the first
+"$out/a22_host" tests/punch.txt "$out"
+# LANE: SEQ, SELECT twice is the LANE subpage (said), BAR 2, ROOT D, and a field turned past its first value is said NONE
+"$out/a22_host" tests/lane.txt "$out"
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host
@@ -55,6 +74,14 @@ $CC -std=c99 $SAN core/*.c tests/a22_test.c -o build/a22test -lm -lpthread
 build/a22test
 $CC -std=c99 $SAN core/*.c tests/basics.c -o build/a22basics -lm
 build/a22basics
+$CC -std=c99 $SAN core/*.c tests/midiout.c -o build/a22midiout -lm
+build/a22midiout
+$CC -std=c99 $SAN core/*.c tests/keyfollow.c -o build/a22keyfollow -lm
+build/a22keyfollow
+$CC -std=c99 $SAN tests/miditiers.c -o build/a22miditiers
+build/a22miditiers
+$CC -std=c99 $SAN tests/keymap.c core/keymap.c -o build/a22keymap
+build/a22keymap
 $CC -std=c99 $SAN core/*.c tests/mixer.c -o build/a22mixer -lm
 build/a22mixer
 $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
@@ -75,6 +102,10 @@ $CC -std=c99 $SAN core/*.c tests/tracks.c -o build/a22tracks -lm
 build/a22tracks
 $CC -std=c99 $SAN core/*.c tests/tape.c -o build/a22tape -lm
 build/a22tape
+$CC -std=c99 $SAN core/*.c tests/punch.c -o build/a22punch -lm
+build/a22punch
+$CC -std=c99 $SAN core/*.c tests/lane.c -o build/a22lane -lm
+build/a22lane
 $CC -std=c99 $SAN core/*.c tests/overload.c -o build/a22overload -lm
 build/a22overload
 # (25 minutes of DELAY: without the checkers, or it takes most of an hour)

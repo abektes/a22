@@ -1,0 +1,81 @@
+# MIDI out as a DAW records it, through the device app to USB, in fm1-base's host simulator.
+#   ./build.sh --host, then app/build/host/a22_host tests/midiclock.txt app/build/host
+# (the core's side, channel by channel and clock by clock: tests/midiout.c)
+# Clock runs from the start at TEMPO (118): 47.2 a second, about 123 in 2.6 s
+wait 600
+wait 2000
+expect clocks_out >110
+expect clocks_out <135
+out
+# REC arms, the first key starts the take: Start
+tap REC
+wait 100
+key 7 down
+wait 150
+key 7 up
+wait 100
+expect_out USB FA 00 00
+expect_out USB 90 3C 7F
+expect_out USB 80 3C 00
+tap REC
+wait 300
+out
+# PLAY stops the tape: Stop
+tap PLAY
+wait 100
+expect_out USB FC 00 00
+out
+# T2's keys on channel 2
+press EDIT
+wait 60
+turn PRESET 1
+wait 60
+release EDIT
+wait 100
+key 7 down
+wait 150
+key 7 up
+wait 100
+expect_out USB 91 3C 7F
+expect_out USB 81 3C 00
+expect_no_out USB 90 3C 7F
+out
+# HUSH: CC 123 on channels 1 to 4
+press HOME
+wait 1000
+release HOME
+wait 100
+expect_out USB B0 7B 00
+expect_out USB B1 7B 00
+expect_out USB B2 7B 00
+expect_out USB B3 7B 00
+out
+# The tape playing, the port turned host for a keyboard: it gets no clock, Start or Stop
+tap PLAY
+wait 200
+out
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+expect usbh >0
+usbh plug Keys_49 both
+wait 400
+out
+wait 1000
+expect_no_out USBH F8 00 00
+expect_no_out USBH FA 00 00
+# back to the computer while the tape plays: Stop and Start for it when the tape comes round to IN
+press OCT-
+press OCT+
+wait 1300
+release OCT+
+release OCT-
+wait 300
+expect usbh 0
+out
+wait 9000
+expect_out USB FC 00 00
+expect_out USB FA 00 00

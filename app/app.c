@@ -2,6 +2,7 @@
  * passes the panel in, and the sound, the lights and the changed parts of the picture out. */
 #include "app.h"
 #include "../core/h1.h"
+#include "midi_tiers.h"
 
 /* ---- the screen: 8-bit ink through the palette into RGB565, band by band -------------------- */
 #define BAND_ROWS 20                     /* the core never asks for a taller rectangle */
@@ -181,6 +182,12 @@ static void usb_tell(const char *s)             /* on the screen, and to the rea
 static void usb_news(void)
 {
     static int host_was;
+    static uint32_t link_was;
+    if (plat_midi_out_link() != link_was) {      /* a new USB connection: a DAW that joins while the tape plays gets
+                                                  * Stop and Start when it next comes round (h1_midi_resync) */
+        link_was = plat_midi_out_link();
+        h1_midi_resync();
+    }
     if (h1_usb_host() != host_was) {             /* (the core's own toast says it on the screen) */
         host_was = h1_usb_host();
         if (ann_on())
@@ -277,17 +284,14 @@ static int core2_run(void (*fn)(uint32_t), uint32_t arg) { return plat_cpu2_on()
 static int core2_wait(void) { return plat_cpu2_wait(); }
 #endif
 
-/* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes from the render,
- * its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and nothing
- * is queued. A note-on or a knob goes only while there is room to spare, so the queue never fills with them
- * and leaves a note-off out (a note the computer would then hold for ever). */
-#define MIDI_SPARE 16u
+/* MIDI out, to the computer over USB (the FM-1's TRS jack is an input only): the core's notes and clock from the
+ * render, its knobs from the main loop; plat_midi_send takes both. With nobody listening there is no room, and
+ * nothing is queued. What may be left out when the queue is nearly full goes in tiers: midi_tiers.h.
+ * (A one-byte real-time message, 0xF8 and up, packs as code index 0xF, which status >> 4 gives.) */
 static void midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     uint32_t pkt = (uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24;
-    uint32_t room = plat_midi_out_room(TO_USB);
-    int off = (status & 0xF0u) == 0x80u || (status == 0xB0u && d1 == 123u);
-    if (off ? room > 0u : room > MIDI_SPARE)
+    if (plat_midi_out_room(TO_USB) > midi_out_need(status, d1))
         plat_midi_send(pkt, TO_USB);
 }
 
@@ -783,7 +787,8 @@ static void say_perf(void)
 
 static void speak(void)
 {
-    static int inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
+    static uint32_t fx_at;                                  /* when FX went down */
+    static int fx_said, fx_was, punch_was, inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
@@ -791,6 +796,18 @@ static void speak(void)
         int where = ann_where();
         if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
             ann_say(lay ? "LAYERS ON" : "LAYERS OFF", 0, ANN_NOW);
+        if (h1_fx_held()) {                                 /* FX held: the punch strip is up. Said once it is a
+                                                             * hold (a tap opens the FX page and says only that), and
+                                                             * not when a punch already named itself */
+            if (!fx_was) { fx_at = plat_ms(); fx_said = 0; }
+            if (h1_punch()) fx_said = 1;
+            else if (!fx_said && plat_ms() - fx_at >= 400u) {
+                ann_say("PUNCH", 0, ANN_NOW);
+                fx_said = 1;
+            }
+        }
+        if (h1_punch() && h1_punch() != punch_was)          /* a punch starts: its name */
+            ann_say(h1_punch_name(h1_punch()), 0, ANN_NOW);
         if (ask && !ask_was)                                /* REC held: the whole tape, asked first */
             ann_say("CLEAR ALL? TAP REC", 0, ANN_NOW);
         if (answer)                                         /* and its answer (no strcmp: the device has no libc) */
@@ -815,18 +832,27 @@ static void speak(void)
             ann_say(t, 0, quiet ? 0 : ANN_NOW);
             quiet = 1;
         }
+        /* what changed is said in one go, SELECT's (a new subpage: its name) first, then the columns that
+         * changed with it. ann_later keeps one thing, the newest, so they are put together here */
+        d = t;
+        t[0] = 0;
         for (k = 0; k < H1_NENC; k++) {
             const char *name = 0, *text = 0;
             int v = h1_control(k, 0, 0, &name, &text);
             if (v != val_was[k] && !quiet && k != H1_ENC_PRESET && k != H1_ENC_ALGO && name && name[0]) {
-                d = say_cat(t, end, name);
+                if (d != t)
+                    d = say_cat(d, end, ". ");
+                d = say_cat(d, end, name);
                 d = say_cat(d, end, " ");
-                say_cat(d, end, text);
-                ann_later(t, ANN_NOW, 250u, plat_ms());
+                d = say_cat(d, end, text[0] == '-' && !text[1] ? "NONE" : text);   /* (the LANE page's dash) */
             }
             val_was[k] = v;
         }
+        if (d != t)
+            ann_later(t, ANN_NOW, 250u, plat_ms());
     }
+    fx_was = h1_fx_held();
+    punch_was = h1_punch();
     inst_was = inst;
     algo_was = algo;
     page_was = page;

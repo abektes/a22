@@ -63,6 +63,17 @@ track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix
 
 The master bus has its own three-band EQ and drive (the MIX page's last subpage).
 
+**PUNCH.** Hold FX and one of the eight white keys from the lowest F, and a punch hits the whole mix for as long as
+you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (opens from a dull sound over
+a bar), 6 HPF (the same from the bottom), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
+replaces the first, and the key holds its punch even after FX is let go. A strip along the bottom of the screen
+shows the eight, the one held lit, and the screen reader says PUNCH (once FX is held, not on a tap), then the punch's name. FX tapped alone opens the
+FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is
+recorded on the track in hand and plays back on the whole mix (not on a muted track); CUT, PASTE and clear treat
+it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A punch you hold by hand wins
+over the tape's, and a punch replaces TRICK while it is held: TRICK's setting is back when the punch ends. A punch
+still held when a take ends is ended there. Punches do not go out over MIDI. A tape with punches loaded into 0.6.0 plays without them.
+
 ## Pages
 
 <p>
@@ -74,12 +85,12 @@ Each page's four columns are the four knobs. SELECT steps through a page's subpa
 | Page | Button | Columns |
 |---|---|---|
 | FX | FX | The effect's four knobs |
-| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE |
+| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE; KEY: each track's tape follows the key, OFF or ON (DRUM on a drum track) |
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
 | SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE |
-| TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH |
+| TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH; LANE: BAR, ROOT, SCALE, DEG |
 
 ## The tape
 
@@ -99,10 +110,40 @@ When it is full the screen says **TAPE FULL**.
   it is answered: tap REC within three seconds of letting go to clear the whole tape. Anything else (another
   button, a key, an encoder, or waiting) keeps it.
 
+**KEY.** A track can play its tape in the key you have set. Open MIX (SEL), then SELECT four times to the fifth
+subpage, KEY, and turn a track's knob to ON (it is OFF to begin with). Each note on that track sounds in GLO's
+KEYS ROOT and SCALE, whatever they are now, from the key it was recorded in: ROOT up 2 and the track plays two
+semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its place in the scale; between
+others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
+Drum engines (KIT, SKINS) never move, and say DRUM; a track switched to one stops following, and follows again on a
+melodic engine. A tape recorded on 0.6.0 or earlier plays as recorded,
+and so does a track with KEY off, except that a note recorded over a DEG bar on a KEY track is stored moved down (see
+LANE), so on 0.6.0, or after KEY is turned off, it plays moved down. MIDI out sends the notes as they sound.
+
+**LANE.** The key can change from bar to bar. With the tape in view, tap SEQ, then SELECT twice to the third subpage,
+LANE: BAR (K1) picks a bar, and ROOT (K2), SCALE (K3) and DEG (K4) set that bar's entry. Turn a field below its first
+value for "-" (the screen reader says NONE): all three at "-" is no entry. DEG is the chord degree: IV in C major
+plays F, A, C where the tape has C, E, G (DEG does nothing in CHROM). Each field holds until a later entry sets it
+again, one field at a time: bar 1 SCALE MINOR and bar 3 ROOT D plays D minor from bar 3. Fields no entry has set
+come from GLO's ROOT and SCALE, and DEG I; the lane does not wrap. Only tracks with KEY on (above) follow the lane, and
+drums never do. A change applies from the first tick of its bar, and notes already sounding keep their pitch. The
+cells show a bar each, an entry's bars bright, the bars it carries over dim, and a minor degree's numeral underlined;
+the DECK subpage marks entry bars, and while the tape plays over a lane its header says the key in force, for
+example D MAJ . IV. Live keys and chord memory's SCALE mode snap to the root and scale in force while the tape
+plays (not to DEG), and to GLO's key when it is stopped; STEP mode ignores the lane. Recording over a bar with a
+DEG on a KEY track stores the note moved back down, so it plays as played and follows later changes; a note that is
+not in the bar's scale (from MIDI in, or a chord) is stored as played instead, and does not follow. The lane
+belongs to the whole tape: CUT, PASTE and holding REC leave it, CLEAR ALL clears it, and turning BARS down keeps
+entries past the new end. A tape saved with a lane loads on 0.6.0 without the lane and without its punches (it drops
+what it does not know), and its notes play as recorded.
+
 The tape and every setting are saved by themselves and come back after a restart.
 
 **STEP.** Hold SEQ to swap the tape for the step sequencer. REC then turns step writing on and off, PLAY
-runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest.
+runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest. The pattern has one key, the
+ROOT and SCALE when its first step is written; clearing the whole pattern clears it. A track with KEY on plays
+the pattern in the key it has now, as it does the tape. A step written on a track with KEY off while GLO's key differs
+from the pattern's is stored as played, and turning KEY on later maps it from the pattern's key.
 
 ## Riff and Shake
 
@@ -143,7 +184,8 @@ MONO is monophonic and plays the chord's root alone. A chord takes a voice a not
 | KNOB 1–4 | Home screen: the engine's four knobs. On a page: its four columns. On the MIX volume subpage with EDIT held: mute T1 to T4 |
 | SELECT | Home screen: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
 | MASTER | Volume of everything. **Hold EDIT:** the track's volume |
-| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back |
+| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back. FX opens its page when you let go, unless you played a punch |
+| hold FX + white key 1–8 | A punch on the whole mix while the key is held (see Effects). The keys are the eight white keys from the lowest F; other keys play notes. With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before |
 | EDIT | Pins the knob strip on the home screen. Writing steps or Riff: a rest |
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
@@ -172,8 +214,21 @@ through it.
 **MIDI in,** over USB or the TRS jack, on any channel: notes play the engine in hand at their velocity
 (softer is quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
 
-**MIDI out,** over USB only, on channel 1: the notes of the keys, the arpeggiator and the tape, and
-CC 20 to 23 as the knobs turn. A note that came in over MIDI isn't sent back out.
+**MIDI out,** over USB only, each track on its own channel (T1 on 1, T2 on 2, T3 on 3, T4 on 4), so a DAW
+records the four tracks apart:
+- the notes of the tape and the step sequencer on their track's channel, and those of the keys, chords and the
+  arpeggiator on the channel of the track in hand (a note ends on the channel it started on);
+- CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back (not those that came in
+  over MIDI);
+- MIDI clock, 24 a beat at TEMPO, all the time, with Start when the tape or the step pattern starts (PLAY, or
+  the first key of a take), sent before the note that starts it, and Stop when it stops. A DAW set to follow
+  external MIDI clock can take A22's tempo, Start and Stop from it. When the tape jumps back to IN while it plays
+  (BARS turned down, IN or OUT moved past it), it sends Stop and Start again; a computer that connects while the
+  tape plays gets Stop and Start when the tape next comes round to IN;
+- CC 123 on channels 1 to 4 when HOME is held.
+
+A note that came in over MIDI isn't sent back out. A synth played from A22's MIDI out hears T2 to T4 only if it
+listens on every channel (omni). A keyboard on USB host gets no clock, Start or Stop.
 
 **A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB port
 turns host for a USB-MIDI keyboard. The keyboard needs its own power or a powered hub. Hold both again to

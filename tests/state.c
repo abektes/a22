@@ -83,6 +83,8 @@ static void version4(void)
               zero(st.knob[NINST], sizeof st.knob[0] * (NSLOT - NINST)), "the slots no engine has yet are empty");
         CHECK(engines_new_from(12), "the engines version 4 did not have (CYCLE, SKINS) come up as new");
         CHECK(st.nfx == NFX && st.version == H1_VERSION, "it is version 5 now, with its effects counted");
+        CHECK(st.rsv[0] == 0 && st.rsv[1] == 0 && st.trk[0].rsv == 0 && st.trk[1].rsv == 0 &&
+              st.trk[2].rsv == 0 && st.trk[3].rsv == 0, "no step key, and no track follows a key");
     }
     CHECK(h1_instrument() == 10 && h1_algorithm() == 10 % 8, "the engine and algorithm in hand, as saved");
 }

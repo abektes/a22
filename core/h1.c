@@ -355,6 +355,7 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         if (tr->send > 100) tr->send = 35;
         tr->mute &= 3u;
         tr->has_snap &= 1u;
+        tr->rsv &= 1u;                         /* (bit 0: the track follows the key) */
         for (j = 0; j < 4; j++) {
             if (tr->knob[j] > 100) tr->knob[j] = 50;
             if (tr->env[j] > 100) tr->env[j] = 50;
@@ -390,7 +391,9 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         }
     st.ninst = NINST;
     st.nfx = NFX;
-    st.rsv[0] = st.rsv[1] = 0;
+    /* rsv[0] is the step pattern's key: a valid key (the valid bit, a root of 0..11) or none */
+    if (!(st.rsv[0] & 0x80u) || (st.rsv[0] & 15u) > 11u) st.rsv[0] = 0;
+    st.rsv[1] = 0;
     eng_init(0);
     ui_init();
     return 0;
@@ -443,3 +446,4 @@ int h1_quiet(void) { return eng_quiet(); }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && !eng_loop_taking(); }
 void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2)) { eng_midi_fn = fn; }
+void h1_midi_resync(void) { eng_midi_resync(); }

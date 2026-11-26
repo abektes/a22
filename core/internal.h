@@ -111,6 +111,8 @@ enum { ARP_OFF = 0, ARP_RIFF, ARP_SHAKE, ARP_UP, ARP_DOWN, ARP_UPDN, ARP_RAND, A
 enum { FX_PLATE = 0, FX_DELAY, FX_FILTER, FX_SHIFT, FX_CHORUS, FX_TANK, FX_LOFI, FX_THUMP };
 enum { TAPE_SPD_HALF = 0, TAPE_SPD_1X, TAPE_SPD_2X, TAPE_SPD_REV };
 enum { TRICK_OFF = 0, TRICK_BRAKE, TRICK_STUT8, TRICK_STUT16, TRICK_STUT32 };
+#define TRICK_SMOOTH 16          /* with fx_master_block's trick: a punch's change, faded over 10 ms */
+enum { PUNCH_LPF = 5, PUNCH_HPF, PUNCH_CRUSH, PUNCH_GATE };   /* punches 1-4 are TRICK's own */
 enum { CLICK_REC = 0, CLICK_ON, CLICK_OFF };
 enum { CHORD_OFF = 0, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE };
 #define CHORD_MAX 6              /* notes a chord can have */
@@ -278,6 +280,7 @@ extern const PageDef pages[NPAGE];
 const ParamDef *page_param(int page, int i);
 uint8_t *page_value(int page, int i);
 int ui_subpage(void);
+const char *ui_lane_head(void);          /* the deck's header key while the tape plays over a lane ("D MAJ . IV"), else "" */
 
 /* ---- engine (synth.c) ----------------------------------------------------------------- */
 enum {
@@ -293,7 +296,10 @@ enum {
     EV_RIFF_REST,             /* add rest to riff sequence */
     EV_SNAP_SAVE,                /* save patch to snapshot 0..7 */
     EV_SNAP_LOAD,                /* load patch from snapshot 0..7 */
-    EV_MIDI_OFF                  /* MIDI's all notes off (CC 123): the notes MIDI plays end, the tape plays on */
+    EV_MIDI_OFF,                 /* MIDI's all notes off (CC 123): the notes MIDI plays end, the tape plays on */
+    EV_PUNCH,                    /* a punch 1-8 starts, 0 ends it; bit 23: the tape's (the hand's wins) */
+    EV_LANE                      /* the key lane: a = the bar 0-31, bits 16-17 the field (0 ROOT, 1 SCALE, 2 DEG),
+                                  * bits 18-22 its value (ROOT 0-11, SCALE 0-7, DEG 0-6; 31: none) (eng_post_lane) */
 };
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 
@@ -319,6 +325,13 @@ void eng_init(uint32_t sample_rate);
 void eng_post(int type, int a);
 void eng_post_note(int on, int note, int vel, int from_midi);
 void eng_post_auto(int knob, int val);
+void eng_post_auto_in(int knob, int val);  /* the same, set over MIDI in: on the tape, never sent back out */
+void eng_post_lane(int bar, int field, int value);   /* EV_LANE: a lane entry's ROOT, SCALE or DEG (31: none) */
+int eng_lane_get(int bar, int field);    /* the entry starting at BAR: its ROOT, SCALE or DEG, or -1 for none */
+uint8_t eng_key_at(int bar);             /* the key in force at BAR (GLO's where the lane has none) */
+int eng_deg_at(int bar);                 /* the DEG in force at BAR: 0 (I) to 6 */
+int eng_punch(void);                     /* the punch playing, 0-8: the hand's if held, else the tape's */
+void eng_midi_resync(void);              /* a new listener on MIDI out: Stop and Start at the next loop start */
 extern void (*eng_midi_fn)(uint8_t status, uint8_t d1, uint8_t d2);
 
 const uint8_t *eng_loop_blob(uint32_t *size);
@@ -350,6 +363,21 @@ extern Voice voices[NVOICE];
 extern uint32_t eng_rng;
 int scale_snap(int note);
 
+/* keymap.c: the scales' notes (bit n = n semitones above the root), and a note moved from one key to another. */
+#define KEY_VALID 0x80u
+extern const uint16_t SCALE_MASK[8];
+uint8_t key_byte(int root, int scale);
+int key_root(uint8_t k);
+int key_scale(uint8_t k);
+int key_map(int note, uint8_t from, uint8_t to);
+int key_steps(int note, uint8_t key, int steps);
+uint8_t eng_key_glo(void);                      /* GLO's ROOT and SCALE as a key byte (synth.c) */
+uint8_t eng_key_play(void);                     /* the key in force at the tape's playhead; GLO's in STEP (synth.c) */
+uint8_t eng_key_live(void);                     /* the keys' key: eng_key_play's while the tape plays, else GLO's */
+int eng_follows(int trk, int part);             /* KEY on for the track, and not a drum part (synth.c) */
+#define INST_KIT 8                              /* the drum engines: their notes never follow the key */
+#define INST_SKINS 13
+
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];
 extern const char *const FX_KNOBS[NFX][4];
@@ -358,6 +386,8 @@ void fx_init(f32 sr);
 void fx_reset(void);
 void fx_send_block(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, int fx_type, const uint8_t p[4], f32 bpm, int fx_on);
 void fx_master_block(f32 *l, f32 *r, const uint8_t master[4], int trick, f32 bpm);
+void fx_punch_restart(void);                                             /* a punch started: the effects begin again */
+void fx_punch_block(f32 *l, f32 *r, int punch, f32 bpm, f32 phase16);   /* punches 5-8, after TRICK */
 void fx_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void));
 
 /* UI (ui.c) */

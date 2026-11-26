@@ -25,20 +25,22 @@
  * drawn) leaves the panel showing exactly that frame. */
 #include <pthread.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../core/internal.h"
 #include "../core/h1.h"
 
 /* how many algorithms an instrument has (eight, LAVA nine): the names it gives */
 static int nalgos(int inst) { int a = 0; while (a < 16 && *h1_algo_name(inst, a)) a++; return a; }
 
-static uint32_t rng_s = 1;
+static uint32_t fz_s = 1;
 static uint32_t rnd(void)
 {
-    rng_s ^= rng_s << 13;
-    rng_s ^= rng_s >> 17;
-    rng_s ^= rng_s << 5;
-    return rng_s;
+    fz_s ^= fz_s << 13;
+    fz_s ^= fz_s >> 17;
+    fz_s ^= fz_s << 5;
+    return fz_s;
 }
 static int below(int n) { return (int)(rnd() % (uint32_t)n); }
 
@@ -58,12 +60,15 @@ static void blit(int x, int y, int w, int h)
 
 extern uint32_t h1_fuzz_nan;                 /* core/synth.c, in this build: samples that were not numbers */
 
-/* MIDI out (h1_midi_out): every message a well-formed one on channel 1, notes and CC 20-23 and 123 only */
+/* MIDI out (h1_midi_out): every message a well-formed one on channels 1 to 4 (a track each), notes and CC 20-23
+ * and 123 only; or clock, Start or Stop, with nothing after them */
 static volatile uint32_t midi_outs;
 static void midi_out_check(uint8_t status, uint8_t d1, uint8_t d2)
 {
-    int ok = d1 < 128 && d2 < 128 && ((status == 0x90 && d2 >= 1) || (status == 0x80 && d2 == 0) ||
-             (status == 0xB0 && ((d1 >= 20 && d1 <= 23) || (d1 == 123 && d2 == 0))));
+    int type = status & 0xF0, ch = status & 0x0F;
+    int ok = (status == 0xF8 || status == 0xFA || status == 0xFC) ? d1 == 0 && d2 == 0 :
+             ch < 4 && d1 < 128 && d2 < 128 && ((type == 0x90 && d2 >= 1) || (type == 0x80 && d2 == 0) ||
+             (type == 0xB0 && ((d1 >= 20 && d1 <= 23) || (d1 == 123 && d2 == 0))));
     if (!ok)
         die("a MIDI message out that is not one", status, d1, d2, 0);
     midi_outs++;
@@ -153,7 +158,20 @@ static void frame(uint32_t ms, int with_sound)
 static void poke(int with_sound)
 {
     int r = below(100), k;
-    if (r < 30) {                                            /* a key */
+    if (r < 4) {                                             /* FX held and a snapshot key (a punch), or both let go */
+        static const uint8_t SK[8] = {0, 2, 4, 6, 7, 9, 11, 12};
+        if (!(btns_down >> H1_BTN_FX & 1u)) {
+            btns_down |= 1u << H1_BTN_FX;
+            h1_button(H1_BTN_FX, 1);
+        }
+        k = SK[below(8)];
+        keys_down ^= 1u << k;
+        h1_key(k, (int)(keys_down >> k & 1u));
+        if (below(3) == 0) {
+            btns_down &= ~(1u << H1_BTN_FX);
+            h1_button(H1_BTN_FX, 0);
+        }
+    } else if (r < 30) {                                     /* a key */
         k = below(H1_NKEYS);
         keys_down ^= 1u << k;
         h1_key(k, (int)(keys_down >> k & 1u));
@@ -299,6 +317,15 @@ static void part_state(int rounds)
             for (i = 5; i < size; i++) odd[1 + i] = (uint8_t)rnd();          /* all of it */
         else
             for (k = 0; k < 40; k++) odd[1 + 5 + below((int)size - 5)] = (uint8_t)rnd();   /* a few bytes */
+        {                                                    /* the keys: a step pattern's, a track's KEY bit (any bits
+                                                              * past bit 0 are cleared, an invalid key is none) */
+            static const uint8_t KB[] = {0, 0x80, 0x8C, 0xA5, 0xFF, 0x25, 0x71, 0xC3};
+            odd[1 + offsetof(H1State, rsv)] = below(2) ? KB[below(8)] : (uint8_t)rnd();
+            odd[1 + offsetof(H1State, rsv) + 1] = below(2) ? 0 : (uint8_t)rnd();
+            for (k = 0; k < NTRACK; k++)
+                odd[1 + offsetof(H1State, trk) + (size_t)k * sizeof(Track) + offsetof(Track, rsv)] =
+                    below(2) ? (uint8_t)below(2) : (uint8_t)rnd();
+        }
         if (n % 7 == 3 && n % 5 != 4) {                      /* a version 4 state (0.1.0 to 0.4.0: 2648 bytes), any
                                                               * bytes: taken, a table at a time (core/h1.c) */
             odd[1 + 4] = 4;
@@ -325,6 +352,33 @@ static void part_state(int rounds)
                 lp[9] = (uint8_t)ne; lp[10] = (uint8_t)(ne >> 8);
                 lp[11] = (uint8_t)len; lp[12] = (uint8_t)(len >> 8);
             }
+            lp[8] = below(3) ? 1 : (uint8_t)rnd();           /* h[5]: the events carry keys (bit 0), or not, any more */
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* e[7] of each event: a valid key, or any byte */
+                    if (below(2))
+                        lp[3 + 12u + j * 8u + 7u] = below(2) ? (uint8_t)(0x80 | below(8) << 4 | below(12)) : (uint8_t)rnd();
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* a third of the events punches (kind 3) in the tail:
+                                                              * ticks in [15360, 30720), some outside it (junk) */
+                    if (below(3) == 0) {
+                        uint32_t tk = below(5) ? 15360u + (uint32_t)below(15360) : (uint32_t)below(65536);
+                        lp[3 + 12u + j * 8u] = (uint8_t)tk;
+                        lp[3 + 12u + j * 8u + 1u] = (uint8_t)(tk >> 8);
+                        lp[3 + 12u + j * 8u + 2u] = (uint8_t)(below(4) ? below(8) : below(256));      /* d1: the punch */
+                        lp[3 + 12u + j * 8u + 3u] = (uint8_t)(3u | (below(4) == 0 ? 0x18u : 0u) | (below(8) == 0 ? 0x80u : 0u));
+                        lp[3 + 12u + j * 8u + 6u] = (uint8_t)(below(4) ? below(2) : below(256));      /* d2: start or end */
+                    }
+            if (ln >= 20u)
+                for (j = 0; j < (ln - 12u) / 8u; j++)        /* and a third of those lane entries (kind 4): d1 the ROOT
+                                                              * (0..11, 127 for none, or junk), d2 SCALE | DEG << 4 */
+                    if (below(3) == 0) {
+                        uint32_t tk = below(5) ? 15360u + (uint32_t)below(15360) : (uint32_t)below(65536);
+                        lp[3 + 12u + j * 8u] = (uint8_t)tk;
+                        lp[3 + 12u + j * 8u + 1u] = (uint8_t)(tk >> 8);
+                        lp[3 + 12u + j * 8u + 2u] = (uint8_t)(below(4) ? (below(6) ? below(12) : 127) : below(256));   /* d1: the ROOT */
+                        lp[3 + 12u + j * 8u + 3u] = (uint8_t)(4u | (below(2) ? 0x10u : 0u) | (below(8) == 0 ? 0x80u : 0u));
+                        lp[3 + 12u + j * 8u + 6u] = (uint8_t)(below(4) ? ((below(8) ? below(8) : 15) | (below(8) ? below(7) : 7) << 4) : below(256));   /* d2 */
+                    }
             if (below(8) == 0)
                 lp[3 + (uint32_t)below((int)ln)] ^= (uint8_t)(1u << below(8));
             if (h1_loop_load(lp + 3, below(4) ? ln : ln - (uint32_t)below(9)) == 0)
@@ -371,8 +425,8 @@ static void part_panel(int steps)
             if (na > H1_LOOP_MAX)
                 die("a saved loop longer than its room", (int)na, 0, 0, 0);
             memcpy(a + 1, p, na);
-            for (n = 12; n + 8 <= (int)na; n += 8)          /* (bit 7 of flags: played this pass, not saved; the kind is bits 0..2) */
-                a[1 + n + 3] &= 7;
+            for (n = 12; n + 8 <= (int)na; n += 8)          /* (bit 7 of flags: played this pass, not saved; the kind is bits 0..2, a lane entry's LEV_GLOBAL bit 4) */
+                a[1 + n + 3] &= 0x7F;
             if (na) {
                 if (h1_loop_load(a + 1, na) != 0)
                     die("a loop it saved itself was refused", (int)na, 0, 0, 0);
@@ -462,7 +516,7 @@ int main(int argc, char **argv)
     unsigned seeds = argc > 1 ? (unsigned)atoi(argv[1]) : 8u, first = argc > 2 ? (unsigned)atoi(argv[2]) : 1u, s;
     for (s = first; s < first + seeds; s++) {
         seed_now = s;
-        rng_s = s * 2654435761u + 1u;
+        fz_s = s * 2654435761u + 1u;
         part_state(40);
         part_panel(1500);
         part_long();

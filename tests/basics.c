@@ -222,6 +222,8 @@ static uint8_t mo[1024][3];
 static int nmo;
 static void mo_fn(uint8_t s, uint8_t a, uint8_t b)
 {
+    if (s >= 0xF8)                               /* (clock, Start, Stop: tests/midiout.c) */
+        return;
     if (nmo < 1024) {
         mo[nmo][0] = s;
         mo[nmo][1] = a;

@@ -3,6 +3,75 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## 0.7.0
+
+Identity `FM-1_4122000700`. Released 2026-11-26. MIDI out for a DAW, a tape that follows the key (KEY and LANE), and
+PUNCH. Run on one FM-1 (CI's test packages of the same code, e6c6413 and ce94c90), no crash recorded:
+- the image is 554,608 B of the 581,564 B slot. To make room, STACK and ELECTRIC are back to one render for all
+  their algorithms (0.5.0 gave each algorithm its own): the sound is the same to the bit, the audio time a little
+  higher. With eight-note chords and PLATE, STACK peaks at 70% (CHOIR) and ELECTRIC at 54%, no half missed and no
+  voice let go;
+- each punch held over an eight-note chord on STACK CHOIR with PLATE: 70 to 74% at the peak, none missed or let go;
+- KEY and LANE checked by the notes the FM-1 sends: a part recorded on 0.7.0 moved up 2 for ROOT up 2, and a
+  I-IV-V-vi lane moved it +0, +5, +7 and +8 or +9 bar by bar, pass after pass; a tape from 0.6.0 plays as recorded;
+- MIDI out: each track on its own channel, recorded in Studio One on four tracks; the clock measured at TEMPO, and a
+  4-bar tape coming round within a clock of it for 11 passes.
+
+Settings and the tape saved by 0.1.0 to 0.6.0 load as before: the state is still version 5.
+
+**PUNCH**
+- Hold FX and one of the eight white keys from the lowest F for a punch on the whole mix, while the key is held: BRAKE,
+  ST 1/8, ST 1/16, ST 1/32, LPF, HPF, CRUSH, GATE. Other keys play notes, a second key replaces the first, and the
+  key holds the punch after FX is let go. FX tapped alone opens its page on release; one used for a punch does not.
+  With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before.
+- A strip at the bottom of the screen shows the eight punches, the held one lit, with a toast (PUNCH ST 1/16); FX's
+  light is on while it is held, and the screen reader says PUNCH once FX is held (not on a tap), then the punch's name.
+- Recording or overdubbing on the tape records the punches on the track in hand, and they play back on the whole mix
+  (not on a muted track). CUT, PASTE and clear treat them like knob moves, REV swaps their starts and ends, and a
+  punch ends at stop and at the wrap (and where a take ends, if you still hold it). One held by hand wins over the tape's. Punches do not go over MIDI.
+- Tapes saved with punches load in 0.6.0 without them (it drops what it does not know).
+
+**LANE**
+- TAPE has a third subpage, LANE (SEQ, then SELECT twice): BAR, ROOT, SCALE and DEG, one entry at most a bar, 32 bars.
+  Tracks with KEY on play the tape in the key in force and move each note DEG - 1 steps up the scale (IV: C E G in
+  C major plays F A C; DEG does nothing in CHROM). A field no entry has set comes from GLO's ROOT and SCALE, and
+  DEG I: each field holds from the latest entry that sets it, from bar 1, with no wrap. Drums never follow.
+- A change applies from its bar's first tick; sounding notes keep their pitch. Live keys and chord memory's SCALE
+  mode snap to the key in force while the tape plays (not DEG), GLO's when it is stopped; STEP ignores the lane.
+- Recording over a DEG bar on a KEY-on track stores the note moved down DEG - 1 steps, so it plays as played; a note off the bar's scale is stored as played.
+- Entries belong to the whole tape: CUT, PASTE and holding REC leave them, CLEAR ALL clears them, a tape with only
+  entries is not empty, an entry keeps its tick when METER changes, and BARS turned down keeps entries past the end.
+- The cells show a bar each (entry bars bright, inherited bars dim, a minor degree's numeral underlined), the DECK
+  subpage marks entry bars and shows the key in force while playing (D MAJ . IV). The screen reader says NONE for "-".
+- Tapes saved with a lane load in 0.6.0 without it and without punches; their notes play as recorded.
+
+**The tape follows the key**
+- MIX has a fifth subpage, KEY (SEL, then SELECT four times): T1 to T4, OFF or ON (DRUM on a KIT or SKINS
+  track). A track with KEY on plays its tape in GLO's KEYS ROOT and SCALE, from the key each note was recorded in:
+  a seven-note scale keeps a note's place in the scale, any other shifts it by ROOT and snaps. Drums never move.
+- The tape remembers each note's key, and the step pattern has one (its first written step's; clearing the whole
+  pattern clears it). KEY is off to begin with, and tapes and settings from 0.6.0 and earlier play as recorded.
+- The screen reader says the columns as KEY's knobs turn (T1 ON), and MIDI out sends the notes as they sound.
+
+**MIDI out for a DAW**
+- Each track goes out on its own MIDI channel, T1 on 1 to T4 on 4: the tape's and the step sequencer's notes on
+  their track's, the keys' and the arpeggiator's on the track in hand's, each note-off on its note-on's channel.
+  The knobs' CC 20 to 23 go out on the same channels, and so do the tape's recorded knob moves as it plays.
+  HOME held sends CC 123 on all four. Playing on T1 sends what it sent before.
+- MIDI clock, 24 a beat at TEMPO, all the time, with Start as the tape or the step pattern starts (before the note
+  that starts it) and Stop as it stops. The tape jumping back to IN while it plays (BARS turned down, IN or OUT
+  moved past it) sends Stop and Start again, and a computer that connects while the tape plays gets them when the
+  tape next comes round to IN. When the USB queue is busy the FM-1 keeps its last places for note-offs, CC 123,
+  Start and Stop, then the clock, then notes and knobs. A keyboard on USB host gets no clock, Start or Stop.
+- A knob set over MIDI while recording plays back from the tape but is never sent back out (the tape marks it;
+  earlier firmware loads such a tape as before).
+
+**The tape's timing**
+- The tape keeps its place in whole ticks and a fraction. Added up in one float, it lost a little of every 0.7 ms
+  far into a long tape, and a 32-bar tape came round up to 7 MIDI clocks (about 150 ms at 120) off the clock in five
+  passes. It now keeps to the clock pass after pass, at every SPEED and in REV. Notes on a long tape land a fraction
+  of a tick from where 0.6.0 put them.
+
 ## 0.6.0
 
 Identity `FM-1_4122000600`. Released 2026-11-25. More room for the audio in a dense loop jam
