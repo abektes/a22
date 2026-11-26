@@ -11,6 +11,11 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   stopped, SAVE or not (the step pattern, the mixer, snapshots, engines and knobs; the tape itself was kept). A save
   erases flash, which can stall the sound for a moment; after SAVE that now happens at once, playing or not. Changes
   without SAVE still wait for silence. As h1 0.3.1 does for jakehandy/h1#39's steps. `tests/statesave.txt`.
+- The tape's flash is made ready a sector a frame. Once the tape stopped and nothing sounded, A22 erased a whole slot
+  of its ring, five 4 KB sectors, in one go: the sound and the keys stalled for the lot, so a key struck just then came
+  late, and the key lights could flicker (what h1 heard as a crackle at the start of play and a dropout with the LEDs
+  flickering, jakehandy/h1#64 and #58). Each sector now goes in a frame of its own, as h1 0.3.1 does, after a start
+  that failed too. The tape and where it is kept are unchanged. `tests/ringerase.txt`.
 
 ## 0.7.0
 

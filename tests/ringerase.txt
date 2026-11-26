@@ -1,0 +1,68 @@
+# The tape's ring erased a sector a frame (jakehandy/h1#58, #64). An erase stalls the sound and the input while it
+# runs, so a slot's five sectors in one frame were a cut a key struck just then could fall into. Run by
+# tests/run_tests.sh in fm1-base's host simulator: ./build.sh --host, then
+# app/build/host/a22_host tests/ringerase.txt app/build/host
+wait 600
+# a take; the loop plays on and goes into slot 0
+tap REC
+wait 100
+key 12 down
+wait 300
+key 12 up
+wait 400
+tap REC
+wait 3000
+expect data.0xC8000 0x41
+# an overdub, and a power-off a moment into its save: slot 0 is left part-written, so it takes no more records
+tap REC
+wait 200
+strum 0 15 30
+strum 0 15 30
+wait 300
+tap REC
+wait 350
+power
+wait 600
+# PLAY, and another overdub: its save goes into slot 1 (0xCD000)
+tap PLAY
+wait 500
+tap REC
+wait 200
+key 16 down
+wait 300
+key 16 up
+wait 1200
+tap REC
+wait 3000
+expect data.0xCD000 0x41
+# 1  stopped, and silent: slot 0, which holds no loop now, goes back to erased, a sector a frame
+tap PLAY
+wait 3000
+expect data.0xC8000 255
+expect data.0xCC000 255
+expect ring_erases 5 1
+# 2  a start that failed: the ring is left alone until a new tape is saved over it, every slot erased first,
+#    still a sector a frame (four slots, twenty sectors)
+badstart
+reboot
+wait 600
+press REC
+wait 2500
+release REC
+wait 300
+tap REC
+wait 100
+key 9 down
+wait 300
+key 9 up
+wait 1500
+tap PLAY
+wait 6000
+expect ring_erases 25 1
+# and that tape is the one kept: after a start, PLAY plays it
+reboot
+wait 600
+tap PLAY
+peakreset
+wait 3000
+expect peak_db_min -50

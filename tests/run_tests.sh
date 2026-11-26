@@ -53,6 +53,8 @@ out=app/build/host
 "$out/a22_host" tests/usbhost.txt "$out"
 # the tape kept through a power-off while it plays, and one cut off in the middle of its save
 "$out/a22_host" tests/looppower.txt "$out"
+# the ring's slots erased a sector a frame, stopped and after a start that failed, and the tape kept
+"$out/a22_host" tests/ringerase.txt "$out"
 # settings while the tape plays: written only in silence on their own, at once after SAVE, and kept through a power cut
 "$out/a22_host" tests/statesave.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
