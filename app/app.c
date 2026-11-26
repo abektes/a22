@@ -98,10 +98,14 @@ static void send_rest(void)
  * Then STAGE seq voices wait mix fx master: the slowest render since the last PERF, split by h1_stages, each in
  * percent of the block's time (they add up to that render's time in h1_render; AUDIO also counts the port's own
  * MASTER gain after it, so it reads a little higher); and FLASH n max: the tape's flash writes in that time and the
- * longest in microseconds (each holds the interrupts off, the audio's included: ring_write). The stages are timed only
- * from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in its render. */
+ * longest in microseconds (each holds the interrupts off, the audio's included: ring_write); and ERASE n max: the
+ * ring's 4 KiB sector erases from frames in that time, and the most erase time in one frame, in microseconds (one
+ * sector's at most since erases go a sector a frame: ring_erase_some; the start's, before the sound, not counted).
+ * The stages are timed only from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in
+ * its render. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
-static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max; } pf;
+static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max, erase_n, erase_max; } pf;
+static uint32_t erase_us_frame;                 /* this frame's erase time so far (ERASE) */
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
 /* the renders as the tape's flash writes see them (ring_go): one more each render, and the slowest of the last few
  * (each render takes an eighth off it), in microseconds */
@@ -423,13 +427,18 @@ static uint32_t ring_scan(int slot, uint32_t *at, uint32_t *len, uint32_t *seq)
     return o;
 }
 
-static int ring_sector_erase(uint32_t off)      /* one 4 KiB sector (counted on the host: expect ring_erases) */
+static int ring_sector_erase(uint32_t off)      /* one 4 KiB sector, timed (ERASE; on the host: expect ring_erases) */
 {
+    uint32_t t0 = plat_ticks24();
+    int rc;
 #ifdef PLAT_HOST
     host_er_n++;
     host_er_frame++;
 #endif
-    return plat_data_erase(off);
+    rc = plat_data_erase(off);
+    erase_us_frame += US(plat_ticks24() - t0);
+    pf.erase_n++;
+    return rc;
 }
 
 static void ring_erase(int slot)
@@ -675,8 +684,9 @@ void app_init(void)
         else if ((n = plat_store_load(OBJ_LOOP, blob, sizeof blob)) > 0)
             h1_loop_load(blob, (uint32_t)n);                /* (one saved before the ring: it goes there next) */
     }
+    erase_us_frame = pf.erase_n = 0;                        /* (the start's erases, before the sound, are not a frame's) */
 #ifdef PLAT_HOST
-    host_er_frame = 0;                                      /* (the start's erases, before the sound, are not a frame's) */
+    host_er_frame = 0;
 #endif
 }
 
@@ -751,6 +761,9 @@ void app_frame(void)
             h1_state_saved();
     } else
         ring_step();
+    if (erase_us_frame > pf.erase_max)                      /* (ERASE: the most erase time in one frame) */
+        pf.erase_max = erase_us_frame;
+    erase_us_frame = 0;
 #ifdef PLAT_HOST
     if (host_er_frame > host_er_max)
         host_er_max = host_er_frame;
@@ -846,9 +859,14 @@ static void say_perf(void)
     d = say_cat(d, end, ". FLASH ");                        /* the tape's flash writes, and the longest (us) */
     d = say_num(d, end, pf.flash_n);
     d = say_cat(d, end, " ");
-    say_num(d, end, pf.flash_max);
+    d = say_num(d, end, pf.flash_max);
+    d = say_cat(d, end, ". ERASE ");                        /* the ring's sector erases, and the most in a frame (us) */
+    d = say_num(d, end, pf.erase_n);
+    d = say_cat(d, end, " ");
+    say_num(d, end, pf.erase_max);
     ann_say(t, 0, ANN_NOW);
     pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = pf.flash_n = pf.flash_max = 0;
+    pf.erase_n = pf.erase_max = 0;
     pf.since_ms = plat_ms();
 }
 

@@ -50,7 +50,7 @@ wait 100
 said . STAGE
 midi B0 77 01
 wait 100
-said . FLASH 0 0
+said . FLASH 0 0. ERASE 0 0
 # SAVE writes the settings, and a restart keeps them
 tap SAVE
 wait 200

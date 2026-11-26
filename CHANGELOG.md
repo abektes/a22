@@ -22,6 +22,10 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   flickering, jakehandy/h1#64 and #58). Each sector now goes in a frame of its own, as h1 0.3.1 does, after a start
   that failed too. The tape and where it is kept are unchanged. `tests/ringerase.txt`.
 
+**Inside**
+- The PERF line (MIDI CC 119 to a listening screen reader) ends with `ERASE n max`: the ring's sector erases since the
+  last PERF, and the most erase time in one frame, in microseconds. `tools/fm1_profile.py` prints it.
+
 ## 0.7.0
 
 Identity `FM-1_4122000700`. Released 2026-11-26. MIDI out for a DAW, a tape that follows the key (KEY and LANE), and
