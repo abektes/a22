@@ -107,7 +107,7 @@ static void kit_note(Voice *v, const Blk *b)
     v->pan = (type == KICK || type == SNARE) ? 0.0f : clampf(((f32)type - 5.5f) * 0.11f, -0.62f, 0.62f);
 }
 
-static void kit_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void kit_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     int type = iclamp((int)v->s[8], 0, NDRUM - 1), i, j;
     const DrumDef *d = &DR[type];
