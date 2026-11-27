@@ -252,7 +252,7 @@ static void cluster_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
     v->ph[0] = p0; v->ph[1] = p1; v->ph[2] = p2; v->ph[3] = p3; v->ph[4] = pm; v->ph[5] = pd;
 }
 
-static void cluster_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void cluster_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     cluster_render_a(v, b, out_l, out_r, n, C.algo & 7);
 }
