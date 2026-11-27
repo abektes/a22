@@ -12,6 +12,8 @@ The [README](../README.md) is the manual and the install guide. The rest:
 - [../PRODUCT.md](../PRODUCT.md) and [../DESIGN.md](../DESIGN.md): the website's audience and its design system.
 
 **Records** (plans and research as they were written; later releases may have changed what they describe)
+- [PLAN-projects.md](PLAN-projects.md): next, four projects (tape and settings) kept in flash, and project files over
+  USB (issue #12).
 - [PLAN-0.7.2.md](PLAN-0.7.2.md): 0.7.2, the newer fm1-base, the sliced erase, denormal speed and the engines in RAM,
   with the FM-1's numbers.
 - [PLAN-cpu-headroom.md](PLAN-cpu-headroom.md): 0.6.0's CPU work for loop jams.
