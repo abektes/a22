@@ -106,7 +106,7 @@ static void perc_note(Voice *v, const Blk *b)
     v->u[1]  = 0u;     /* sample counter since strike */
 }
 
-static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void perc_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     const ModalAlgo *a = &MA[PR.algo];
     f32 pitch = v->pitch + b->bend;

@@ -73,7 +73,7 @@ static void haze_note(Voice *v, const Blk *b)
     }
 }
 
-static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void haze_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     const DimAlgo *a = &DMA[DM.algo];
     f32 pitch = v->pitch + (f32)(a->oct * 12) + b->bend;
