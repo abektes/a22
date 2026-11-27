@@ -140,6 +140,14 @@ int h1_loop_taking(void);                        /* 1: a take is going in (REC o
  * refused and nothing changed. A loop that does not load leaves the tape empty. */
 void h1_silence(void);
 int h1_project_load(const void *state, uint32_t state_size, const void *loop, uint32_t loop_size);
+/* The panel's side: SAVE + F#, G#, A# or C# (the first four black keys) asks to load project 0..3, with EDIT held to
+ * save. h1_proj_take gives the ask once (0 none, 1 save, 2 load) and its project; the port says each frame which
+ * projects hold a record (bit p) and which is being saved (-1 none), and how an ask ended. h1_proj_said gives the
+ * words of a project toast once ("" none), for a screen reader. */
+int h1_proj_take(int *p);
+void h1_proj_news(uint32_t have, int saving);
+void h1_proj_done(int kind, int p, int ok);
+const char *h1_proj_said(void);
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */
 #define H1_STATE_MAX 3584u                      /* the saved state's most: a project's slot holds it and a full loop */

@@ -797,6 +797,7 @@ static void proj_write(void)
         if (ring_write(off + RING_BODY + proj.at, wpage, n) != 0) {
             proj.fails++;                        /* (given up: the slot is free and erased before it is used) */
             proj.to = -1;
+            h1_proj_done(1, proj.doing, 0);
             return;
         }
         proj.at = proj.at < PAGES(proj.slen) ? PAGES(proj.at + n) : proj.at + n;
@@ -814,8 +815,11 @@ static void proj_write(void)
         proj.of[proj.doing] = (int8_t)proj.to;   /* (the slot it was in before is free now) */
         proj.seq++;
         proj.saves++;
-    } else
+        h1_proj_done(1, proj.doing, 1);
+    } else {
         proj.fails++;
+        h1_proj_done(1, proj.doing, 0);
+    }
     proj.to = -1;
 }
 
@@ -836,6 +840,7 @@ static void proj_load_step(void)
     if (s < 0 || h1_loop_taking() || !proj_read(s, &q, &seq) || q != (uint32_t)p) {
         proj.load_rc = s < 0 ? -1 : -2;
         proj.load = -1;
+        h1_proj_done(2, p, 0);
         return;
     }
     if (proj.load_wait++ == 0)
@@ -849,7 +854,25 @@ static void proj_load_step(void)
     plat_unlock(f);
     if (proj.load_rc == 0)
         proj.loads++;
+    h1_proj_done(2, p, proj.load_rc == 0);
     proj.load = -1;
+}
+
+/* the panel's asks taken, and what it shows told (h1_proj_news: the keys lit with SAVE held) */
+static void proj_panel(void)
+{
+    uint32_t have = 0;
+    int p, k = h1_proj_take(&p);
+    if (k == 1)
+        proj.want = p;
+    else if (k == 2 && proj.load < 0) {
+        proj.load = p;
+        proj.load_wait = 0;
+    }
+    for (k = 0; k < PROJ_N; k++)
+        if (proj.of[k] >= 0)
+            have |= 1u << k;
+    h1_proj_news(have, proj.to >= 0 ? proj.doing : proj.want);
 }
 
 /* every frame, before the ring: 1 when the projects had the flash this frame (the ring waits). A save asked for
@@ -977,6 +1000,27 @@ static int proj_host_cmd(const char *cmd, const char *a, const char *b)
         proj_dump();
         return 1;
     }
+    if (!strcmp(cmd, "expect") && !strcmp(a, "toast")) {   /* expect toast WORDS_SO: the toast showing (_ a space) */
+        const char *t = h1_toast_now();
+        int i;
+        for (i = 0; b[i] && t[i] && (t[i] == b[i] || (b[i] == '_' && t[i] == ' ')); i++)
+            ;
+        if (b[i] || t[i]) {
+            printf("FAIL expect toast %s, got \"%s\"\n", b, t);
+            exit(1);
+        }
+        printf("  ok toast \"%s\"\n", t);
+        return 1;
+    }
+    if (!strcmp(cmd, "expect") && !strcmp(a, "key_leds")) {   /* expect key_leds MASK: the keys the core lights */
+        uint32_t m = h1_key_leds(), want = (uint32_t)strtoul(b, 0, 0);
+        if (m != want) {
+            printf("FAIL expect key_leds == 0x%X, got 0x%X\n", (unsigned)want, (unsigned)m);
+            exit(1);
+        }
+        printf("  ok key_leds == 0x%X\n", (unsigned)m);
+        return 1;
+    }
     return !strcmp(cmd, "expect") && proj_expect(a, b);
 }
 #endif
@@ -1081,6 +1125,7 @@ void app_frame(void)
     usb_news();
     h1_master((int)(plat_master() * 1000u / 4096u));        /* shown while it turns; the gain is app_render's */
     t0 = plat_ticks24();
+    proj_panel();
     if (proj.load >= 0)
         proj_load_step();                                   /* (a project in place of what plays: before the frame) */
     h1_frame(plat_ms());                                    /* (and most of the last frame goes out meanwhile) */
@@ -1227,6 +1272,7 @@ static void speak(void)
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
+    const char *said = h1_proj_said();
     if (ann_on()) {
         int where = ann_where();
         if (lay != lay_was && lay_was >= 0)                 /* SEQ and REC together */
@@ -1247,6 +1293,8 @@ static void speak(void)
             ann_say("CLEAR ALL? TAP REC", 0, ANN_NOW);
         if (answer)                                         /* and its answer (no strcmp: the device has no libc) */
             ann_say(answer == 2 ? "TAPE CLEARED" : "TAPE KEPT", 0, ANN_NOW);
+        if (said[0])                                        /* a project saved, loaded, asked or refused */
+            ann_say(said, 0, ANN_NOW);
         if (where || inst != inst_was || algo != algo_was) {
             d = say_cat(t, end, where ? APP_NAME ". " : "");
             d = say_cat(d, end, h1_instrument_name(inst));

@@ -1,0 +1,162 @@
+# Projects on the panel (docs/PLAN-projects.md P3): SAVE + F#, G#, A#, C# (keys 1, 3, 5, 8) loads project 1..4,
+# SAVE + EDIT + the key saves to it. A load over changed work asks first (the same keys again within three seconds),
+# a load while the tape plays and anything while a take goes in is refused, and with SAVE held the black keys that
+# hold a project are lit. Run by tests/run_tests.sh in fm1-base's host simulator: ./build.sh --host, then
+# app/build/host/a22_host tests/projpanel.txt app/build/host
+wait 600
+tap REC
+wait 100
+key 12 down
+wait 300
+key 12 up
+wait 400
+tap REC
+wait 1500
+tap PLAY
+wait 1500
+# SAVE held: no project yet, no key lit
+press SAVE
+wait 100
+expect key_leds 0
+# 1  SAVE + EDIT + F#: saved to P1, and F# lit once it is in
+press EDIT
+wait 50
+key 1 down
+wait 50
+expect toast SAVING_P1
+key 1 up
+wait 50
+release EDIT
+wait 400
+expect toast P1_SAVED
+expect key_leds 0x2
+release SAVE
+wait 300
+expect proj.1 0
+expect proj_same 1
+# 2  SAVE + G#: P2 holds nothing
+press SAVE
+wait 50
+key 3 down
+wait 50
+key 3 up
+release SAVE
+wait 100
+expect toast P2_EMPTY
+# 3  SAVE + F# with nothing changed since the save: loaded at once
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 300
+expect toast P1_LOADED
+expect proj_loads 1
+# 4  a knob turned, then SAVE + F#: asked first; the same keys again within three seconds load it
+turn K1 3
+wait 300
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 100
+expect toast LOAD_P1?_AGAIN
+expect proj_loads 1
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 300
+expect toast P1_LOADED
+expect proj_loads 2
+# 5  asked, then another key: the work is kept, and the next SAVE + F# asks again
+turn K1 3
+wait 300
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 100
+expect toast LOAD_P1?_AGAIN
+key 12 down
+wait 100
+key 12 up
+wait 100
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 100
+expect toast LOAD_P1?_AGAIN
+expect proj_loads 2
+# 6  asked, and three seconds gone: asked again, not loaded
+wait 3200
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 100
+expect toast LOAD_P1?_AGAIN
+expect proj_loads 2
+wait 3200
+# 7  the tape playing: a load is refused
+tap PLAY
+wait 300
+press SAVE
+wait 50
+key 1 down
+wait 50
+key 1 up
+release SAVE
+wait 100
+expect toast STOP_TAPE_FIRST
+expect proj_loads 2
+tap PLAY
+wait 500
+# 8  a take going in: a save is refused
+tap REC
+wait 100
+key 19 down
+wait 100
+press SAVE
+press EDIT
+wait 50
+key 5 down
+wait 50
+key 5 up
+release EDIT
+release SAVE
+wait 100
+expect toast RECORDING
+key 19 up
+wait 300
+tap REC
+wait 1500
+tap PLAY
+wait 500
+expect proj.3 -1
+# 9  SAVE + EDIT + A#: P3 saved; SAVE held lights F# and A#
+press SAVE
+press EDIT
+wait 50
+key 5 down
+wait 50
+key 5 up
+release EDIT
+wait 800
+expect key_leds 0x22
+release SAVE
+wait 300
+expect proj.3 1
+expect proj_same 3

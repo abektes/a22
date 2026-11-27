@@ -98,12 +98,23 @@ in only if the build after P3 leaves its 624 B above the spare.
     it) and `tests/state.c` (TUNE and BRIGHT kept, the rest to the byte, a refused state changes nothing).
   - **Left for P5:** how long the render is locked out on the FM-1 (`eng_init` clears the effects' buffers), and
     whether LATE counts one at a load.
-- [ ] **P3. On the FM-1's panel** (decisions 1 and 3).
-  - The gesture and toasts: `P2 SAVED`, `P2 LOADED`, `P2 EMPTY`, `LOAD P2? AGAIN`, `SAVING P2` while it writes.
-  - The key lights with SAVE held show which black keys hold a project.
-  - The screen reader says the same.
-  - A save while recording is refused (`RECORDING`).
-  - Host tests for each.
+- [x] **P3. On the FM-1's panel** (decisions 1 and 3).
+  - **Gestures:** SAVE + F#, G#, A# or C# (keys 1, 3, 5, 8: `PROJ_KEYS` in `core/ui.c`) loads P1 to P4, and SAVE +
+    EDIT + the key saves. EDIT let go after a save doesn't pin the knob strip, and SAVE let go doesn't save the
+    settings or reset.
+  - **Toasts:** `SAVING P2`, then `P2 SAVED` (or `P2 NOT SAVED`); `P2 LOADED` (or `P2 NOT LOADED`); `P2 EMPTY`;
+    `LOAD P2? AGAIN`; `STOP TAPE FIRST` for a load while the tape plays; `RECORDING` for either while a take goes in.
+  - **The confirm:** the same keys again within three seconds load it, and any other key or button cancels it.
+    "Changed" means a setting changed (`mark_dirty`) or the tape did (`h1_loop_gen`) since the last project save or
+    load. At start, a tape with anything on it counts as changed.
+  - **Lights:** with SAVE held, the black keys that hold a project are lit, and the one being saved blinks.
+  - **Screen reader:** each project toast is said once (`h1_proj_said`, taken in `app.c`'s `speak`).
+  - **Between the core and the app:** the core keeps only the asks (`h1_proj_take`); the app tells it each frame
+    what the slots hold (`h1_proj_news`) and how each ask ended (`h1_proj_done`).
+  - **Host test:** `tests/projpanel.txt`. The simulator gained `expect toast` and `expect key_leds`. The reader's
+    words are not checked: the host has no reader.
+  - **Note for P5:** hold SAVE resets the algorithm's knobs at 0.9 s (`HOLD_RESET_ALGO`). The lights show at once,
+    but looking at them for longer than that resets the knobs. Check on the FM-1 whether that is a trap in practice.
 - [ ] **P4. Project files over USB** (decision 4; fm1-base `companion = true`, `APP_FILES`).
   - `project1` to `project4`, kind project: read in place.
   - A write goes into the spare slot frame by frame, the CRC is checked at commit, and it becomes current only then.

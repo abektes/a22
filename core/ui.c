@@ -56,6 +56,9 @@ static const int KCOL[4] = {GC_BLUE, GC_GREEN, GC_WHITE, GC_ORANGE};
 
 /* 8 white keys F3..F4 mapped to instant patch snapshots 1..8 */
 static const uint8_t SNAP_KEYS[NSNAP] = {0, 2, 4, 6, 7, 9, 11, 12};
+/* the first four black keys, F#, G#, A# and C#: projects 1..4 (docs/PLAN-projects.md P3) */
+#define NPROJ 4
+static const uint8_t PROJ_KEYS[NPROJ] = {1, 3, 5, 8};
 
 /* ---- page definitions (base templates; subpages override cleanly in page_param) ------- */
 const PageDef pages[NPAGE] = {
@@ -328,7 +331,8 @@ static int dirty;
 static uint32_t dirty_ms;
 static int save_asked;                           /* SAVE tapped: the state is written at once, playing or not */
 
-static void mark_dirty(void) { dirty = 1; dirty_ms = now; }
+static int proj_changed;
+static void mark_dirty(void) { dirty = 1; dirty_ms = now; proj_changed = 1; }
 
 /* ---- string helpers ------------------------------------------------------------------- */
 static char *put_s(char *d, const char *s)
@@ -374,6 +378,105 @@ static void toast(const char *a, int num, int has_num, const char *b, int pips)
     if (b) put_s(d, b);
     toast_t = 0.0f;
     toast_pips = pips;
+}
+
+/* Projects (docs/PLAN-projects.md): SAVE + one of PROJ_KEYS loads that project, SAVE + EDIT + it saves to it. The port
+ * keeps them (app.c's slots): it takes the asks (h1_proj_take), says each frame which hold one and which is being
+ * saved (h1_proj_news), and how each ask ended (h1_proj_done). A load is only asked while the tape is stopped and no
+ * take goes in; over work changed since the last project save or load it asks first: the same keys again within
+ * three seconds, anything else keeps the work. The reader hears each project toast once (h1_proj_said). */
+static int proj_req, proj_req_p;                 /* an ask not yet taken: 1 save, 2 load; its project */
+static uint32_t proj_have;                       /* bit p: project p holds a record */
+static int proj_saving = -1;                     /* the project being saved, -1 none */
+static int proj_ask = -1;                        /* LOAD P? AGAIN asked: the project, -1 none */
+static uint32_t proj_ask_ms;
+static int proj_changed = 1, proj_known;         /* the work changed since the last project save or load */
+static uint32_t proj_gen;                        /* and the tape's generation then */
+static char proj_said[24];
+
+static void proj_toast(const char *a, int p, const char *b)   /* p -1: no number */
+{
+    int i;
+    toast(a, p + 1, p >= 0, b, -1);
+    for (i = 0; i < (int)sizeof proj_said - 1 && toast_s[i]; i++)
+        proj_said[i] = toast_s[i];
+    proj_said[i] = 0;
+}
+
+static int proj_work_changed(void) { return proj_changed || eng_loop_gen() != proj_gen; }
+
+static void proj_key(int p, int save)
+{
+    if (eng_loop_taking()) {
+        proj_toast("RECORDING", -1, 0);
+        return;
+    }
+    if (save) {
+        proj_req = 1;
+        proj_req_p = p;
+        proj_ask = -1;
+        proj_toast("SAVING P", p, 0);
+        return;
+    }
+    if (!(proj_have >> p & 1u)) {
+        proj_toast("P", p, " EMPTY");
+        return;
+    }
+    if (!eng_loop_quiet()) {
+        proj_toast("STOP TAPE FIRST", -1, 0);
+        return;
+    }
+    if (proj_work_changed() && !(proj_ask == p && now - proj_ask_ms < 3000u)) {
+        proj_ask = p;
+        proj_ask_ms = now;
+        proj_toast("LOAD P", p, "? AGAIN");
+        return;
+    }
+    proj_ask = -1;
+    proj_req = 2;
+    proj_req_p = p;
+}
+
+int h1_proj_take(int *p)
+{
+    int r = proj_req;
+    if (p) *p = proj_req_p;
+    proj_req = 0;
+    return r;
+}
+
+void h1_proj_news(uint32_t have, int saving)
+{
+    if (!proj_known) {                           /* (at start: an empty tape is no work to lose) */
+        proj_known = 1;
+        proj_changed = eng_loop_used() > 0;
+        proj_gen = eng_loop_gen();
+    }
+    proj_have = have;
+    proj_saving = saving;
+}
+
+void h1_proj_done(int kind, int p, int ok)
+{
+    if (ok) {
+        proj_changed = 0;
+        proj_gen = eng_loop_gen();
+    }
+    if (kind == 1)
+        proj_toast("P", p, ok ? " SAVED" : " NOT SAVED");
+    else
+        proj_toast("P", p, ok ? " LOADED" : " NOT LOADED");
+}
+
+const char *h1_proj_said(void)
+{
+    static char said[24];
+    int i;
+    for (i = 0; proj_said[i]; i++)
+        said[i] = proj_said[i];
+    said[i] = 0;
+    proj_said[0] = 0;
+    return said;
 }
 
 static void fit_text(f32 cx, f32 y, const char *s, f32 size, f32 max_w, f32 a)
@@ -520,6 +623,19 @@ void h1_key(int key, int down)
     int i;
     if (key < 0 || key >= H1_NKEYS) return;
     if (down) clear_all_keep();
+    /* SAVE + the first four black keys: projects (SAVE + EDIT + key saves) */
+    if (down && (btn_held & (1u << H1_BTN_SAVE))) {
+        for (i = 0; i < NPROJ; i++)
+            if (key == PROJ_KEYS[i]) {
+                btn_fired[H1_BTN_SAVE] = 3;
+                if (btn_held & (1u << H1_BTN_EDIT))
+                    btn_fired[H1_BTN_EDIT] = 3;  /* (EDIT let go: no knob strip pinned) */
+                proj_key(i, (btn_held & (1u << H1_BTN_EDIT)) != 0);
+                return;
+            }
+    }
+    if (down)
+        proj_ask = -1;                           /* (LOAD P? AGAIN: any other key keeps the work) */
     /* SAVE + White Keys 1..8: Instant Patch Snapshots! */
     if (down && (btn_held & (1u << H1_BTN_SAVE))) {
         for (i = 0; i < NSNAP; i++) {
@@ -751,6 +867,8 @@ SMALL void h1_button(int btn, int down)
         return;
     }
     if (btn == H1_BTN_EDIT) edit_at = master_raw;
+    if (btn != H1_BTN_SAVE && btn != H1_BTN_EDIT)
+        proj_ask = -1;                           /* (LOAD P? AGAIN: any other button keeps the work) */
     btn_held |= 1u << btn;
     btn_ms[btn] = now;
     btn_fired[btn] = 0;
@@ -2335,6 +2453,15 @@ const uint16_t *h1_palette(void)    { return pal; }
 uint32_t h1_key_leds(void)
 {
     uint32_t m;
+    if (btn_held & (1u << H1_BTN_SAVE)) {        /* SAVE held: the black keys that hold a project (the one saving
+                                                  * blinks) */
+        int i;
+        m = 0;
+        for (i = 0; i < NPROJ; i++)
+            if (((proj_have >> i & 1u) && i != proj_saving) || (i == proj_saving && fractf(tsec * 4.0f) < 0.5f))
+                m |= 1u << PROJ_KEYS[i];
+        return m;
+    }
     if (eng_seq_leds(&m, page == PG_SEQ, fractf(tsec * 2.2f) < 0.6f)) return m;
     return eng_sounding_lo();
 }

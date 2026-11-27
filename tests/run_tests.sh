@@ -63,6 +63,8 @@ out=app/build/host
 "$out/a22_host" tests/projects.txt "$out"
 # a project loaded stopped, while playing with a key held, refused while recording, and kept through a restart
 "$out/a22_host" tests/projload.txt "$out"
+# projects on the panel: SAVE + black key loads, with EDIT saves; asked first over changed work; refused playing or recording
+"$out/a22_host" tests/projpanel.txt "$out"
 # settings while the tape plays: written only in silence on their own, at once after SAVE, and kept through a power cut
 "$out/a22_host" tests/statesave.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back
