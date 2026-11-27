@@ -70,22 +70,34 @@ in only if the build after P3 leaves its 624 B above the spare.
 
 ## Steps
 
-- [ ] **P1. The slots** (`app/app.c`, beside the ring).
-  - Scan at start; save a page a frame; erase the spare a sector a frame (sliced erase, as the ring since 0.7.2).
-  - **One flash writer:** while a project save runs, the state's save and the ring wait, and a project save waits for
-    a ring save under way. Never two in one frame.
-  - **The tape changes mid-save** (a take: `h1_loop_gen`): the save is dropped and starts again, as the ring does.
-  - **The state changes mid-save** (a knob): the bytes are written as they are, and the CRC is the one that went in,
-    so the record is whole and holds a moment of the save.
-  - **A save right after a save**, before the spare is erased: erase it first, sliced, then write.
-  - **Host tests:** `tests/projects.txt` (save, load, four projects, a restart, a save cut at each page, foreign
-    bytes in a slot, a full tape) and the fuzz with project saves mixed in. `tests/run_tests.sh` passes.
-- [ ] **P2. Loading while the sound runs.** `h1_state_load` and `h1_loop_load` run only at start today, before the
-      sound. Snapshots load through the engine's queue (`EV_SNAP_LOAD`). Trace what a whole load needs with the render
-      running: stop the tape, silence the voices (as hold HOME does), then hand the state and the tape over where the
-      render can't read them half-written (`plat_lock`, or an engine event as snapshots use). The settings then
-      redraw and save as after a start. Keep TUNE and BRIGHT (decision 2). Host test: load while notes sound and while
-      the tape plays, and the next frame plays the project. The CPU and screen numbers stay within a point.
+- [x] **P1. The slots** (`app/app.c`, beside the ring; `06528d0`).
+  - Done as planned: scan at start, a page a frame through the ring's deferral (`flash_go`), a free slot erased a
+    sector a frame. One flash writer a frame: `proj_step` runs before `ring_step` and has the frame while a save
+    is under way; it starts only when the ring is not part-way through one. A take mid-save starts it again.
+  - The header is 32 bytes at the start of its page: magic "A22P", version 1, project, sequence number, the
+    state's and the loop's lengths, the body's CRC-32, the header's own CRC-32. `H1_STATE_MAX` (3,584, in
+    `core/h1.h`) bounds the state so that header, state and a full loop fit 20,480 bytes at most; `H1State` is 2,888.
+  - **Host tests:** `tests/projects.txt`. It covers four projects into the four erased slots, P1 again into the
+    spare with its old slot erased a sector a frame, a restart, and a power-off part-way through a save's body (the
+    old copy kept, the torn slot erased). It also covers another firmware's bytes in a free slot, a take during a
+    save, and a full tape (2,048 events).
+  - The fuzz (`tests/fuzz.c`) runs the core only, so it can't reach `app.c`'s slots; the simulator script stands
+    in for it there. P2's load is in the core.
+- [x] **P2. Loading while the sound runs** (`2e9566f`).
+  - `h1_silence` stops the tape and every voice as hold HOME does, sending CC 123 on the four channels.
+  - The load waits three frames for the render to take that, because `eng_init` empties the engine's queue (found by
+    the test: CC 123 never went out when the load came in the same frame). It then waits for the tails, half a
+    second at most.
+  - `h1_project_load` then takes the state and the loop, read in place from the slot, under `plat_lock`. That's the
+    same path as a start (`h1_state_load`, `h1_loop_load`), with TUNE and BRIGHT kept.
+  - Both count as changed, so the ring and the state's save keep them as what plays.
+  - A load waits for a project's save under way. It is refused while a take goes in, and when the record no longer
+    checks.
+  - **Host tests:** `tests/projload.txt` (loaded stopped, then playing with a key held; the next bar plays the
+    project's note and not the other's; an empty project and a load while recording refused; a restart after keeps
+    it) and `tests/state.c` (TUNE and BRIGHT kept, the rest to the byte, a refused state changes nothing).
+  - **Left for P5:** how long the render is locked out on the FM-1 (`eng_init` clears the effects' buffers), and
+    whether LATE counts one at a load.
 - [ ] **P3. On the FM-1's panel** (decisions 1 and 3).
   - The gesture and toasts: `P2 SAVED`, `P2 LOADED`, `P2 EMPTY`, `LOAD P2? AGAIN`, `SAVING P2` while it writes.
   - The key lights with SAVE held show which black keys hold a project.
