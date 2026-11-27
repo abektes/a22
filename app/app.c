@@ -758,7 +758,7 @@ static void proj_start(void)
 }
 
 /* ---- the projects as files over USB (fm1-base's companion: app.h APP_FILES; docs/PLAN-projects.md P4) ---------
- * projectN is project N's record as its slot holds it: the header page (the header's 32 bytes, then erased bytes),
+ * projectN.a22 is project N's record as its slot holds it (the name a download and a backup's zip keep it under): the header page (the header's 32 bytes, then erased bytes),
  * the state from byte 256 and the loop from the next page. A computer keeps it as a file whatever it holds; written
  * back to any of the four, it becomes that project. A write goes into a free slot (proj_free: no project in it, no
  * save going into it), its sectors erased as the data reaches them, the body written as it comes; the header is kept
@@ -781,7 +781,7 @@ static uint32_t proj_size(int s)         /* a slot's record as a file: its bytes
 
 int app_file(uint32_t i, plat_file_info_t *f)
 {
-    static const char *const NAMES[PROJ_N] = {"project1", "project2", "project3", "project4"};
+    static const char *const NAMES[PROJ_N] = {"project1.a22", "project2.a22", "project3.a22", "project4.a22"};
     if (i >= (uint32_t)PROJ_N)
         return -1;
     f->name = NAMES[i];

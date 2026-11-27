@@ -28,7 +28,7 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 - In flash: five slots of five sectors at 0xAF000..0xC7FFF (four projects and a spare), just under the tape's ring.
   A save goes into the spare with its header written last, so a power-off part-way leaves the old copy; another
   firmware's bytes there count as an empty slot. 0x97000..0xAEFFF stays free.
-- Over USB: fm1-base's companion services (`companion = true`) list `project1` to `project4` as files. The site's new
+- Over USB: fm1-base's companion services (`companion = true`) list `project1.a22` to `project4.a22` as files. The site's new
   companion page backs them up into one zip and puts them back, and `base/tools/fm1_companion.py` does the same from a
   terminal. A project file put back under any number becomes that project; one whose body doesn't match its header is
   refused. Back them up before installing another firmware: it may write over them.

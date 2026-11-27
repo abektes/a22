@@ -144,9 +144,10 @@ F#, G#, A# and C# for projects 1 to 4.
 
 **Back them up.** The projects live in the part of the FM-1's flash that firmwares share, so one installed after A22
 may write over them. Keep them on a computer before you switch: the [companion page](https://abektes.github.io/a22/companion/)
-(Chrome or Edge, the FM-1 on USB, the tape stopped) lists `project1` to `project4`. **Back up all** saves them in one
+(Chrome or Edge, the FM-1 on USB, the tape stopped) lists `project1.a22` to `project4.a22`. **Back up all** saves them in one
 zip, and **Restore from a backup** puts them back. From a terminal in a clone:
-`python3 base/tools/fm1_companion.py get project1` and `python3 base/tools/fm1_companion.py put project1 project3`.
+`python3 base/tools/fm1_companion.py get project1.a22` and
+`python3 base/tools/fm1_companion.py put project1.a22 project3.a22`.
 A project file put back under any number becomes that project.
 
 ## Riff and Shake

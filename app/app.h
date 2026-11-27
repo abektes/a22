@@ -4,7 +4,7 @@
 #include "plat.h"
 
 #define APP_NAME "A22"
-/* the companion's files (fm1.toml companion = true): project1 to project4, each a project's record as its slot holds
+/* the companion's files (fm1.toml companion = true): project1.a22 to project4.a22, each a project's record as its slot holds
  * it (app.c: a header page, the state, the loop). Read in place; a write goes into a free slot and counts at commit,
  * once its header and body check; busy while the tape plays, a take goes in, or a project saves or loads */
 #define APP_FILES

@@ -3,7 +3,7 @@
 APP_FILES hooks (app/app.c), in the host simulator driven as an FM-1 (a22_host --serve) by tools/fm1_companion.py's
 own client, as the companion page and the tool talk to an FM-1.
 
-  the list      project1..4, kind project, P1's size once it is saved from the panel, the rest empty
+  the list      project1.a22..project4.a22, kind project, P1's size once it is saved from the panel, the rest empty
   read          P1 read whole, CRC-checked: its header (magic "A22P", project 0) and its state as the slot holds it
   write         P1's file put to project2: P2 is P1's state and loop, its header says project 1 now; a restart keeps it
   refused       a body that does not match its header's CRC, a header of another version: P3 stays empty
@@ -75,7 +75,7 @@ def main():
 
     # the list
     fs = c.files()
-    check([f["name"] for f in fs] == ["project1", "project2", "project3", "project4"], "four files, project1..4")
+    check([f["name"] for f in fs] == [f"project{n}.a22" for n in range(1, 5)], "four files, project1.a22..project4.a22")
     check(all(f["kind"] == "project" and f["room"] == 20480 for f in fs), "kind project, room 20,480 bytes")
     check(fs[0]["size"] > 256 and all(f["size"] == 0 for f in fs[1:]), f"P1 holds {fs[0]['size']} bytes, the rest none")
 

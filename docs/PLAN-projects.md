@@ -124,7 +124,8 @@ feature that needs SRAM has about 1 KB.
   - A port that keeps no projects (it never calls `h1_proj_news`) gets nothing from the keys: no `SAVING P1` that
     goes nowhere.
 - [x] **P4. Project files over USB** (`companion = true` in `app/fm1.toml`; `APP_FILES` in `app/app.h`).
-  - `project1` to `project4`, kind project, room 20,480 bytes. A file is the project's record as its slot holds it
+  - `project1.a22` to `project4.a22` (named with `.a22` after P5, so a download has an extension), kind project, room
+    20,480 bytes. A file is the project's record as its slot holds it
     (header page, state, loop), read in place.
   - **A write** goes into a free slot. Each 512-byte frame is written straight to flash as it comes, the sectors
     erased as the data reaches them (sliced), so there is no file buffer. The header is kept in RAM (32 bytes) and
