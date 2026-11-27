@@ -15,6 +15,8 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   same to the bit with stems taken or not, nothing written while nobody records, and with the master bus flat the stems
   adding up to the mix to 0.3%, a loud chord bringing the limiter in. `tests/stems.txt` and `tools/a22_stems.py` check
   the same through fm1-base's simulator, MASTER at half; the fuzz records stems through a ring that wraps at an odd place.
+- Costs: the USB audio ring grows from 2 KB to 10 KB and the stems take 2 KB, 11,024 B of SRAM in all (10,200 B free,
+  2 KB past the 8 KB spare the build keeps); the image grows by 1,616 B to 556,240 B of the 581,564 B slot.
 
 ## 0.7.2
 
