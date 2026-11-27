@@ -36,6 +36,10 @@ usb_host = true
 # stored trimmed to each glyph's lit box and Huffman-coded, the same pixels in about 17.5 KB instead of 61 KB
 font_trim = true
 font_pack = true
+# the panel's own ST7789V setup after its reset (base/device/lcd.c LCD_SEQ: porch, gate voltages, VCOM 0x18, supplies,
+# 60 Hz, gammas): the newer FM-1s (UC25HQ80 flash, B36014) show washed-out colours or a blank screen without it, as h1
+# 0.3.1 found; the panel's SPI stays on the fast clock (LCD_BAUD 0), as h1 0.3.2 put every unit back on
+lcd_panel = true
 # what a crash leaves behind is kept in flash (read with base/tools/fm1_remote.py crashes), with each stack's
 # room at the crash; the stacks are painted at every start, so their unused bytes can be read (app.c's PERF)
 crash_history = true
