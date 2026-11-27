@@ -18,10 +18,32 @@ engines' renders in RAM), what the FM-1 developer wiki says about this chip
       had sounded through them, so they never held on the device after the first note until now.
       On the FM-1 (that package, 2026-11-27): after a start with SHIFT chosen 12% idle, effect stage 1% (16% and 6%
       before); after notes through SHIFT, back to 12% and 1% within 15 s. No crash.
-- [ ] K1. The newer fm1-base
-- [ ] K2. Sliced flash erase
-- [ ] K3. The newer FM-1's screen
-- [ ] K4. Denormal speed, measured
+- [x] **K1. The newer fm1-base** (branch `base-main`, `93607de`, PR abektes/a22#16, CI device build 45914119065).
+      fm1-base `3039770`, felucca-bsp `fdd709f`; nothing in A22 needed changing (no API, build or linker change it
+      meets; `panel_setup` is fm1-base's own static, no clash). Image 552,736 B (2,192 less), SRAM free 73,800 B
+      (1,744 more: RAM code 8,036 B). On the FM-1 (2026-11-27, against the K0 build measured the same session just
+      before): installed first try, no crash; idle 11-16% by effect, every one within a point of before; all 112
+      algorithms, eight-note chords, PLATE: AUDIO average 49.9% (49.2), peak 75% PERC GAMELAN (74), FPS 44.4 (45.0),
+      min 22 STACK CHOIR (23). About +0.7 points throughout (81 algorithms up a point, none down), inside the 1-2
+      allowed. A scratch take (the tape was empty; owner's yes) played through a power cycle while playing, settings
+      kept. No USB keyboard at hand: the USB host is checked only by the host simulator's `tests/usbhost.txt`.
+- [x] **K2. Sliced flash erase** (`42851b5`, `FM1B_ERASE_SLICED 1` in `app/app.h`; PERF says HELD, erases since the
+      start that held the sound whole: `plat_flash_held`). On the FM-1 (CI device build 45914219105): SAVE with the
+      tape playing, after ALGO turned, twice: LATE 0 and HELD 0 both times (0.7.1: LATE 1); a power cycle kept the
+      saved algorithm and the tape. HELD 0 says this FM-1's flash suspends the erase. felucca-bsp checks no part,
+      but a part that ignores the suspend is waited out in one window with the sound silenced (fm1_flash_slice.h),
+      as before, and HELD counts it: a newer unit is no worse than 0.7.1. The ring's own erase after a stop (ERASE)
+      was not provoked on the device (it needs a slot filled by overdubs); `tests/ringerase.txt` passes. Step 3
+      (saving by itself while playing) is left for the owner to decide.
+- [x] **K3. The newer FM-1's screen** (`5e4f12f`, `lcd_panel = true`). On the owner's FM-1 (the same build): the
+      screen looks as before (the owner's eye), FPS 63 idle as before. Its flash part is not known: `fm1_install.py
+      --info` doesn't show it from a running A22. The release notes ask newer-unit owners to report.
+- [x] **K4. Denormal speed, measured** (debug branch `debug-denormal-speed`, never merged, CI device build
+      45914332675). Four dependent chains x = x*0.5 + c, 4,096 steps, least of five, on the FM-1 from the main loop:
+      denormal operands (c = 1e-40, results stay near 2e-40: bit pattern 570896 read back) 6,151 ticks of 24 MHz,
+      normal (c = 1e-3) 6,151, zero 6,161, four tries alike: 15.6 ns a multiply-add whatever the operands. **The
+      FM-1's FPU keeps denormals and does arithmetic on them at full speed** (the wiki's open question 8). So no
+      snaps: a decaying state costs nothing more; only a sleep that waits for exactly 0 needs `snap0` (K0).
 - [ ] K5. The engines' renders in RAM
 - [ ] K6. (only if time) compiler flags, measured
 - [ ] K7. Release
