@@ -66,8 +66,9 @@ engines' renders in RAM), what the FM-1 developer wiki says about this chip
       RAM, falls from 91% to 75% at its peak and from about 73% to 63% on average, FPS 15-18 to 21-25: the tactic
       pays where many voices of a few engines play, as it did on DUB-1. Step 2 (`k5-ram-2`) was built but not timed
       on its own. Hashes: the code is unchanged (only its section), and `tests/run_tests.sh` passes.
-- [ ] K6. (only if time) compiler flags, measured
-- [ ] K7. Release
+- [ ] K6. (only if time) compiler flags, measured. Not done in 0.7.2: left for a later release.
+- [x] **K7. Release** 0.7.2 (owner's go-ahead 2026-11-27): release commit `34b61d5` (CHANGELOG `## 0.7.2`,
+      `dist/a22.rfm1` 0.7.2), PRs abektes/a22#16 then #18 merged into `main`, annotated tag `v0.7.2` on #18's merge.
 
 ## Where things stand (0.7.1, CI 45877821782)
 
