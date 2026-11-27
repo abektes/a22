@@ -13,8 +13,9 @@
 #   keymap     the key mapping (core/keymap.c): a note in one key played in another, by scale steps, clamped
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
-#   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
-#   pads       chord pads: the 24 sets in every root, their names and numerals
+#   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORDS page
+#   pads       chord pads: the 24 sets in every root; every note-off matched whatever changes under a held pad,
+#              HOLD, HUSH, the tape, STEP and RIFF, SMOOTH, the saved state, the CHORDS page and key lights
 #   state      saved state version 5: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
 #              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
 #              (and a project's state: taken whole but TUNE and BRIGHT)
@@ -80,6 +81,8 @@ python3 tests/projfiles.py "$out/a22_host"
 "$out/a22_host" tests/punch.txt "$out"
 # LANE: SEQ, SELECT twice is the LANE subpage (said), BAR 2, ROOT D, and a field turned past its first value is said NONE
 "$out/a22_host" tests/lane.txt "$out"
+# CHORD PADS: ARP held opens CHORDS (said), MODE PADS, the set, and a pad's three notes on USB with their off
+"$out/a22_host" tests/pads.txt "$out"
 # STEMS: the USB audio input's ten channels, a take on each track then a pass recorded at half MASTER, checked by
 # tools/a22_stems.py: T1 to T4 on 3-4 to 9-10 in turn, fitting the mix but for its master bus, T1 muted silent
 "$out/a22_host" tests/stems.txt "$out"

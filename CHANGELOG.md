@@ -5,6 +5,18 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 
 ## Unreleased
 
+**Chord pads**
+- **Hold ARP** opens CHORDS, a page of its own; GLO's CHORD subpage moved there, and EDIT + GLO works as before.
+- MODE **PADS**: the eight white keys from the lowest F play eight chords, from 24 sets (POP, BALLAD, SOUL, LOFI, JAZZ,
+  CINEMA, HOUSE, DARK, three each), in the KEYS root or the lane's while the tape plays. The screen shows each chord and
+  its numeral. The tape, STEP, the arpeggiator, HOLD, STRUM and MIDI out get the notes. On KIT and SKINS the keys stay
+  drums.
+- VOICING **SMOOTH**: each chord takes the inversion closest to the last one.
+- CHORD PLAY shows the last chord on a keyboard.
+- The saved state is still version 5: the set is a byte that was spare. Older firmware reads PADS as OFF and SMOOTH
+  as CLOSE.
+- `tests/pads.c` and `tests/pads.txt`. Not yet timed on an FM-1.
+
 **USB audio stems**
 - The USB audio input has ten channels: the mix on 1 and 2 as before (the same to the bit), and T1 to T4 on 3-4, 5-6,
   7-8 and 9-10. Each track is taken as it goes into the mix, after its volume and pan, with the limiter's gain and

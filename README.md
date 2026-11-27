@@ -87,7 +87,8 @@ A page's four columns are the four knobs. SELECT steps through its subpages.
 | MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE; KEY: OFF or ON per track (DRUM on a drum track) |
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
-| GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
+| GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD |
+| CHORDS | hold ARP | PADS: MODE, SET (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM |
 | SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE |
 | TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH; LANE: BAR, ROOT, SCALE, DEG |
 
@@ -160,19 +161,27 @@ Modes of the SEQ page (ARP, then ALGORITHM; or hold EDIT and turn ALGORITHM anyw
 - **SHAKE:** every key drops a ball into a spinning cage, and the ball plays its note each time it bounces. GRAV,
   SPIN and BOUNCE are on the page, CAGE on its second subpage. KNOB 1 stays MODE.
 
-## Chord memory
+## Chords
 
-One key plays a chord. The settings are GLO's third subpage, CHORD:
+**Hold ARP** to open CHORDS. SELECT steps between PADS and PLAY.
 
-- **MODE:** OFF; MEMORY, a chord you play in; SCALE, chords from the KEYS page's root and scale (with CHROM, the
-  major scale); SHAPE, a fixed chord.
-- **TYPE:** in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER or OCT.
-- **VOICING:** CLOSE; OPEN (the middle note up an octave); DROP2 (the second from the top down an octave); +BASS
-  (the root again an octave below).
-- **STRUM:** 0 plays the notes together; up to 60 ms between them, bottom up.
+- **MODE:** OFF; PADS, a chord on each of eight keys; MEMORY, a chord you play in; SCALE, chords from the KEYS page's
+  root and scale (with CHROM, the major scale); SHAPE, a fixed chord.
+- **PLAY** subpage: **VOICING:** CLOSE; OPEN (the middle note up an octave); DROP2 (the second from the top down an
+  octave); +BASS (the root again an octave below); SMOOTH (the inversion closest to the last chord). **STRUM:** 0
+  plays the notes together; up to 60 ms between them, bottom up. The screen shows the last chord on a keyboard.
+
+**PADS.** The eight white keys from the lowest F play eight chords; the other keys play notes. K2 picks the **SET**:
+POP, BALLAD, SOUL, LOFI, JAZZ, CINEMA, HOUSE and DARK, three of each. The screen shows each pad's chord and its
+numeral (a minor one underlined; BORROWED for a chord whose root is outside the set's major or minor key). The chords
+are built from the KEYS page's ROOT, or the lane's while the tape plays; SCALE doesn't change them, and still snaps
+the other keys. OCT moves chords and notes together. On KIT and SKINS the keys stay drums. MONO plays a pad's root.
+
+**TYPE** (SCALE and SHAPE): in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7,
+POWER or OCT.
 
 **Hold the keys and press EDIT + GLO** to store them as MEMORY's chord (up to six notes); each key then plays that
-shape from itself. EDIT + GLO with no keys held turns chords off and on.
+shape from itself. Pad keys don't count. EDIT + GLO with no keys held turns chords off and on.
 
 The tape, the step sequencer, the arpeggiator and MIDI out get the chord's notes, so recordings play back as heard.
 MIDI in is never made into chords. MONO plays the root alone. A chord takes a voice per note, out of eight.
@@ -192,7 +201,7 @@ MIDI in is never made into chords. MONO plays the root alone. A chord takes a vo
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
 | EDIT + ARP | Hold (latch) on and off |
-| EDIT + GLO | With keys held: store them as the chord. With none: chords off, or on again |
+| EDIT + GLO | With keys held (pad keys aside): store them as the chord. With none: chords off, or on again |
 | EDIT + LFO | DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits |
 | EDIT + ENV | Back to the knobs before the last roll, and again to the roll |
 | SAVE | Save the settings now |
@@ -200,6 +209,7 @@ MIDI in is never made into chords. MONO plays the root alone. A chord takes a vo
 | SAVE + F#, G#, A#, C# | Load project 1 to 4 (the tape stopped). **SAVE + EDIT + key** saves to it (see Projects) |
 | hold SAVE | Reset the algorithm's knobs. About two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages |
 | hold SEQ | Swap TAPE and STEP |
+| hold ARP | CHORDS (see Chords) |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
 | hold HOME | Silence everything (and send CC 123) |
 | OCT − / + | Octave, two each way. Both together: the middle octave |

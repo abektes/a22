@@ -158,7 +158,7 @@ static void frame(uint32_t ms, int with_sound)
         have_want = 0;
     }
     if (h1_instrument() < 0 || h1_instrument() >= h1_instrument_count() || h1_algorithm() < 0 || h1_algorithm() >= nalgos(h1_instrument()) ||
-        h1_page() < 0 || h1_page() > 7)
+        h1_page() < 0 || h1_page() >= NPAGE)
         die("out of range", h1_instrument(), h1_algorithm(), h1_page(), 0);
     (void)h1_key_leds();
     (void)h1_button_leds();
@@ -343,6 +343,10 @@ static void part_state(int rounds)
             static const uint8_t KB[] = {0, 0x80, 0x8C, 0xA5, 0xFF, 0x25, 0x71, 0xC3};
             odd[1 + offsetof(H1State, rsv)] = below(2) ? KB[below(8)] : (uint8_t)rnd();
             odd[1 + offsetof(H1State, rsv) + 1] = below(2) ? 0 : (uint8_t)rnd();
+            if (below(2)) {                                  /* a chord mode and a set that load, so pads play */
+                odd[1 + offsetof(H1State, chord)] = (uint8_t)below(CHORD_PADS + 1);
+                odd[1 + offsetof(H1State, rsv) + 1] = (uint8_t)below(NCHSET);
+            }
             for (k = 0; k < NTRACK; k++)
                 odd[1 + offsetof(H1State, trk) + (size_t)k * sizeof(Track) + offsetof(Track, rsv)] =
                     below(2) ? (uint8_t)below(2) : (uint8_t)rnd();

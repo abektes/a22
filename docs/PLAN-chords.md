@@ -37,18 +37,21 @@ A sprint is done when all of these are ticked:
 
 ## Sprint 1: chord pads
 
-- [ ] **Sets.** A table of chord types and 24 sets of eight pads, our own, in flash. A test builds every pad of every
+Built 2026-11-27 on branch `chords-pads`; its host tests and the fuzz pass. Still to do: CI's flash and SRAM line
+(the flash gate), and the owner's run on the FM-1.
+
+- [x] **Sets.** A table of chord types and 24 sets of eight pads, our own, in flash. A test builds every pad of every
       set in all twelve roots: in range, at most six notes, a name for each.
-- [ ] **MODE PADS** (`core/synth.c`, beside chord memory). The eight white keys from the lowest F are caught by key,
+- [x] **MODE PADS** (`core/synth.c`, beside chord memory). The eight white keys from the lowest F are caught by key,
       before scale snapping and octave; OCT moves the chord. Notes go the way chord memory's do, to the tape, STEP, arp,
       latch, strum and MIDI out; pads need slot and latch identities of their own. Off on KIT and SKINS.
-- [ ] **SMOOTH** voicing.
-- [ ] **The CHORDS page:** PADS (MODE, SET) and PLAY (VOICING, STRUM), the eight cards with name and numeral, the pad
+- [x] **SMOOTH** voicing.
+- [x] **The CHORDS page:** PADS (MODE, SET) and PLAY (VOICING, STRUM), the eight cards with name and numeral, the pad
       in hand, the sounding pad. Pad keys light while held.
-- [ ] **Controls.** Hold ARP opens the page (ARP's tap moves to release; EDIT + ARP unchanged). HOLD ARP: CHORDS on the
+- [x] **Controls.** Hold ARP opens the page (ARP's tap moves to release; EDIT + ARP unchanged). HOLD ARP: CHORDS on the
       SEQ page. GLO's CHORD subpage removed. EDIT + GLO unchanged.
-- [ ] **Saved:** MODE and SET come back after a restart, no version change. A state from 0.7.x loads as before.
-- [ ] **Tests:** every note-off matches its note-on across set, ROOT, mode, track and octave changes with pads held;
+- [x] **Saved:** MODE and SET come back after a restart, no version change. A state from 0.7.x loads as before.
+- [x] **Tests:** every note-off matches its note-on across set, ROOT, mode, track and octave changes with pads held;
       SAVE + key and FX + key still win; MIDI in unchanged; RIFF record and STEP write with pads, as chord memory; two
       pads on one root, and a pad with a played key at the same pitch, held and latched, released in either order.
 

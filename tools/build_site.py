@@ -147,7 +147,8 @@ PAGES = [("FX", "FX", "the effect's four knobs"),
                         "KEY: OFF or ON per track (DRUM on a drum track)"),
          ("ENV", "ENV", "ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH"),
          ("LFO", "LFO", "SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan)"),
-         ("GLOBAL", "GLO", "TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM"),
+         ("GLOBAL", "GLO", "TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD"),
+         ("CHORDS", "hold ARP", "PADS: MODE, SET (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM"),
          ("SEQ", "ARP", "MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. "
                          "In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE"),
          ("TAPE", "SEQ", "TRACK, BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK; edit: IN BAR, OUT BAR, SNAP, PITCH; "
@@ -163,7 +164,7 @@ HOTKEYS = [("PRESETS", "The engine. With EDIT held: the track in hand, T1 to T4.
            ("EDIT", "Pins the knob strip. Writing steps or a riff: a rest."),
            ("EDIT + FX", "Effect on or bypassed."), ("EDIT + SEL", "Mute the track in hand."),
            ("EDIT + ARP", "Hold (latch) on and off."),
-           ("EDIT + GLO", "With keys held: store them as the chord. With none: chords off, or on again."),
+           ("EDIT + GLO", "With keys held (pad keys aside): store them as the chord. With none: chords off, or on again."),
            ("EDIT + LFO", "DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits."),
            ("EDIT + ENV", "Back to the knobs before the last roll, and again to the roll."),
            ("EDIT + REC / PLAY", "Cut the track's notes to a clipboard / paste them at the current bar."),
@@ -172,7 +173,7 @@ HOTKEYS = [("PRESETS", "The engine. With EDIT held: the track in hand, T1 to T4.
            ("SAVE + F#, G#, A#, C#", "Load project 1 to 4, the tape stopped. SAVE + EDIT + key saves to it."),
            ("hold SAVE", "Reset the algorithm's knobs. Two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages."),
            ("hold REC", "Clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC to clear the whole tape."),
-           ("hold SEQ", "Swap the tape and the step sequencer."), ("hold GLO", "Metronome: CLICK REC, CLICK ON, CLICK OFF."),
+           ("hold ARP", "CHORDS."), ("hold SEQ", "Swap the tape and the step sequencer."), ("hold GLO", "Metronome: CLICK REC, CLICK ON, CLICK OFF."),
            ("hold HOME", "Silence everything (and send CC 123)."),
            ("OCT − / +", "Octave, two each way. Both together: the middle octave."),
            ("hold OCT − and OCT +", "USB host for a keyboard, or back to the computer.")]
@@ -694,9 +695,12 @@ def manual():
             stopped. Over changed work it asks LOAD P2? AGAIN first: the same keys within three seconds load it. With
             SAVE held the keys that hold a project light up. Another firmware may write over them: keep them on a
             computer with the <a href="companion/">companion page</a> (Chrome or Edge, Back up all).</p>
-          <h3>Chord memory</h3>
-          <p>Hold a chord and press EDIT + GLO: each key then plays that shape from itself. The CHORD page can also build chords
-            from the KEYS page's scale, or play a fixed shape.</p></div>
+          <h3>Chords</h3>
+          <p>Hold ARP for CHORDS. In MODE PADS the eight white keys from the lowest F play eight chords in the KEYS page's
+            root, from 24 sets (POP, BALLAD, SOUL, LOFI, JAZZ, CINEMA, HOUSE, DARK), each named on the screen; the other keys
+            play notes. VOICING SMOOTH keeps each chord close to the last. MEMORY: hold a chord and press EDIT + GLO, and
+            each key then plays that shape from itself. SCALE builds chords from the KEYS page's scale, SHAPE plays a fixed
+            one.</p></div>
       </div>
     </section>
 

@@ -221,6 +221,10 @@ otherwise the same: `h1_state_load` reads it a table at a time, by the offsets o
 Any other version or size is refused and the settings start as new; the tape is saved apart and kept.
 `tests/state.c` loads a state written by 0.4.0's own core (`tests/state_v4.bin`) and compares every table.
 
+Two bytes that were spare are used since: `rsv[0]` is the step pattern's key, and `rsv[1]` the chord pads' set.
+MODE PADS and VOICING SMOOTH are new values of `chord[0]` and `chord[2]`; older firmware reads them as OFF and
+CLOSE.
+
 ## Controls as values
 
 `h1_control` reports what each encoder currently means (its name, range, value and value text)
