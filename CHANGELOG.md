@@ -3,7 +3,23 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.7.2
+
+Identity `FM-1_4122000702`. Released 2026-11-27. Performance and the newer fm1-base: SHIFT and TANK asleep again, saving
+without a gap in the sound, the panel's own setup for the newer FM-1s, and seven engines rendering from RAM. Run on one
+FM-1 (CI's test packages of the same code, each step on its own), no crash recorded:
+- the image is 554,624 B of the 581,564 B slot; SRAM keeps 21,224 B free (13 KB past the 8 KB spare);
+- with nothing playing 11-15% of the audio time by effect and 63 frames a second; SHIFT 12% after notes through it (16%
+  on 0.7.1);
+- eight-note chords on all 112 algorithms under PLATE: 49.5% of the audio time on average, peak 73% (PERC GAMELAN), 45
+  frames a second on average;
+- a four-layer loop jam (SHAPER, ELECTRIC, KIT, STACK) peaks at 75% (91% before the renders moved to RAM), 21-25
+  frames a second, no late audio;
+- SAVE with the tape playing: no audio half late, twice (one on 0.7.1); switched off and on, the FM-1 came back with
+  what was saved, and the tape played.
+
+Settings and the tape saved by 0.1.0 to 0.7.1 load as before: the state is still version 5 and the tape's format is
+unchanged. Owners of a newer FM-1 (UC25HQ80 flash): please report how the screen looks.
 
 **Audio time**
 - SHIFT and TANK fall asleep again on the FM-1 once nothing sounds, as 0.6.0 meant them to: about 5 points of the audio
