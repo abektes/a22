@@ -208,7 +208,7 @@ static inline __attribute__((always_inline)) void digital_render_a(Voice *v, con
 
 /* one copy of the render per algorithm (algo a constant in each: the branches on it inside the sample loop
  * fold away); the same code, bit-exact */
-static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void digital_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     switch (DG.algo & 7) {
     case 0: digital_render_a(v, b, out_l, out_r, n, 0); break;

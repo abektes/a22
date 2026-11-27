@@ -863,7 +863,9 @@ static void say_perf(void)
     d = say_cat(d, end, ". ERASE ");                        /* the ring's sector erases, and the most in a frame (us) */
     d = say_num(d, end, pf.erase_n);
     d = say_cat(d, end, " ");
-    say_num(d, end, pf.erase_max);
+    d = say_num(d, end, pf.erase_max);
+    d = say_cat(d, end, ". HELD ");                         /* erases since the start that held the sound whole */
+    say_num(d, end, plat_flash_held());
     ann_say(t, 0, ANN_NOW);
     pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = pf.flash_n = pf.flash_max = 0;
     pf.erase_n = pf.erase_max = 0;

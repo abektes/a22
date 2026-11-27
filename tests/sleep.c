@@ -17,8 +17,8 @@
 #include <pmmintrin.h>
 #endif
 
-/* Denormals flushed to zero, as the FM-1 does (port/host/main.c does the same): without it a filter's state can stop at
- * the smallest denormal instead of 0, and an effect never sleeps on the host though it does on the device. */
+/* Denormals flushed to zero for the comparison of asleep and awake (port/host/main.c flushes them too). The FM-1 does
+ * not: it keeps them, which `sleep denormals` (denormals_kept, below) runs as. */
 static void flush_denormals(void)
 {
 #if defined(__SSE2__)
@@ -132,10 +132,43 @@ static void wire(void)
     }
 }
 
+/* `sleep denormals`: the effects fall asleep with denormals kept, as the FM-1 keeps them (its FPU does not flush them;
+ * 0.7.1's PERF on an FM-1 read SHIFT's first allpass state at 1.4e-45, the smallest denormal, for good). A filter's
+ * state decays to the smallest denormal and stays there, since a fraction of it rounds back to it, so an effect that
+ * waits for its state to be exactly 0 never sleeps once something has gone through it. Not flushed here, so it runs
+ * as the device does. */
+static int denormals_kept(void)
+{
+    static const int FXS[4] = {FX_DELAY, FX_SHIFT, FX_CHORUS, FX_TANK};
+    static const char *const NAMES[4] = {"DELAY", "SHIFT", "CHORUS", "TANK"};
+    int f, i, t, bad = 0;
+    h1_init(44100);
+    run(10);
+    for (f = 0; f < 4; f++) {
+        uint32_t s0;
+        st.fx_type = (uint8_t)FXS[f];
+        st.fx_on = 1;
+        for (i = 0; i < 4; i++) st.fx_p[FXS[f]][i] = 50;
+        for (t = 0; t < NTRACK; t++) st.trk[t].send = 100;
+        for (i = 0; i < 6; i++) { h1_key(3 + 3 * i, 1); run(20); h1_key(3 + 3 * i, 0); run(5); }
+        run(2600);                                           /* 15 s: tails gone, lines run out */
+        s0 = fx_test_slept(FXS[f]);
+        run(100);
+        if (fx_test_slept(FXS[f]) == s0) {
+            fprintf(stderr, "FAIL sleep: %s never fell asleep after sounding, with denormals kept (as on the FM-1)\n", NAMES[f]);
+            bad = 1;
+        } else
+            printf("denormals: %s asleep after sounding\n", NAMES[f]);
+    }
+    return bad;
+}
+
 int main(int argc, char **argv)
 {
     int before = argc > 1 && !strcmp(argv[1], "before"), f, bad = 0;
     static const int FXS[4] = {FX_DELAY, FX_SHIFT, FX_CHORUS, FX_TANK};
+    if (argc > 1 && !strcmp(argv[1], "denormals"))
+        return denormals_kept();
     flush_denormals();
     fx_test_no_sleep(before);
     wire_test_whole_row(before);

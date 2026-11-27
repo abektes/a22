@@ -180,7 +180,7 @@ static inline __attribute__((always_inline)) void fm4_loop(FmRun *R, const int t
     R->sa[0] = sa[0]; R->sa[1] = sa[1]; R->sb[0] = sb[0]; R->sb[1] = sb[1];
 }
 
-static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void fm4_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     const FmAlgo *a = &FA[F.algo];
     f32 pitch = v->pitch + b->bend;

@@ -91,6 +91,11 @@ void fx_test_no_sleep(int on) { echo_no_sleep = on; }   /* (tests/sleep.c: the s
 uint32_t fx_test_slept(int t) { return (uint32_t)t < NFX ? echo_slept[t] : 0u; }   /* (blocks it slept) */
 #endif
 static int fx_now;                               /* (the effect echo_asleep is asked for) */
+/* A filter state the effects' sleep reads, 0 once it is below 1e-20 (-400 dB): the FM-1's FPU keeps denormals, and a state
+ * decaying with nothing coming in stops at the smallest one (1.4e-45, a fraction of which rounds back to it), never at
+ * 0. SHIFT's first allpass sat there from every start on 0.7.1 and SHIFT never slept (PERF on an FM-1); TANK the same.
+ * Once a block, before the sleep's test, awake or asleep alike (tests/sleep.c denormals) */
+static inline void snap0(f32 *x) { if (absf(*x) < 1e-20f) *x = 0.0f; }
 static int echo_asleep(const f32 *sl, const f32 *sr, uint32_t line)
 {
     int n;
@@ -403,6 +408,7 @@ static void fx_delay(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     tgt_r = tgt * 1.5f + 40.0f < 16383.0f ? tgt * 1.5f : tgt * 0.75f;
     if (mix <= 0.001f)
         return;
+    snap0(&echo_lpl); snap0(&echo_lpr); snap0(&echo_ol); snap0(&echo_or);
     if (echo_lpl == 0.0f && echo_lpr == 0.0f && echo_ol == 0.0f && echo_or == 0.0f && echo_asleep(sl, sr, 16384u)) {
         for (n = 0; n < CTRL; n += 2) {          /* asleep (echo_quiet) */
             wow_ph += 0.62f * 2.0f * ISRf; if (wow_ph >= 1.0f) wow_ph -= 1.0f;
@@ -487,12 +493,16 @@ static void fx_shift(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8
     f32 fb = (f32)p[2] * 0.01f * 0.84f;
     f32 mix = (f32)p[3] * 0.01f;
     f32 dph = shift_hz * ISRf;
-    int n, j, quiet = shf_fb_l == 0.0f && shf_fb_r == 0.0f;
+    int n, j, quiet;
 
     if (mix <= 0.001f)
         return;
-    for (j = 0; j < 4; j++)
+    snap0(&shf_fb_l); snap0(&shf_fb_r);
+    quiet = shf_fb_l == 0.0f && shf_fb_r == 0.0f;
+    for (j = 0; j < 4; j++) {
+        snap0(&shf_i1[j]); snap0(&shf_q1[j]);
         quiet &= shf_i1[j] == 0.0f && shf_q1[j] == 0.0f;
+    }
     if (quiet && echo_asleep(sl, sr, 16384u)) {
         for (n = 0; n < CTRL; n++) {             /* asleep (echo_quiet) */
             shf_ph += dph;
@@ -591,6 +601,7 @@ static void fx_tank(const f32 *sl, const f32 *sr, f32 *dl, f32 *dr, const uint8_
 
     if (mix <= 0.001f)
         return;
+    snap0(&spr_lp); snap0(&spr_ap[0]); snap0(&spr_ap[1]); snap0(&spr_ap[2]); snap0(&spr_ap[3]);
     if (spr_lp == 0.0f && spr_ap[0] == 0.0f && spr_ap[1] == 0.0f && spr_ap[2] == 0.0f && spr_ap[3] == 0.0f
         && echo_asleep(sl, sr, 8192u)) {
         echo_w += CTRL;                          /* asleep (echo_quiet) */

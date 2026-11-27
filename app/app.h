@@ -12,6 +12,13 @@ void app_splash(void);                   /* instrument comes up */
 #define APP_CANVAS_PX (240u * 48u)
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms */
 #define APP_USB_HOST_NAME                /* the USB host reads a keyboard's name, to show when it connects */
+/* a 4 KiB erase (the store's saves, the tape's ring) in windows of about 1 ms with the interrupts and the sound on
+ * between them (fm1-base device/main_fm1.c data_erase, felucca-bsp fl_erase4k_sliced), instead of one window of
+ * about 18 ms with the sound silenced: SAVE and the ring's erase no longer leave an audio half unrendered. A flash
+ * part that ignores the suspend is waited out in one window as before (plat_flash_held counts those: PERF's HELD).
+ * The render never returns with the second core's job running (core/synth.c, core/fx.c wait for it), which the
+ * windows need: the XIP is off in each */
+#define FM1B_ERASE_SLICED 1
 
 /* the store: the saved state, the platform's panel calibration and the loop recorder's loop. Each object is an
  * A/B pair of 4 KiB sectors, written by the platform's storage (CRC, a torn write leaves the copy before in

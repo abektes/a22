@@ -225,7 +225,7 @@ static void elec_render_a(Voice *v, const Blk *b, f32 *out_l, f32 *out_r,
     v->s[4] = lpl; v->s[5] = lpr;
 }
 
-static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
+H1_HOT static void elec_render(Voice *v, const Blk *b, f32 *out_l, f32 *out_r, int n)
 {
     elec_render_a(v, b, out_l, out_r, n, E.algo & 7);
 }

@@ -15,7 +15,11 @@ typedef float f32;
  * (fm1-base's build checks the disassembly: tools/ramcode.py), so it is flattened: every helper it calls is inlined
  * into it, there and only there (the helpers themselves stay plain static inline, so the engines in the flash are
  * built as before). Code in the flash calls it through H1_FAR, since a direct call does not reach that far. In the
- * host simulator, the browser's and the tests: plain functions and plain calls. */
+ * host simulator, the browser's and the tests: plain functions and plain calls.
+ * (0.7.2) Seven engines have their voice render in RAM too (docs/PLAN-0.7.2.md K5): PERC, FM-4, SHAPER, STACK, HAZE,
+ * ELECTRIC and KIT, about 50 KB. Each is called through InstDef's render pointer from voice_block, in the flash
+ * (allowed), and calls nothing itself. Moving only some of them made the ones left in the flash slower (K5 step 1):
+ * measure on the FM-1 before moving another or taking one back. */
 #if defined(H1_DEVICE) && !defined(PLAT_HOST)
 #define H1_HOT __attribute__((section(".app_ram"), noinline, flatten))
 static inline __attribute__((always_inline)) void *h1_far_ptr(void *fn)

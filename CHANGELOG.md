@@ -3,6 +3,57 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## 0.7.2
+
+Identity `FM-1_4122000702`. Released 2026-11-27. Performance and the newer fm1-base: SHIFT and TANK asleep again, saving
+without a gap in the sound, the panel's own setup for the newer FM-1s, and seven engines rendering from RAM. Run on one
+FM-1 (CI's test packages of the same code, each step on its own), no crash recorded:
+- the image is 554,624 B of the 581,564 B slot; SRAM keeps 21,224 B free (13 KB past the 8 KB spare);
+- with nothing playing 11-15% of the audio time by effect and 63 frames a second; SHIFT 12% after notes through it (16%
+  on 0.7.1);
+- eight-note chords on all 112 algorithms under PLATE: 49.5% of the audio time on average, peak 73% (PERC GAMELAN), 45
+  frames a second on average;
+- a four-layer loop jam (SHAPER, ELECTRIC, KIT, STACK) peaks at 75% (91% before the renders moved to RAM), 21-25
+  frames a second, no late audio;
+- SAVE with the tape playing: no audio half late, twice (one on 0.7.1); switched off and on, the FM-1 came back with
+  what was saved, and the tape played.
+
+Settings and the tape saved by 0.1.0 to 0.7.1 load as before: the state is still version 5 and the tape's format is
+unchanged. Owners of a newer FM-1 (UC25HQ80 flash): please report how the screen looks.
+
+**Audio time**
+- SHIFT and TANK fall asleep again on the FM-1 once nothing sounds, as 0.6.0 meant them to: about 5 points of the audio
+  time back with nothing playing. The FM-1 keeps denormals, so a filter's state decaying with nothing coming in stopped at
+  the smallest float (1.4e-45, read off an FM-1 for SHIFT) and never reached the 0 their sleep waited for: SHIFT, from
+  every start with it chosen, ran at 16% of the audio time instead of 11% until another effect was chosen and back.
+  States below 1e-20 (-400 dB) are now 0 for the sleep's test, in DELAY, SHIFT and TANK; the sound is otherwise the
+  same. `tests/sleep.c` (`denormals`) runs the four echo effects with denormals kept, as the FM-1 does.
+- Dense loop jams have more room: seven engines (PERC, FM-4, SHAPER, STACK, HAZE, ELECTRIC and KIT) render their voices
+  from RAM instead of flash, out of the way of the instruction cache the screen's drawing shares. On the FM-1 a
+  four-layer jam of SHAPER, ELECTRIC, KIT and STACK peaks at 75% of the audio time instead of 91%, and the screen keeps
+  21-25 frames a second instead of 15-18; eight-note chords on each of those engines peak 1-2 points lower. ANALOG and
+  MONO, still in flash, peak about 2 points higher. The sound is the same to the bit.
+
+**Saving**
+- Saving no longer stops the sound for a moment. A save erases a 4 KiB sector of flash first: that ran as one stretch
+  of about 18 ms with the interrupts off, so SAVE with the tape playing, and the tape's own flash made ready after a
+  stop, left an audio half unplayed. The erase now goes in steps of about 1 ms with the sound running between them
+  (fm1-base's sliced erase). A flash part that can't pause an erase is waited out as before; PERF's new HELD says how
+  many erases did that since the start.
+
+**Screen**
+- The panel gets its own full setup at start (porch, gate voltages, VCOM, supplies, 60 Hz, gammas), as M-VAVE's
+  firmware sends it. Newer FM-1s (with the UC25HQ80 flash) showed washed-out colours or a blank screen without it
+  (h1 0.3.1 found the same). On an older FM-1 nothing changes. Owners of a newer FM-1: please report how the screen
+  looks.
+
+**Platform**
+- Built on fm1-base `3039770` (2026-11-26, was `c8e0599`) and felucca-bsp `fdd709f`. What A22 gets from it: USB host
+  resets that wait longer for a keyboard slow to answer, and a keyboard's bulk MIDI endpoint declaring a high-speed size
+  taken (a Casio PX-160 said NOT MIDI: jakehandy/h1#54, #72); MIDI to a computer that is not reading dropped instead of
+  queued (A22 sends clock all the time); MASTER no longer zippering while USB audio is full; a SysEx stream that was
+  never ended let go.
+
 ## 0.7.1
 
 Identity `FM-1_4122000701`. Released 2026-11-26. Fixes from h1's issues that apply to A22 too: SAVE while the music

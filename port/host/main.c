@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     if (argc < 2) { fprintf(stderr, "usage: h1host OUTDIR script...\n"); return 2; }
     outdir = argv[1];
 #ifdef __SSE2__
-    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);          /* as the FM-1 does: a denormal costs it nothing */
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);          /* (speed on x86; the FM-1 keeps denormals: core/fx.c snap0) */
     _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
     h1_init(44100);
