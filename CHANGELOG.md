@@ -3,6 +3,21 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+**USB audio stems**
+- The USB audio input has ten channels: the mix on 1 and 2 as before (the same to the bit), and T1 to T4 on 3-4, 5-6,
+  7-8 and 9-10. Each track is taken as it goes into the mix, after its volume and pan, with the limiter's gain and
+  MASTER as the mix has them; the effect, the master bus, TRICK, the punches and the metronome are on the mix only, so
+  the tracks are dry. None of the stem work runs unless a computer is recording. A DAW sees a track per channel;
+  `tools/a22_stems.py REC.wav --split DIR` splits a ten-channel recording into stereo files. Like h1's (its PR #73).
+- `tests/stems.c` checks the core alone: each track on its own pair and nowhere else, a muted one silent, the mix the
+  same to the bit with stems taken or not, nothing written while nobody records, and with the master bus flat the stems
+  adding up to the mix to 0.3%, a loud chord bringing the limiter in. `tests/stems.txt` and `tools/a22_stems.py` check
+  the same through fm1-base's simulator, MASTER at half; the fuzz records stems through a ring that wraps at an odd place.
+- Costs: the USB audio ring grows from 2 KB to 10 KB and the stems take 2 KB, 11,024 B of SRAM in all (10,200 B free,
+  2 KB past the 8 KB spare the build keeps); the image grows by 1,616 B to 556,240 B of the 581,564 B slot.
+
 ## 0.7.2
 
 Identity `FM-1_4122000702`. Released 2026-11-27. Performance and the newer fm1-base: SHIFT and TANK asleep again, saving

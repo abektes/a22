@@ -2448,6 +2448,24 @@ static f32 punch_phase16(void)
     return fractf((st.seq[0] == SEQ_STEP ? (f32)(step_at * seq_grid_ticks()) + step_acc : loop_pos) * (1.0f / 24.0f));
 }
 
+/* ---- stems (USB audio's channels 3..10) ---------------------------------------------------
+ * T1 to T4 on four stereo pairs beside the mix, each track as it goes into the mix (after its volume and pan), before
+ * what runs over the whole mix: the 18 Hz filter, the effect, the master bus, the punches, the metronome. The limiter's
+ * gain goes on them as on the mix (lim_block), so they add up to the mix without its effects. Two blocks: the one
+ * heard (the limiter looks a block ahead) and the next. Only while a computer records (the port's get gives a frame,
+ * h1_stems); otherwise none of it runs. */
+static f32 stem_b[2][NTRACK][2][CTRL];
+static uint8_t stem_ok[2], stem_w;              /* stem_ok: that block has stems (the next is stem_w) */
+static int stem_on;                             /* a computer records: this render's blocks make stems */
+static int16_t *(*stem_get)(uint32_t off, uint32_t *run);
+static uint32_t stem_stride;
+
+void eng_stems(int16_t *(*get)(uint32_t off, uint32_t *run), uint32_t stride)
+{
+    stem_get = get;
+    stem_stride = stride;
+}
+
 static void block(f32 *L, f32 *R)
 {
     static f32 sl[CTRL], sr[CTRL], tl[CTRL], tr[CTRL];
@@ -2486,6 +2504,12 @@ static void block(f32 *L, f32 *R)
 
     for (n = 0; n < CTRL; n++)
         L[n] = R[n] = sl[n] = sr[n] = 0.0f;
+    stem_ok[stem_w] = (uint8_t)stem_on;
+    if (stem_on) {                              /* (a track with nothing sounding leaves its stem at 0) */
+        f32 *z = &stem_b[stem_w][0][0][0];
+        for (n = 0; n < NTRACK * 2 * CTRL; n++)
+            z[n] = 0.0f;
+    }
 
     /* Render track by track (T1..T4) with per-track volume, pan, mute/solo, VU & FX send! */
     for (t = 0; t < NTRACK; t++) {
@@ -2590,6 +2614,13 @@ static void block(f32 *L, f32 *R)
             sl[n] += xl * r->send_s;
             sr[n] += xr * r->send_s;
         }
+        if (stem_on) {                           /* and the same into its stem (USB audio) */
+            f32 *ul = stem_b[stem_w][t][0], *ur = stem_b[stem_w][t][1];
+            for (n = 0; n < CTRL; n++) {
+                ul[n] = tl[n] * p_l;
+                ur[n] = tr[n] * p_r;
+            }
+        }
         if (t == cur_trk)                        /* (written where the master scope's next block goes: one scope_pos) */
             for (n = 0; n < CTRL; n++) own_scope[(scope_w + n) & (SCOPE_N - 1)] = (tl[n] * p_l + tr[n] * p_r) * 0.5f;
         r->peak_out += (tpeak - r->peak_out) * (tpeak > r->peak_out ? 0.5f : 0.04f);
@@ -2690,6 +2721,7 @@ static void lim_block(f32 *L, f32 *R)
     f32 need_now = lim_need, g0 = lim_g, g1, dg;
     int i;
     for (i = 0; i < CTRL; i++) { L[i] = NL_buf[i]; R[i] = NR_buf[i]; }
+    stem_w ^= 1u;                                /* (the stems: the block heard is now the other one) */
     block(NL_buf, NR_buf);
     lim_need = lim_peak(NL_buf, NR_buf);
     g1 = g0 + (1.0f - g0) * LIM_REL;
@@ -2697,6 +2729,16 @@ static void lim_block(f32 *L, f32 *R)
     if (g1 > lim_need) g1 = lim_need;
     if (g1 > 0.99999f && g0 > 0.99999f) { lim_g = 1.0f; return; }
     dg = (g1 - g0) * (1.0f / (f32)CTRL);
+    if (stem_ok[stem_w ^ 1u]) {                  /* the stems heard with this block: the same gain, step for step */
+        int k;
+        for (k = 0; k < 2 * NTRACK; k++) {
+            f32 *x = stem_b[stem_w ^ 1u][k >> 1][k & 1], g = g0;
+            for (i = 0; i < CTRL; i++) {
+                g += dg;
+                x[i] *= g;
+            }
+        }
+    }
     for (i = 0; i < CTRL; i++) {
         g0 += dg;
         L[i] *= g0;
@@ -2724,19 +2766,45 @@ H1_HOT static void eng_out(int32_t *lr, const f32 *L, const f32 *R, uint32_t tak
     }
 }
 
+/* the stems of frames pos.. of the block heard, take of them, into the port's channels from frame at of this render,
+ * at the mix's scale (eng_out's 7549747 of 1 << 23: 0.9 of full scale) */
+static void stems_out(uint32_t at, uint32_t pos, uint32_t take)
+{
+    const f32 (*b)[2][CTRL] = stem_b[stem_w ^ 1u];
+    uint32_t run = 0, i;
+    int16_t *u = 0;
+    if (!stem_ok[stem_w ^ 1u])
+        return;                                  /* (made before the computer recorded: the channels stay at 0) */
+    for (i = 0; i < take; i++, run--, u += stem_stride) {
+        int k;
+        if (!run && !(u = stem_get(at + i, &run)))
+            return;
+        for (k = 0; k < 2 * NTRACK; k++) {
+            f32 x = b[k >> 1][k & 1][pos + i] * 29491.2f;
+            int32_t v = (int32_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
+            u[k] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+        }
+    }
+}
+
 void eng_render(int32_t *lr, uint32_t n)
 {
     static f32 L[CTRL], R[CTRL];
+    uint32_t at = 0, run;
     int k;
     if (stg_clock) {
         stg_t0 = stg_clock();
         for (k = 0; k < H1_NSTG; k++) stg_acc[k] = 0;
     }
+    stem_on = stem_get && stem_get(0, &run) != 0;   /* a computer records */
     while (n) {
         uint32_t take;
         if (!eng_have) { lim_block(L, R); eng_have = CTRL; eng_pos = 0; }
         take = eng_have < n ? eng_have : n;
         H1_FAR(eng_out)(lr, L + eng_pos, R + eng_pos, take);
+        if (stem_on)
+            stems_out(at, eng_pos, take);
+        at += take;
         lr += 2u * take;
         eng_pos += take;
         eng_have -= take;
@@ -2766,6 +2834,8 @@ SMALL void eng_init(uint32_t sample_rate)
     stamp_ctr = 0;
     eng_have = eng_pos = 0;
     for (i = 0; i < CTRL; i++) NL_buf[i] = NR_buf[i] = 0.0f;
+    stem_ok[0] = stem_ok[1] = 0;                 /* (no stems made yet: the port's get stays as set) */
+    stem_on = 0;
     {
         uint8_t *p = (uint8_t *)trun;
         uint32_t k;

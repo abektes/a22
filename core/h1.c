@@ -181,6 +181,7 @@ SMALL void h1_init(uint32_t sample_rate)
 
 void h1_frame(uint32_t now_ms) { ui_frame(now_ms); }
 void h1_render(int32_t *lr, uint32_t n) { eng_render(lr, n); }
+void h1_stems(int16_t *(*get)(uint32_t off, uint32_t *run), uint32_t stride) { eng_stems(get, stride); }
 void h1_late(int late) { eng_late(late); }
 uint32_t h1_voices_shed(void) { return eng_shed_count(); }
 void h1_stage_clock(uint32_t (*clock)(void)) { eng_stage_clock(clock); }

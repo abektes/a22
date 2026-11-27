@@ -667,6 +667,9 @@ void app_init(void)
     if (plat_cpu2_set(1) == 0)                              /* (app_init is the one moment it can start) */
         h1_two_cores(core2_run, core2_wait);
 #endif
+#if PLAT_USB_CH >= 8
+    h1_stems(plat_usb_ch, PLAT_USB_CH_STRIDE);              /* USB audio's channels 3..10: T1 to T4 */
+#endif
     if (last_start_failed()) {
         ring_held = 1;                           /* (the saved tape left alone: ring_step) */
         return;
@@ -706,11 +709,26 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
      * fm1-base's APP_OVERLOAD: that comes at 90 % of the time, where nothing is late yet.) */
     h1_late(xr != xr_seen);
     xr_seen = xr;
+#if PLAT_USB_CH >= 8
+    uint32_t run = 0;
+    int16_t *u = plat_usb_ch(0, &run);                      /* the stems, at MASTER too (NULL: nobody records) */
+#endif
     h1_render(lr, n);                                       /* 24-bit, already limited */
     for (i = 0; i < n; i++) {
         gain_now += (gain - gain_now) * 0.004f;             /* ~5 ms: turning MASTER does not click */
         lr[2 * i] = (int32_t)((float)lr[2 * i] * gain_now);
         lr[2 * i + 1] = (int32_t)((float)lr[2 * i + 1] * gain_now);
+#if PLAT_USB_CH >= 8
+        if (u) {                                            /* (the same gain, frame for frame, as the mix) */
+            int32_t g = (int32_t)(gain_now * 32768.0f), k;
+            if (!run && !(u = plat_usb_ch(i, &run)))
+                continue;
+            for (k = 0; k < 8; k++)
+                u[k] = (int16_t)(u[k] * g >> 15);
+            u += PLAT_USB_CH_STRIDE;
+            run--;
+        }
+#endif
     }
     us = US(plat_ticks24() - t0);
     au_recent = us > au_recent - au_recent / 8u ? us : au_recent - au_recent / 8u;

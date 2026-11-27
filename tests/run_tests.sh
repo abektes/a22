@@ -33,6 +33,9 @@
 #   lane       the key lane (EV_LANE): entries one a bar, inherited field by field, kept in the tape's tail through a
 #              save, CUT, PASTE and a track's clear, gone with CLEAR ALL; KEY-on tracks follow bar by bar (I-IV-V-vi),
 #              recording over a DEG stores the note down, the live keys and chord SCALE snap to it, STEP ignores it
+#   stems      the USB audio input's stems: T1 to T4 each on its own pair, a muted one silent, the mix the same to
+#              the bit with them or without, nothing written while nobody records, and they add up to the mix
+#              (master bus flat), the limiter's gain on them too
 #   overload   the audio over its time: two late halves shed a voice, fast and quiet, one at a time
 #   echo       DELAY the same after 25 minutes on as at start
 #   cores      two cores sound the same as one, section by section
@@ -67,6 +70,10 @@ out=app/build/host
 "$out/a22_host" tests/punch.txt "$out"
 # LANE: SEQ, SELECT twice is the LANE subpage (said), BAR 2, ROOT D, and a field turned past its first value is said NONE
 "$out/a22_host" tests/lane.txt "$out"
+# STEMS: the USB audio input's ten channels, a take on each track then a pass recorded at half MASTER, checked by
+# tools/a22_stems.py: T1 to T4 on 3-4 to 9-10 in turn, fitting the mix but for its master bus, T1 muted silent
+"$out/a22_host" tests/stems.txt "$out"
+python3 tools/a22_stems.py "$out/stems.wav" --check
 # (that build has the second core, as the firmware does: the simulator runs its jobs at once, in order)
 # and the build without it: the same script
 FM1B_CPU2=0 ./build.sh --host
@@ -112,6 +119,8 @@ $CC -std=c99 $SAN core/*.c tests/lane.c -o build/a22lane -lm
 build/a22lane
 $CC -std=c99 $SAN core/*.c tests/overload.c -o build/a22overload -lm
 build/a22overload
+$CC -std=c99 $SAN core/*.c tests/stems.c -o build/a22stems -lm
+build/a22stems
 # (25 minutes of DELAY: without the checkers, or it takes most of an hour)
 $CC -std=c99 -O2 -ffp-contract=off -w core/*.c tests/echo.c -o build/a22echo -lm
 build/a22echo

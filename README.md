@@ -185,8 +185,20 @@ A button with a hold does its tap when it is let go.
 
 ## USB audio and MIDI
 
-Over a USB cable that carries data, the FM-1 shows up as one device with an audio input (the whole mix at the MASTER
-volume, like a USB microphone; nothing plays back through it) and MIDI.
+Over a USB cable that carries data, the FM-1 shows up as one device with an audio input (like a USB microphone; nothing
+plays back through it) and MIDI.
+
+**Audio,** ten channels at 44.1 kHz. Pick the `A22 FM-1` input in a DAW, a recording app or the system's sound settings:
+
+| Channels | What's on them |
+|---|---|
+| 1-2 | The whole mix at the MASTER volume, the same as the speaker |
+| 3-4, 5-6, 7-8, 9-10 | T1, T2, T3 and T4: each track at its volume and pan, and MASTER |
+
+The tracks are dry: the effect, the master bus (EQ and drive), TRICK, the punches and the metronome run over the whole
+mix, so they are on 1-2 only. Notes played by hand are on the track in hand's pair, and a muted track's pair is silent.
+A recording app that wants stereo takes 1-2. To split a ten-channel file into five stereo ones, run
+`python3 tools/a22_stems.py REC.wav --split OUTDIR`.
 
 **MIDI in,** over USB or the TRS jack, any channel: notes play the engine in hand at their velocity (softer is
 quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
@@ -253,11 +265,11 @@ From fm1-base, which A22 is built on:
 - **M-VAVE FM-1 only,** not the SMK-37.
 - **Both flash chips:** the original Puya P25Q80 (JEDEC `0x856014`) and the UC25HQ80 (`0xB36014`). Since 0.7.2 the
   panel gets its full setup, which the newer units need; reports from them are welcome.
-- USB audio out, USB MIDI in and out, or USB host for a keyboard; MIDI in over the TRS jack. No MIDI out over TRS and
+- USB audio out (the mix and the four tracks), USB MIDI in and out, or USB host for a keyboard; MIDI in over the TRS jack. No MIDI out over TRS and
   no Bluetooth.
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, algorithm, page and
   each control's value as it changes.
-- The image is about 555 KB of the 582 KB flash slot; it uses about 454 KB of the chip's 475 KB of SRAM.
+- The image is about 556 KB of the 582 KB flash slot; it uses about 465 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 

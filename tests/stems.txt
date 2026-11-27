@@ -1,0 +1,98 @@
+# Stems in fm1-base's host simulator: the USB audio input's ten channels, the mix on 1-2 and T1 to T4 on 3-4 to 9-10.
+#   ./build.sh --host, then app/build/host/a22_host tests/stems.txt app/build/host, then
+#   tools/a22_stems.py app/build/host/stems.wav --check
+# A take on each track, a key each, about 1.2 s apart (the tape is 4 bars at 118: 8.1 s), then a pass recorded with
+# MASTER at half and FX bypassed, a loud chord played by hand on T4 over its end (the limiter works); then T1 muted and
+# a pass recorded with FX on. tools/a22_stems.py checks each track on its own pair, in order, and the stems adding up
+# to the mix. Never presses SAVE.
+wait 600
+master 2048
+# T1 (FM-4): the take starts with its key, at 0 s
+tap REC
+wait 100
+key 12 down
+wait 150
+key 12 up
+wait 400
+tap REC
+# T2, at about 1.2 s
+press EDIT
+wait 60
+turn PRESET 1
+wait 60
+release EDIT
+wait 300
+tap REC
+wait 100
+key 16 down
+wait 150
+key 16 up
+wait 400
+tap REC
+# T3, at about 2.4 s
+press EDIT
+wait 60
+turn PRESET 1
+wait 60
+release EDIT
+wait 300
+tap REC
+wait 100
+key 19 down
+wait 150
+key 19 up
+wait 400
+tap REC
+# T4, at about 3.6 s
+press EDIT
+wait 60
+turn PRESET 1
+wait 60
+release EDIT
+wait 300
+tap REC
+wait 100
+key 7 down
+wait 150
+key 7 up
+wait 400
+tap REC
+# the next pass, FX bypassed: the tape comes round at 8.1 s
+press EDIT
+wait 60
+tap FX
+wait 60
+release EDIT
+wait 3300
+usbwav stems.wav
+wait 5200
+# a loud chord by hand on T4 (the track in hand), past the takes' tails
+key 0 down
+key 3 down
+key 7 down
+key 10 down
+key 14 down
+key 19 down
+wait 500
+key 0 up
+key 3 up
+key 7 up
+key 10 up
+key 14 up
+key 19 up
+wait 1200
+usbwavstop
+# FX back on, T1 in hand and muted (EDIT + SEL): its stem silent, the others on theirs
+press EDIT
+wait 60
+tap FX
+wait 60
+turn PRESET -3
+wait 60
+tap SEL
+wait 60
+release EDIT
+wait 400
+usbwav stems_mute.wav
+wait 6000
+usbwavstop

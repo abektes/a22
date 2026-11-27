@@ -52,6 +52,13 @@ void h1_frame(uint32_t now_ms);                  /* advance the animation and dr
 
 /* audio interrupt side: n stereo frames, signed 24-bit in int32 (fm1-base's app_render format) */
 void h1_render(int32_t *lr, uint32_t n);
+/* Stems, for a USB audio input with 8 channels of the port's own beside the mix: get gives the frame off frames into
+ * the render being made (8 int16s, the next frame stride on, for *run frames), or NULL while nobody records. h1_render
+ * then writes the four tracks there, T1 on the first pair to T4 on the fourth, at the mix's scale before MASTER: each
+ * after its volume and pan, dry (no effect, master bus, punch or metronome: those run over the whole mix), with the
+ * limiter's gain as the mix has it. The mix itself is the same to the bit with or without. While get gives NULL, none
+ * of it runs. Set it before the audio starts. */
+void h1_stems(int16_t *(*get)(uint32_t off, uint32_t *run), uint32_t stride);
 /* Whether the last audio half went out late (rendered after its time): call once a render, from where h1_render is
  * called. Two late halves in a row and a voice lets go fast (10 ms), one at a time, a note the player is not holding
  * first, so the sound gets back in time instead of running late half after half (which starves the main loop).
