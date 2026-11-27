@@ -2208,7 +2208,7 @@ static void chord_keyboard(f32 y, f32 h, int base, const uint8_t *note, int n, i
 static void draw_chord_play(void)
 {
     uint8_t note[CHORD_MAX];
-    int n = eng_chord_last(note), i;
+    int n = eng_chord_last(note), i, pc, type;
     char name[16], list[CHORD_MAX * 4 + 1], *d = list;
     if (n <= 0) {
         g_color(GC_SLATE);
@@ -2216,11 +2216,9 @@ static void draw_chord_play(void)
         g_color(GC_WHITE);
         return;
     }
-    if (st.chord[0] == CHORD_PADS) {
-        int set = st.rsv[1] < NCHSET ? st.rsv[1] : 0;
-        int pc = ch_pad_pc(set, pad_hand, key_root(eng_key_live()));
-        put_s(put_s(put_s(name, O_ROOT[pc]), " "), CH_TYPES[CH_SETS[set].pad[pad_hand & 7].type].name);
-    } else
+    if (eng_chord_pad(&pc, &type))                           /* (as it sounded, whatever is set now) */
+        put_s(put_s(put_s(name, O_ROOT[pc]), " "), CH_TYPES[type].name);
+    else
         put_s(name, O_ROOT[note[0] % 12]);
     list[0] = 0;
     for (i = 0; i < n; i++) {

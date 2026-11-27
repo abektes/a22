@@ -1832,11 +1832,21 @@ static uint8_t ch_cnt[128];
 static int ch_ctr = -1;                          /* the last chord's centre (ch_centre), SMOOTH's aim; -1 none */
 static uint8_t ch_last[CHORD_MAX];               /* and its notes, for the screen */
 static volatile int ch_last_n;
+static volatile int ch_last_pad = -1;            /* a pad's: its root's pitch class + 16 * type; -1 not a pad's */
 static void ch_keep(const uint8_t *note, int n)
 {
     int i;
+    ch_last_pad = -1;
     for (i = 0; i < n && i < CHORD_MAX; i++) ch_last[i] = note[i];
     ch_last_n = i;
+}
+int eng_chord_pad(int *pc, int *type)
+{
+    int v = ch_last_pad;
+    if (v < 0) return 0;
+    *pc = v & 15;
+    *type = v >> 4;
+    return 1;
 }
 int eng_chord_last(uint8_t out[CHORD_MAX])
 {
@@ -1901,15 +1911,17 @@ static int chord_build(int root, uint8_t *out)
 
 static int pad_build(int pad, uint8_t *out)                  /* a pad's chord, from the set, in the key in force */
 {
-    int nt[CHORD_MAX + 1], p[5], i;
-    int n = ch_pad_notes(st.rsv[1], pad, key_root(eng_key_live()), st.octave, p);
+    int nt[CHORD_MAX + 1], p[5], i, m = 1, root = key_root(eng_key_live());
+    int n = ch_pad_notes(st.rsv[1], pad, root, st.octave, p);
     if (insts[cur_i]->mono) {
         out[0] = (uint8_t)iclamp(p[0], 0, 127);
         ch_keep(out, 1);
-        return 1;
+    } else {
+        for (i = 0; i < n; i++) nt[i] = p[i];
+        m = chord_voice(nt, n, p[0] - 12, out);
     }
-    for (i = 0; i < n; i++) nt[i] = p[i];
-    return chord_voice(nt, n, p[0] - 12, out);
+    ch_last_pad = ch_pad_pc(st.rsv[1], pad, root) + 16 * CH_SETS[st.rsv[1] < NCHSET ? st.rsv[1] : 0].pad[pad & 7].type;
+    return m;
 }
 
 static void ch_on(const ChSlot *c, int i)
@@ -2012,6 +2024,7 @@ static void chord_clear(void)                                /* (the voices are 
     for (i = 0; i < 128; i++) ch_cnt[i] = 0;
     ch_ctr = -1;
     ch_last_n = 0;
+    ch_last_pad = -1;
 }
 
 static uint8_t latched_pads;                     /* HOLD's pads: bit p, pad p */
@@ -2083,11 +2096,18 @@ static void handle(uint32_t e)
         phys_down++;
         chord_key(a, 1, vel, from_midi);
         break;
-    case EV_NOTE_OFF:
-        if (from_midi) midi_down[a >> 5] &= ~(1u << (a & 31));
+    case EV_NOTE_OFF: {
+        uint32_t bit = 1u << (a & 31);
+        int held = !from_midi || (midi_down[a >> 5] & bit);
+        if (from_midi) midi_down[a >> 5] &= ~bit;
         if (phys_down > 0) phys_down--;
         if (!st.keys[3]) chord_key(a, 0, 0, from_midi);
+        else if (held && !(latched[a >> 5] & bit)) {  /* (HOLD came on while it was down: HOLD keeps it) */
+            latched[a >> 5] |= bit;
+            if (from_midi) latched_midi[a >> 5] |= bit;
+        }
         break;
+    }
     case EV_PAD_ON:                              /* (HOLD and the keys held count pads as notes) */
         a &= 7;
         if (st.keys[3]) {
@@ -2099,7 +2119,8 @@ static void handle(uint32_t e)
         break;
     case EV_PAD_OFF:
         if (phys_down > 0) phys_down--;
-        if (!st.keys[3]) pad_key(a & 7, 0, 0);
+        if (st.keys[3]) latched_pads |= (uint8_t)(1u << (a & 7));    /* (as a key) */
+        else pad_key(a & 7, 0, 0);
         break;
     case EV_PUNCH:                               /* (bit 23: the tape's) */
         if (a > 8) a = 0;
@@ -2123,7 +2144,7 @@ static void handle(uint32_t e)
             if (midi_down[n >> 5] & bit) {
                 midi_down[n >> 5] &= ~bit;
                 if (phys_down > 0) phys_down--;
-                if (!st.keys[3]) chord_key(n, 0, 0, 1);
+                if (!(latched[n >> 5] & bit)) chord_key(n, 0, 0, 1);    /* (latched ones end below) */
             }
             if ((latched[n >> 5] & bit) && (latched_midi[n >> 5] & bit)) {
                 latched[n >> 5] &= ~bit;

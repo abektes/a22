@@ -9,7 +9,9 @@
  *   smooth      SMOOTH voicing: each chord close to the last, and OCT still moves it
  *   saved       MODE PADS, the set and SMOOTH in the saved state, nonsense clamped
  *   controls    the CHORDS page: hold ARP, its two subpages' columns, EDIT + GLO, GLO without CHORD
- *   screen      the eight cards drawn, the held pad alone lit, the last chord's notes, the buttons' lights */
+ *   screen      the eight cards drawn, the held pad alone lit, the last chord's notes, the buttons' lights
+ *   hold_mid    HOLD switched on under a held pad or key: it is latched, and ends as a latched one does
+ *   last_name   the last chord's name stays the one that sounded */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -343,6 +345,40 @@ static void screen(void)
     CHECK(!(h1_button_leds() & (1u << H1_BTN_FX)), "FX bypassed: FX dark on CHORDS");
 }
 
+static void hold_toggle(void)
+{
+    h1_button(H1_BTN_EDIT, 1); go(30); tap(H1_BTN_ARP); h1_button(H1_BTN_EDIT, 0); go(60);
+}
+static void hold_mid(void)                        /* HOLD switched on while something is held */
+{
+    fresh(); pads_on(0); down(0); hold_toggle();
+    CHECK(st.keys[3] == 1, "EDIT + ARP: HOLD on");
+    up(0); CHECK(gated() == 3, "let go: the pad's chord is held");
+    clear(); key(6, 60); CHECK(off_n[48] == 1 && off_n[52] == 1 && off_n[55] == 1, "the next pad replaces it");
+    hold_toggle(); go(300); CHECK(gated() == 0, "HOLD off: nothing left sounding");
+    fresh(); pads_on(0); down(0); hold_toggle(); up(0); hold_toggle(); go(300);
+    CHECK(matched(), "HOLD off straight after ends the pad");
+    fresh(); down(14); hold_toggle(); up(14); CHECK(gated() == 1, "a key is held too");
+    hold_toggle(); go(300); CHECK(matched(), "and ends with HOLD off");
+    fresh(); h1_midi(0x90, 60, 100); go(100); hold_toggle(); h1_midi(0x80, 60, 0); go(100); hold_toggle(); go(300);
+    CHECK(gated() == 0, "a note over MIDI the same");
+    fresh(); h1_midi(0x90, 60, 100); go(100); hold_toggle(); h1_midi(0xB0, 123, 0); go(300);
+    CHECK(gated() == 0, "MIDI all notes off ends it too");
+}
+
+static void last_name(void)                       /* CHORD PLAY names the chord that sounded, not what is set now */
+{
+    int pc = -1, type = -1;
+    fresh(); pads_on(0); CHECK(!eng_chord_pad(&pc, &type), "no pad played yet");
+    key(0, 60); CHECK(eng_chord_pad(&pc, &type) && pc == 0 && type == 0, "POP 1 pad 1: C MAJ");
+    st.rsv[1] = 10; st.keys[0] = 5; go(100);
+    CHECK(eng_chord_pad(&pc, &type) && pc == 0 && type == 0, "SET and ROOT turned: still C MAJ");
+    chord(CHORD_SHAPE, 0, 0, 0); key(7, 60);
+    CHECK(!eng_chord_pad(&pc, &type), "a one-key chord after it is no pad's");
+    fresh(); pads_on(10); h1_control_set(H1_ENC_PRESET, 7); go(60); key(0, 60);
+    CHECK(eng_chord_pad(&pc, &type) && pc == 0 && !strcmp(CH_TYPES[type].name, "MIN9"), "MONO: the pad's name");
+}
+
 int main(void)
 {
     sets();
@@ -353,6 +389,8 @@ int main(void)
     saved();
     page_controls();
     screen();
+    hold_mid();
+    last_name();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
