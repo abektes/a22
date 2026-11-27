@@ -13,6 +13,26 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   States below 1e-20 (-400 dB) are now 0 for the sleep's test, in DELAY, SHIFT and TANK; the sound is otherwise the
   same. `tests/sleep.c` (`denormals`) runs the four echo effects with denormals kept, as the FM-1 does.
 
+**Saving**
+- Saving no longer stops the sound for a moment. A save erases a 4 KiB sector of flash first: that ran as one stretch
+  of about 18 ms with the interrupts off, so SAVE with the tape playing, and the tape's own flash made ready after a
+  stop, left an audio half unplayed. The erase now goes in steps of about 1 ms with the sound running between them
+  (fm1-base's sliced erase). A flash part that can't pause an erase is waited out as before; PERF's new HELD says how
+  many erases did that since the start.
+
+**Screen**
+- The panel gets its own full setup at start (porch, gate voltages, VCOM, supplies, 60 Hz, gammas), as M-VAVE's
+  firmware sends it. Newer FM-1s (with the UC25HQ80 flash) showed washed-out colours or a blank screen without it
+  (h1 0.3.1 found the same). On an older FM-1 nothing changes. Owners of a newer FM-1: please report how the screen
+  looks.
+
+**Platform**
+- Built on fm1-base `3039770` (2026-11-26, was `c8e0599`) and felucca-bsp `fdd709f`. What A22 gets from it: USB host
+  resets that wait longer for a keyboard slow to answer, and a keyboard's bulk MIDI endpoint declaring a high-speed size
+  taken (a Casio PX-160 said NOT MIDI: jakehandy/h1#54, #72); MIDI to a computer that is not reading dropped instead of
+  queued (A22 sends clock all the time); MASTER no longer zippering while USB audio is full; a SysEx stream that was
+  never ended let go.
+
 ## 0.7.1
 
 Identity `FM-1_4122000701`. Released 2026-11-26. Fixes from h1's issues that apply to A22 too: SAVE while the music

@@ -58,6 +58,16 @@ What it brings that A22 wants:
   an answer:** the update loader writes the app area, so whether an install from The Firmware Hub, M-UPGRADE or
   another firmware's loader handles a bigger A22 decides it. Read `base/docs` and felucca-bsp's loader notes; write
   the answer here.
+  **Answer (2026-11-27, fm1-base README "A bigger app slot", `tools/build.py` app_end): off in 0.7.2, and not simply
+  turned on later either.** The package carries its own update loader, and that loader writes the whole bigger area,
+  so an install from The Firmware Hub or the installer page would write it. But: (1) A22's tape ring is at
+  0xC8000..0xDBFFF (`app/app.c` RING_BASE) and its loop and state pairs at 0xDC000/0xDE000, inside the data area a
+  bigger slot takes from the bottom: any `app_end` above 0xC8000 writes code over the ring, so the ceiling is
+  0xC8000 (212 KB more) unless the ring moves, and moving it loses every tape on update. (2) Going back is unsafe
+  with older loaders: only fm1-base's newer loaders compare slots and erase the bigger app's code above their end.
+  Felucca's, M-VAVE's (M-UPGRADE) and older fm1-base loaders don't, so a smaller firmware installed after a bigger
+  A22 finds A22's code in its data area. (3) m-bootloader's MIDI mode writes [0x4000, app_end) without any loader,
+  so it doesn't compare slots or clear anything. With 26.6 KB of image left, 0.7.2 doesn't need it.
 - Smaller fixes A22 likely meets: a SysEx stream never ended (`336e462`), MASTER zippering while USB audio is full
   (`68fdaf8`), MIDI to a computer that does not read dropped rather than queued (felucca-bsp `4649f1e`, A22 sends
   clock all the time since 0.7.0), interrupts off around `fm1_clock_restore` (`0068dfe`).
