@@ -15,7 +15,7 @@
  *   LFO         Modulator / Oscilloscope
  *   SEL         4-Track Mixer (VOL -> PAN -> SEND -> MASTER EQ/DRIVE)
  *   SEQ         4-Track Tape Deck (DECK <-> EDIT)    | Hold: Tape <-> Step Pattern
- *   ARP         Sequencer (RIFF / SHAKE / ARP)
+ *   ARP         Sequencer (RIFF / SHAKE / ARP)            | Hold: CHORDS (PADS <-> PLAY)
  *   GLO         GLOBAL <-> KEYS (tap cycles)              | Hold: Metronome mode
  *   EDIT        Toggle K1..K4 HUD / Rest (Riff & Step) | Hold: Track Vol / Shift
  *   SAVE        Save now | SAVE+WhiteKey 1..8: Snapshots  | Hold: Reset Algo -> Inst -> All
@@ -50,6 +50,10 @@ static const char *const O_CHSCALE[] = {"TRIAD", "7TH", "SUS2", "SUS4", "ADD9", 
 static const char *const O_CHSHAPE[] = {"MAJ", "MIN", "SUS4", "7", "MIN7", "MAJ7", "POWER", "OCT"};
 static const char *const O_CHMEM[]   = {"MEM"};
 static const char *const O_VOICING[] = {"CLOSE", "OPEN", "DROP2", "+BASS", "SMOOTH"};
+/* CHORDS' MODE as the knob steps through it, and each step's stored value (PADS is stored last, so older
+ * firmware reads it as OFF) */
+static const char *const O_CHKNOB[]  = {"OFF", "PADS", "MEMORY", "SCALE", "SHAPE"};
+static const uint8_t CH_KNOB[5] = {CHORD_OFF, CHORD_PADS, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE};
 
 /* color per knob K1..K4 (and tracks T1..T4!) */
 static const int KCOL[4] = {GC_BLUE, GC_GREEN, GC_WHITE, GC_ORANGE};
@@ -77,6 +81,7 @@ const PageDef pages[NPAGE] = {
                 {"RANGE", PK_INT, 4, 1, 0, 0}, {"GATE", PK_PCT, 100, 5, 0, 0}}},
     {"TAPE",   {{"TRACK", PK_ENUM, 3, 0, 0, O_TRK}, {"BARS", PK_ENUM, 5, 0, 0, O_BARS},
                 {"SPEED", PK_ENUM, 3, 0, 0, O_SPEED}, {"TRICK", PK_ENUM, 4, 0, 0, O_TRICK}}},
+    {"CHORDS", {{0,0,0,0,0,0}, {0,0,0,0,0,0}, {0,0,0,0,0,0}, {0,0,0,0,0,0}}},   /* (all from page_param) */
 };
 
 /* dynamic parameter overrides for subpages */
@@ -120,7 +125,8 @@ static int page_nsub(int pg)
     case PG_ARP: return arp_shake() ? 2 : 1;   /* SHAKE: 0 MODE GRAV SPIN BOUNCE, 1 MODE CAGE */
     case PG_MIX: return 5;   /* 0 VOL, 1 PAN, 2 FX SEND, 3 MASTER EQ/DRIVE, 4 KEY */
     case PG_ENV: return 2;   /* 0 AMP ADSR, 1 MOD ENV */
-    case PG_GLO: return 3;   /* 0 GLOBAL, 1 KEYS, 2 CHORD */
+    case PG_GLO: return 2;   /* 0 GLOBAL, 1 KEYS */
+    case PG_CHORD: return 2; /* 0 PADS, 1 PLAY */
     case PG_SEQ: return st.seq[0] == SEQ_TAPE ? 3 : 2;   /* 0 TAPE DECK, 1 TAPE EDIT, 2 LANE (or STEP) */
     default:     return 1;
     }
@@ -182,19 +188,22 @@ const ParamDef *page_param(int pg, int i)
         else { dyn_p.kind = PK_ENUM; dyn_p.max = 1; dyn_p.opts = O_ONOFF; }
         return &dyn_p;
     }
-    if (pg == PG_GLO && sub == 2) {
-        static const char *const CHORD_N[4] = {"MODE", "TYPE", "VOICING", "STRUM"};
+    if (pg == PG_CHORD) {                        /* PADS: MODE and what goes with it; PLAY: VOICING, STRUM */
         int mode = st.chord[0];
-        dyn_p.name = CHORD_N[i]; dyn_p.min = 0; dyn_p.show_off = 0; dyn_p.opts = 0;
-        if (i == 0) { dyn_p.kind = PK_ENUM; dyn_p.max = CHORD_SHAPE; dyn_p.opts = O_CHMODE; }
-        else if (i == 1) {
-            dyn_p.kind = PK_ENUM;
-            if (mode == CHORD_SCALE) { dyn_p.max = CHORD_NSCALE - 1; dyn_p.opts = O_CHSCALE; }
+        dyn_p.name = ""; dyn_p.kind = PK_PCT; dyn_p.min = 0; dyn_p.max = 0; dyn_p.show_off = 0; dyn_p.opts = 0;
+        if (sub == 0 && i == 0) {
+            dyn_p.name = "MODE"; dyn_p.kind = PK_ENUM; dyn_p.max = 4; dyn_p.opts = O_CHKNOB;
+        } else if (sub == 0 && i == 1 && mode != CHORD_OFF) {
+            dyn_p.name = "TYPE"; dyn_p.kind = PK_ENUM;
+            if (mode == CHORD_PADS) { dyn_p.name = "SET"; dyn_p.max = NCHSET - 1; dyn_p.opts = CH_SET_NAMES; }
+            else if (mode == CHORD_SCALE) { dyn_p.max = CHORD_NSCALE - 1; dyn_p.opts = O_CHSCALE; }
             else if (mode == CHORD_SHAPE) { dyn_p.max = CHORD_NSHAPE - 1; dyn_p.opts = O_CHSHAPE; }
-            else { dyn_p.max = 0; dyn_p.opts = O_CHMEM; }
+            else { dyn_p.opts = O_CHMEM; }
+        } else if (sub == 1 && i == 0) {
+            dyn_p.name = "VOICING"; dyn_p.kind = PK_ENUM; dyn_p.max = VOICE_SMOOTH; dyn_p.opts = O_VOICING;
+        } else if (sub == 1 && i == 1) {
+            dyn_p.name = "STRUM"; dyn_p.max = 100;
         }
-        else if (i == 2) { dyn_p.kind = PK_ENUM; dyn_p.max = VOICE_SMOOTH; dyn_p.opts = O_VOICING; }
-        else { dyn_p.kind = PK_PCT; dyn_p.max = 100; }
         return &dyn_p;
     }
     if (pg == PG_ARP && arp_shake() && i > 0) {  /* (K1 is MODE: the page's own) */
@@ -252,13 +261,21 @@ uint8_t *page_value(int pg, int i)
         return &st.master[i];
     case PG_ENV: return sub == 1 ? &ip->menv[i] : &ip->env[i];
     case PG_LFO: return &ip->lfo[i];
-    case PG_GLO:
-        if (sub == 2) {
-            static uint8_t zero;
-            if (i == 1 && st.chord[0] != CHORD_SCALE && st.chord[0] != CHORD_SHAPE) { zero = 0; return &zero; }
-            return &st.chord[i];
+    case PG_GLO: return sub == 1 ? &st.keys[i] : &st.glo[i];
+    case PG_CHORD: {
+        static uint8_t knob, empty;
+        if (sub == 0 && i == 0) {                            /* (a copy of MODE, in the knob's order) */
+            int k;
+            for (k = 0; k < 5; k++)
+                if (CH_KNOB[k] == st.chord[0]) knob = (uint8_t)k;
+            return &knob;
         }
-        return sub == 1 ? &st.keys[i] : &st.glo[i];
+        if (sub == 0 && i == 1 && st.chord[0] == CHORD_PADS) return &st.rsv[1];
+        if (sub == 0 && i == 1 && (st.chord[0] == CHORD_SCALE || st.chord[0] == CHORD_SHAPE)) return &st.chord[1];
+        if (sub == 1 && i < 2) return &st.chord[2 + i];
+        empty = 0;
+        return &empty;
+    }
     case PG_ARP:
         if (i == 0 || !arp_shake()) return &ip->arp[i];
         if (!arp_sub()) return &st.shake[i - 1];             /* GRAV SPIN BOUNCE */
@@ -880,6 +897,7 @@ SMALL void h1_button(int btn, int down)
         }
         if (btn == H1_BTN_GLO)  open_page(PG_GLO);
         if (btn == H1_BTN_SEQ)  open_page(PG_SEQ);
+        if (btn == H1_BTN_ARP)  open_page(PG_ARP);
         if (btn == H1_BTN_HOME) {
             if (page == PG_HOME) name_t = 0.0f;
             page = PG_HOME;
@@ -977,7 +995,7 @@ SMALL void h1_button(int btn, int down)
                 st.chord[0] = chord_last;
                 toast("CHORD: ", 0, 0, O_CHMODE[chord_last], -1);
             }
-            if (page == PG_GLO) sync_cols(PG_GLO);
+            if (page == PG_CHORD) sync_cols(PG_CHORD);
             mark_dirty();
             return;
         }
@@ -1014,7 +1032,6 @@ SMALL void h1_button(int btn, int down)
     case H1_BTN_SEL:   open_page(PG_MIX); break;
     case H1_BTN_ENV:   open_page(PG_ENV); break;
     case H1_BTN_LFO:   open_page(PG_LFO); break;
-    case H1_BTN_ARP:   open_page(PG_ARP); break;
     case H1_BTN_PLAY:  eng_post(EV_PLAY, 0); break;
     case H1_BTN_OCTDN: octave((btn_held & (1u << H1_BTN_OCTUP)) ? 0 : -1); break;
     case H1_BTN_OCTUP: octave((btn_held & (1u << H1_BTN_OCTDN)) ? 0 : 1); break;
@@ -1082,6 +1099,10 @@ static void holds(void)
         btn_fired[H1_BTN_SEQ] = 1;
         set_seq_mode(st.seq[0] == SEQ_STEP ? SEQ_TAPE : SEQ_STEP);
         toast(O_SEQMODE[st.seq[0]], 0, 0, 0, -1);
+    }
+    if ((btn_held & (1u << H1_BTN_ARP)) && !btn_fired[H1_BTN_ARP] && now - btn_ms[H1_BTN_ARP] > 550u) {
+        btn_fired[H1_BTN_ARP] = 1;
+        if (page != PG_CHORD) open_page(PG_CHORD);   /* (held again on it: it stays) */
     }
     if ((btn_held & (1u << H1_BTN_GLO)) && !btn_fired[H1_BTN_GLO] && now - btn_ms[H1_BTN_GLO] > 550u) {
         btn_fired[H1_BTN_GLO] = 1;
@@ -1219,14 +1240,18 @@ static APART void set_param(int i, int v)
         return;
     }
     if (page == PG_ARP && i == 0 && v == ARP_SHAKE) subpage[PG_ARP] = 0;   /* SHAKE opens on 1/2 */
+    if (page == PG_CHORD && subpage[PG_CHORD] == 0 && i == 0) {   /* MODE; SCALE's and SHAPE's type in range */
+        int mode = CH_KNOB[v], tmax = mode == CHORD_SCALE ? CHORD_NSCALE - 1 : CHORD_NSHAPE - 1;
+        st.chord[0] = (uint8_t)mode;
+        if ((mode == CHORD_SCALE || mode == CHORD_SHAPE) && st.chord[1] > tmax) st.chord[1] = (uint8_t)tmax;
+        if (mode != CHORD_OFF) chord_last = (uint8_t)mode;
+        drum_said = 0;
+        sync_cols(PG_CHORD);
+        mark_dirty();
+        return;
+    }
     *q = (uint8_t)v;
     if (page == PG_GLO && subpage[PG_GLO] == 1 && i == 3 && !v) eng_post(EV_UNLATCH, 0);
-    if (page == PG_GLO && subpage[PG_GLO] == 2 && i == 0) {  /* a new mode: its type in its range */
-        drum_said = 0;
-        int tmax = v == CHORD_SCALE ? CHORD_NSCALE - 1 : (v == CHORD_SHAPE ? CHORD_NSHAPE - 1 : 0);
-        if (st.chord[1] > tmax) st.chord[1] = (uint8_t)tmax;
-        if (v != CHORD_OFF) chord_last = (uint8_t)v;
-    }
     if (page == PG_ARP && i == 0) sync_cols(PG_ARP);
     mark_dirty();
 }
@@ -1325,6 +1350,7 @@ SMALL int h1_control(int enc, int *lo, int *hi, const char **name, const char **
             d = put_i(d, v + 1);
             if (page == PG_MIX && v < 5) put_s(put_s(d, " "), MIX_SUBT[v]);
             if (page == PG_SEQ && v == 2 && st.seq[0] == SEQ_TAPE) put_s(put_s(d, " "), "LANE");
+            if (page == PG_CHORD) put_s(put_s(d, " "), v ? "PLAY" : "PADS");
         }
         break;
     default: {
@@ -2055,6 +2081,11 @@ static void draw_arp_page(void)
             g_rect(x - 6.0f, 148.0f - h, 12.0f, h, mode == ARP_OFF ? 0.25f : 0.85f);
         }
     }
+    if (mode != ARP_SHAKE) {                     /* (SHAKE's cage reaches down here) */
+        g_color(GC_SLATE);
+        g_text(120.0f, 165.0f, "HOLD ARP: CHORDS", 8.0f, 1.2f, 0.8f, 1);
+        g_color(GC_WHITE);
+    }
     draw_bottom_cols(PG_ARP, 182.0f);
 }
 
@@ -2062,8 +2093,7 @@ static void draw_glo_page(void)
 {
     int sub = subpage[PG_GLO], i;
     char buf[24];
-    draw_topbar(O_TRK[st.track], sub == 2 ? "CHORD" : (sub == 1 ? "KEYS / SCALE" : "GLOBAL"),
-                sub == 2 ? "3/3" : (sub == 1 ? "2/3" : "1/3"));
+    draw_topbar(O_TRK[st.track], sub == 1 ? "KEYS / SCALE" : "GLOBAL", sub == 1 ? "2/2" : "1/2");
     if (sub == 0) {
         put_s(put_s(buf, "HOLD GLO: "), O_CLICK[st.seq[5] < 3 ? st.seq[5] : 0]);
         g_color(GC_SLATE);
@@ -2093,6 +2123,13 @@ static void draw_glo_page(void)
         fit_text(cx, 194.0f, p->name, 9.0f, 50.0f, 0.85f);
     }
     g_color(GC_WHITE);
+}
+
+static void draw_chords_page(void)
+{
+    int sub = subpage[PG_CHORD];
+    draw_topbar(O_TRK[st.track], sub ? "CHORD PLAY" : "CHORD PADS", sub ? "2/2" : "1/2");
+    draw_bottom_cols(PG_CHORD, 182.0f);
 }
 
 /* ---- overlays: toast, name flash, volume ring, bottom sequencer bar ------------------- */
@@ -2359,6 +2396,10 @@ void ui_frame(uint32_t now_ms)
         draw_arp_page();
         draw_seq_mark();
         draw_toast();
+    } else if (page == PG_CHORD) {
+        draw_chords_page();
+        draw_seq_mark();
+        draw_toast();
     } else {
         draw_glo_page();
         draw_seq_mark();
@@ -2512,12 +2553,14 @@ uint32_t h1_key_leds(void)
 uint32_t h1_button_leds(void)
 {
     static const int8_t PAGE_BTN[NPAGE] = {
-        H1_BTN_HOME, H1_BTN_FX, H1_BTN_SEL, H1_BTN_ENV, H1_BTN_LFO, H1_BTN_GLO, H1_BTN_ARP, H1_BTN_SEQ
+        H1_BTN_HOME, H1_BTN_FX, H1_BTN_SEL, H1_BTN_ENV, H1_BTN_LFO, H1_BTN_GLO, H1_BTN_ARP, H1_BTN_SEQ, H1_BTN_ARP
     };
     uint32_t m = 0;
     int s = seq.mode == SEQ_TAPE ? seq.loop_state : LOOP_EMPTY, blink = fractf(tsec * 2.5f) < 0.5f;
     if (page != PG_HOME) m |= 1u << PAGE_BTN[page];
     if (st.ip[st.inst].arp[0] && (page == PG_ARP || vis.beat < 0.25f)) m |= 1u << H1_BTN_ARP;
+    if (page == PG_CHORD)                        /* (CHORDS: ARP blinks) */
+        m = blink ? m | 1u << H1_BTN_ARP : m & ~(1u << H1_BTN_ARP);
     if (st.hud) m |= 1u << H1_BTN_EDIT;
     if (st.fx_on || (btn_held & (1u << H1_BTN_FX))) m |= 1u << H1_BTN_FX;
     if (s == LOOP_PLAY || s == LOOP_DUB || s == LOOP_REC) m |= 1u << H1_BTN_PLAY;

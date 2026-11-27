@@ -9,7 +9,7 @@
  *   strum       the notes come one after another, and a key let go early leaves nothing behind
  *   capture     EDIT + GLO with keys held stores them (MEMORY); with none held it turns chords off and on
  *   the rest    MIDI in is not made into chords; MONO (mono) plays one note; the tape records the chord;
- *               HOLD latches it; HUSH clears it; the CHORD page; saved and loaded, nonsense clamped */
+ *               HOLD latches it; HUSH clears it; the CHORDS page; saved and loaded, nonsense clamped */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -327,18 +327,18 @@ int main(void)
         CHECK(ons == 0 && gated() == 0, "and the key let go afterwards starts nothing");
     }
 
-    /* ---- the CHORD page ---- */
+    /* ---- the CHORDS page ---- */
     {
         const char *name, *text;
         int lo, hi;
         fresh();
-        tap(H1_BTN_GLO);
-        h1_encoder(H1_ENC_SELECT, 1);
-        h1_encoder(H1_ENC_SELECT, 1);
+        h1_button(H1_BTN_ARP, 1);
+        go(700);
+        h1_button(H1_BTN_ARP, 0);
         go(60);
         h1_control(H1_ENC_K1, &lo, &hi, &name, &text);
-        CHECK(h1_page() == PG_GLO && strcmp(name, "MODE") == 0, "GLO's third page: CHORD, MODE first");
-        h1_encoder(H1_ENC_K1, 3);
+        CHECK(h1_page() == PG_CHORD && strcmp(name, "MODE") == 0, "ARP held: CHORDS, MODE first");
+        h1_encoder(H1_ENC_K1, 4);
         go(60);
         CHECK(st.chord[0] == CHORD_SHAPE, "K1 turns the mode to SHAPE");
         h1_encoder(H1_ENC_K2, 7);
@@ -347,8 +347,10 @@ int main(void)
         h1_encoder(H1_ENC_K1, -1);
         go(60);
         CHECK(st.chord[0] == CHORD_SCALE && st.chord[1] < 6, "back to SCALE: the type is kept in SCALE's range");
-        h1_control(H1_ENC_K4, &lo, &hi, &name, &text);
-        CHECK(strcmp(name, "STRUM") == 0 && hi == 100, "K4 is STRUM");
+        h1_encoder(H1_ENC_SELECT, 1);
+        go(60);
+        h1_control(H1_ENC_K2, &lo, &hi, &name, &text);
+        CHECK(strcmp(name, "STRUM") == 0 && hi == 100, "the second subpage's K2 is STRUM");
     }
 
     /* ---- saved and loaded ---- */

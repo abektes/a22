@@ -7,7 +7,8 @@
  *   latch       HOLD latches pads; HUSH and a state load leave nothing sounding
  *   sequencers  the tape, STEP and RIFF take a pad's notes
  *   smooth      SMOOTH voicing: each chord close to the last, and OCT still moves it
- *   saved       MODE PADS, the set and SMOOTH in the saved state, nonsense clamped */
+ *   saved       MODE PADS, the set and SMOOTH in the saved state, nonsense clamped
+ *   controls    the CHORDS page: hold ARP, its two subpages' columns, EDIT + GLO, GLO without CHORD */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -274,6 +275,48 @@ static void saved(void)
     CHECK(h1_state_load(buf, size) == 0 && st.chord[2] == 0, "a voicing past SMOOTH is CLOSE");
 }
 
+static void hold(int b) { h1_button(b, 1); go(700); h1_button(b, 0); go(60); }
+static int col(int k, const char *name, const char *text)
+{
+    const char *n = "", *t = "";
+    h1_control(k, 0, 0, &n, &t);
+    return !strcmp(n, name) && (!text || !strcmp(t, text));
+}
+static void turn(int enc, int d) { h1_encoder(enc, d); go(60); }
+static void edit_glo(void)
+{
+    h1_button(H1_BTN_EDIT, 1); go(30); tap(H1_BTN_GLO); h1_button(H1_BTN_EDIT, 0); go(60);
+}
+
+static void page_controls(void)
+{
+    fresh();
+    tap(H1_BTN_ARP); CHECK(h1_page() == PG_ARP, "tap ARP: the SEQ page");
+    hold(H1_BTN_ARP); CHECK(h1_page() == PG_CHORD, "hold ARP: CHORDS, from the SEQ page too");
+    hold(H1_BTN_ARP); CHECK(h1_page() == PG_CHORD && col(H1_ENC_K1, "MODE", "OFF"), "held again: it stays");
+    CHECK(col(H1_ENC_K2, "", 0) && col(H1_ENC_SELECT, "SUBPAGE", "1 PADS"), "OFF has no second column");
+    turn(H1_ENC_K1, 1); CHECK(st.chord[0] == CHORD_PADS && col(H1_ENC_K1, "MODE", "PADS"), "PADS is next to OFF");
+    turn(H1_ENC_K2, 4); CHECK(st.rsv[1] == 4 && col(H1_ENC_K2, "SET", "BALLAD 2"), "K2 picks the set");
+    turn(H1_ENC_K1, 1); CHECK(st.chord[0] == CHORD_MEMORY && col(H1_ENC_K2, "TYPE", "MEM"), "MEMORY");
+    turn(H1_ENC_K1, 2); turn(H1_ENC_K2, 7);
+    CHECK(st.chord[0] == CHORD_SHAPE && st.chord[1] == 7, "SHAPE's type");
+    turn(H1_ENC_K1, -1); CHECK(st.chord[0] == CHORD_SCALE && st.chord[1] < CHORD_NSCALE, "kept in SCALE's range");
+    turn(H1_ENC_K1, -2); CHECK(st.chord[0] == CHORD_PADS && st.rsv[1] == 4, "the set is kept");
+    edit_glo(); CHECK(st.chord[0] == CHORD_OFF, "EDIT + GLO: off");
+    edit_glo(); CHECK(st.chord[0] == CHORD_PADS, "and PADS again");
+    h1_key(0, 1); h1_key(2, 1); go(60); edit_glo(); h1_key(0, 0); h1_key(2, 0); go(200);
+    CHECK(st.chord[0] == CHORD_OFF && st.chord_n == 3 && st.chord_mem[1] == 4, "pad keys are not captured");
+    turn(H1_ENC_SELECT, 1);
+    CHECK(col(H1_ENC_SELECT, "SUBPAGE", "2 PLAY") && col(H1_ENC_K1, "VOICING", 0) && col(H1_ENC_K3, "", 0), "PLAY");
+    turn(H1_ENC_K1, 9); CHECK(st.chord[2] == VOICE_SMOOTH && col(H1_ENC_K1, "VOICING", "SMOOTH"), "to SMOOTH");
+    CHECK(col(H1_ENC_K2, "STRUM", 0), "STRUM");
+    tap(H1_BTN_HOME); CHECK(h1_page() == PG_HOME, "HOME leaves");
+    h1_button(H1_BTN_EDIT, 1); go(30); hold(H1_BTN_ARP); h1_button(H1_BTN_EDIT, 0); go(60);
+    CHECK(h1_page() == PG_HOME && st.keys[3] == 1, "EDIT + ARP is still HOLD, and opens no page");
+    fresh(); tap(H1_BTN_GLO); turn(H1_ENC_SELECT, 1); turn(H1_ENC_SELECT, 1);
+    CHECK(col(H1_ENC_K1, "TEMPO", 0), "GLO has two subpages");
+}
+
 int main(void)
 {
     sets();
@@ -282,6 +325,7 @@ int main(void)
     sequencers();
     smooth();
     saved();
+    page_controls();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

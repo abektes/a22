@@ -261,7 +261,7 @@ void wire_test_whole_row(int on);        /* tests/sleep.c: WIRE clears its whole
 extern const InstDef *const insts[];
 
 /* ---- pages ---------------------------------------------------------------------------- */
-enum { PG_HOME = 0, PG_FX, PG_MIX, PG_ENV, PG_LFO, PG_GLO, PG_ARP, PG_SEQ, NPAGE };
+enum { PG_HOME = 0, PG_FX, PG_MIX, PG_ENV, PG_LFO, PG_GLO, PG_ARP, PG_SEQ, PG_CHORD, NPAGE };
 enum { PK_PCT, PK_ENUM, PK_INT };
 
 typedef struct ParamDef {
