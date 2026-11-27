@@ -23,6 +23,11 @@ CI's build of the projects branch (`d4c7016`): flash 563,856 B of the 581,564 B 
 free with 8,192 kept spare (**1,144 B**). Estimated for all four sprints: 15 KB of flash, 360 B of SRAM. No sprint
 adds a RAM buffer.
 
+| CI's build | Flash | Free of the slot | SRAM free | Over the 8,192 spare | Sprint took (estimate) |
+|---|---|---|---|---|---|
+| projects, `d4c7016` | 563,856 B | 17,708 B | 9,336 B | 1,144 B | |
+| sprint 1, `2030f09` | 570,624 B | **10,940 B** | 9,224 B | **1,032 B** | 6,768 B flash (5 KB), 112 B SRAM (80 B) |
+
 ## Rules for every sprint
 
 A sprint is done when all of these are ticked:
@@ -37,8 +42,9 @@ A sprint is done when all of these are ticked:
 
 ## Sprint 1: chord pads
 
-Built 2026-11-27 on branch `chords-pads`; its host tests and the fuzz pass. Still to do: CI's flash and SRAM line
-(the flash gate), and the owner's run on the FM-1.
+Built 2026-11-27 on branch `chords-pads` ([abektes/a22#24](https://github.com/abektes/a22/pull/24)); its host tests,
+the fuzz and a hand-run release build pass. Size above (Actions run 46077485494): the flash gate **does not pass**
+(see below). Still to do: the owner's run on the FM-1.
 
 - [x] **Sets.** A table of chord types and 24 sets of eight pads, our own, in flash. A test builds every pad of every
       set in all twelve roots: in range, at most six notes, a name for each.
@@ -77,6 +83,11 @@ leave enough room to play over them.
       picks: cut
       scope (sprint 4's STYLE first), win flash back elsewhere, or grow the app slot (`app_end`, at most 0xAF000),
       tried on the FM-1 first: install over the old slot size, back to V15, and to another firmware.
+
+**After sprint 1 (2026-11-27): not passed.** Sprints 2 to 4, estimated at 10 KB, would leave 700 B of 10,940: 3,396 B
+short of the 4 KB. Sprint 2 alone leaves about 8.7 KB, so it can go ahead. Sprints 2 and 3 leave about 3.7 KB, so
+cutting all of sprint 4 is not enough by itself. Sprint 1 ran 32% over its estimate; if the others do too (about
+13.2 KB), they do not fit. The owner's choice is open, and is needed before sprint 3.
 
 ## Sprint 3: the chord loop
 
