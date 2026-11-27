@@ -344,6 +344,7 @@ int eng_layer_rec(void);
 int eng_loop_used(void);
 uint32_t eng_loop_full(void);
 void eng_render(int32_t *lr, uint32_t n);
+void eng_stems(int16_t *(*get)(uint32_t off, uint32_t *run), uint32_t stride);
 void eng_late(int late);
 uint32_t eng_saved_n(void);
 uint32_t eng_clock_steps(int inst);       /* blocks an engine's own clocks have moved (tests) */

@@ -108,6 +108,8 @@ need ears or hands.
       arpeggio's notes arrived on the computer.*
 - [ ] USB audio: the computer records the mix from the `A22 FM-1` input. *(macOS asks for microphone
       access first)*
+- [ ] USB audio stems: a DAW sees ten channels, T1 to T4 on 3-4 to 9-10 while the tape plays, on macOS, Windows and
+      iOS; a phone recording app takes the mix on 1-2. CC 119's PERF while recording and while not.
 - [ ] Change the engine, an algorithm and a knob, wait ten seconds, switch off and on: they
       are kept. *Remote, in part: an algorithm was kept through a reinstall's restart; a power-off
       needs hands.*
