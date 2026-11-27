@@ -68,52 +68,135 @@ the projects it overwrote are gone. The README says so, and P4's backup is the w
 The numbers come from #21's CI build and fm1-base's COMPANION.md. Each step's CI build gives the real ones. P4 goes
 in only if the build after P3 leaves its 624 B above the spare.
 
+**As built** (PR abektes/a22#23's CI, `5d49a25`, P1 to P4 together): image 563,536 B (+7,296 B on #21's), about
+18 KB of the slot left; SRAM 9,336 B free (864 B more used), 1,144 B past the 8 KB spare. So P4 fits, and the next
+feature that needs SRAM has about 1 KB.
+
 ## Steps
 
-- [ ] **P1. The slots** (`app/app.c`, beside the ring).
-  - Scan at start; save a page a frame; erase the spare a sector a frame (sliced erase, as the ring since 0.7.2).
-  - **One flash writer:** while a project save runs, the state's save and the ring wait, and a project save waits for
-    a ring save under way. Never two in one frame.
-  - **The tape changes mid-save** (a take: `h1_loop_gen`): the save is dropped and starts again, as the ring does.
-  - **The state changes mid-save** (a knob): the bytes are written as they are, and the CRC is the one that went in,
-    so the record is whole and holds a moment of the save.
-  - **A save right after a save**, before the spare is erased: erase it first, sliced, then write.
-  - **Host tests:** `tests/projects.txt` (save, load, four projects, a restart, a save cut at each page, foreign
-    bytes in a slot, a full tape) and the fuzz with project saves mixed in. `tests/run_tests.sh` passes.
-- [ ] **P2. Loading while the sound runs.** `h1_state_load` and `h1_loop_load` run only at start today, before the
-      sound. Snapshots load through the engine's queue (`EV_SNAP_LOAD`). Trace what a whole load needs with the render
-      running: stop the tape, silence the voices (as hold HOME does), then hand the state and the tape over where the
-      render can't read them half-written (`plat_lock`, or an engine event as snapshots use). The settings then
-      redraw and save as after a start. Keep TUNE and BRIGHT (decision 2). Host test: load while notes sound and while
-      the tape plays, and the next frame plays the project. The CPU and screen numbers stay within a point.
-- [ ] **P3. On the FM-1's panel** (decisions 1 and 3).
-  - The gesture and toasts: `P2 SAVED`, `P2 LOADED`, `P2 EMPTY`, `LOAD P2? AGAIN`, `SAVING P2` while it writes.
-  - The key lights with SAVE held show which black keys hold a project.
-  - The screen reader says the same.
-  - A save while recording is refused (`RECORDING`).
-  - Host tests for each.
-- [ ] **P4. Project files over USB** (decision 4; fm1-base `companion = true`, `APP_FILES`).
-  - `project1` to `project4`, kind project: read in place.
-  - A write goes into the spare slot frame by frame, the CRC is checked at commit, and it becomes current only then.
-  - Delete empties the slot.
-  - `app_file_busy` is 1 while recording or while a save runs.
-  - This gives backup, restore and swapping tapes from fm1-base's companion page (`web/companion/`, "Back up all"
-    zips every file) and `tools/fm1_companion.py`, with no page of A22's own.
-  - Host test with `fm1_companion.py` on the host simulator (`--serve`): get, put, a put cut halfway, a put while
-    recording.
-- [ ] **P5. On an FM-1** (the owner's hands; each step asked first). Install a CI test package, then:
-  - save and load all four with the tape playing, then stopped;
-  - PERF's LATE, ERASE and HELD during saves and loads (0.7.2's SAVE: LATE 0, HELD 0);
-  - a power cycle right after a save (the owner's yes);
-  - the companion page's backup and restore, and a project put from a computer;
-  - `fm1_profile.py idle` and `jam --clear-tape` within a point of 0.7.2 (the jam clears the tape: ask first);
-  - `release-all` and `master pot` at the end.
-- [ ] **P6. Docs.**
-  - README: a Projects section, the hotkeys, and the shared data area's warning with the backup.
-  - The site manual (`tools/build_site.py`).
-  - CHANGELOG Unreleased.
-  - ARCHITECTURE's flash map.
-  - The answer on issue #12, when the owner says.
+- [x] **P1. The slots** (`app/app.c`, beside the ring; `06528d0`).
+  - Done as planned: scan at start, a page a frame through the ring's deferral (`flash_go`), a free slot erased a
+    sector a frame. One flash writer a frame: `proj_step` runs before `ring_step` and has the frame while a save
+    is under way; it starts only when the ring is not part-way through one. A take mid-save starts it again.
+  - The header is 32 bytes at the start of its page: magic "A22P", version 1, project, sequence number, the
+    state's and the loop's lengths, the body's CRC-32, the header's own CRC-32. `H1_STATE_MAX` (3,584, in
+    `core/h1.h`) bounds the state so that header, state and a full loop fit 20,480 bytes at most; `H1State` is 2,888.
+  - **Host tests:** `tests/projects.txt`. It covers four projects into the four erased slots, P1 again into the
+    spare with its old slot erased a sector a frame, a restart, and a power-off part-way through a save's body (the
+    old copy kept, the torn slot erased). It also covers another firmware's bytes in a free slot, a take during a
+    save, and a full tape (2,048 events).
+  - The fuzz (`tests/fuzz.c`) runs the core only, so it can't reach `app.c`'s slots; the simulator script stands
+    in for it there. P2's load is in the core.
+- [x] **P2. Loading while the sound runs** (`2e9566f`).
+  - `h1_silence` stops the tape and every voice as hold HOME does, sending CC 123 on the four channels.
+  - The load waits three frames for the render to take that, because `eng_init` empties the engine's queue (found by
+    the test: CC 123 never went out when the load came in the same frame). It then waits for the tails, half a
+    second at most.
+  - `h1_project_load` then takes the state and the loop, read in place from the slot, under `plat_lock`. That's the
+    same path as a start (`h1_state_load`, `h1_loop_load`), with TUNE and BRIGHT kept.
+  - Both count as changed, so the ring and the state's save keep them as what plays.
+  - A load waits for a project's save under way. It is refused while a take goes in, and when the record no longer
+    checks.
+  - **Host tests:** `tests/projload.txt` (loaded stopped, then playing with a key held; the next bar plays the
+    project's note and not the other's; an empty project and a load while recording refused; a restart after keeps
+    it) and `tests/state.c` (TUNE and BRIGHT kept, the rest to the byte, a refused state changes nothing).
+  - **Left for P5:** how long the render is locked out on the FM-1 (`eng_init` clears the effects' buffers), and
+    whether LATE counts one at a load.
+- [x] **P3. On the FM-1's panel** (decisions 1 and 3).
+  - **Gestures:** SAVE + F#, G#, A# or C# (keys 1, 3, 5, 8: `PROJ_KEYS` in `core/ui.c`) loads P1 to P4, and SAVE +
+    EDIT + the key saves. EDIT let go after a save doesn't pin the knob strip, and SAVE let go doesn't save the
+    settings or reset.
+  - **Toasts:** `SAVING P2`, then `P2 SAVED` (or `P2 NOT SAVED`); `P2 LOADED` (or `P2 NOT LOADED`); `P2 EMPTY`;
+    `LOAD P2? AGAIN`; `STOP TAPE FIRST` for a load while the tape plays; `REC ARMED` for one while REC waits for its
+    first key; `RECORDING` for either while a take goes in.
+  - **After review** (PR #23): saves asked while another waits are queued, a bit a project, and saved in turn; a
+    newer load replaces one still waiting for the silence; a delete marks every copy of the project, so an older one
+    in a slot not yet erased can't come back; the reader no longer says TEMPO when EDIT is let go after a save chord.
+  - **The confirm:** the same keys again within three seconds load it, and any other key or button cancels it.
+    "Changed" means a setting changed (`mark_dirty`) or the tape did (`h1_loop_gen`) since the last project save or
+    load. At start, a tape with anything on it counts as changed.
+  - **Lights:** with SAVE held, the black keys that hold a project are lit, and the one being saved blinks.
+  - **Screen reader:** each project toast is said once (`h1_proj_said`, taken in `app.c`'s `speak`).
+  - **Between the core and the app:** the core keeps only the asks (`h1_proj_take`); the app tells it each frame
+    what the slots hold (`h1_proj_news`) and how each ask ended (`h1_proj_done`).
+  - **Host test:** `tests/projpanel.txt`. The simulator gained `expect toast` and `expect key_leds`. The reader's
+    words are not checked: the host has no reader.
+  - **Note for P5:** hold SAVE resets the algorithm's knobs at 0.9 s (`HOLD_RESET_ALGO`). The lights show at once,
+    but looking at them for longer than that resets the knobs. A save chord that takes longer than that to land
+    resets them first, then saves the reset knobs into the project. Check on the FM-1 whether that is a trap in
+    practice.
+  - A port that keeps no projects (it never calls `h1_proj_news`) gets nothing from the keys: no `SAVING P1` that
+    goes nowhere.
+- [x] **P4. Project files over USB** (`companion = true` in `app/fm1.toml`; `APP_FILES` in `app/app.h`).
+  - `project1.a22` to `project4.a22` (named with `.a22` after P5, so a download has an extension), kind project, room
+    20,480 bytes. A file is the project's record as its slot holds it
+    (header page, state, loop), read in place.
+  - **A write** goes into a free slot. Each 512-byte frame is written straight to flash as it comes, the sectors
+    erased as the data reaches them (sliced), so there is no file buffer. The header is kept in RAM (32 bytes) and
+    written last, at commit. That happens only if the header is this version's, the lengths add up to the file's
+    size, and the body's CRC-32 matches the header's. The header then gets this project's number and the next
+    sequence number, so a file saved as P1 can be put back as P3.
+  - A put given up halfway leaves the project as it was and a free slot that is erased before it is used.
+  - **The panel wins:** a panel save that finds no free slot because a put holds it (four projects saved, a put in
+    flight or abandoned) gives the put up. The put's next frame is refused, and the companion forgets it, so the
+    computer sends it again from the start. A start drops a put cut by it. Found in review: before this, that save
+    erased the tape ring's first slot, a sector a frame.
+  - **A delete** writes the record's magic to 0 in place (no erase), so it stays deleted after a restart.
+  - **Busy** (`app_file_busy`) while the tape plays, a take goes in, or a project saves or loads. Reads go any time.
+  - A project written from a computer shows `P2 FROM USB` and leaves the work that plays alone.
+  - fm1-base builds everything as one file, and its companion has a static `pf`, so `app.c`'s PERF counters are
+    now `perf`.
+  - **Host test:** `tests/projfiles.py` drives the simulator (`a22_host --serve`) with fm1-base's own client
+    (`base/tools/fm1_companion.py`). It covers the list, a CRC-checked read, P1's file put as P2, a damaged body
+    and another version refused, a put cut short then whole, a put refused as busy while the tape plays, and a
+    delete. `tests/projects.txt` adds a delete kept through a restart (`proj rm`).
+  - **Not done here:** the companion page on A22's own site (`tools/build_site.py`; fm1-base's `web/companion/`).
+    That's P6. The flash and SRAM cost comes from this branch's CI build.
+- [x] **P5. On an FM-1** (the owner's, 2026-11-27; CI test package of `5d49a25`, release.yml 46045658099, installed
+      first try over 0.7.2; no crash recorded throughout). The panel was driven over USB (`fm1_remote`), with PERF read
+      around each step and the tape's notes counted as MIDI out.
+  - **Saves** (SAVE + EDIT + F# / G#), playing and stopped: `SAVING P1`, `P1 SAVED`; LATE 0, HELD 0; 15 page writes of
+    at most 2.06 ms. The tape plays on (14-16 notes in 4 s, before and after).
+  - **A save right after a save** while playing: both in, LATE 0. The spare's erase ran 5 sectors, at most 22-24 ms in
+    a frame, with the tape playing: LATE 0, HELD 0.
+  - **Loads**, stopped, nothing changed: `P1 LOADED` at once; LATE 0, AUDIO peak 29% in that window. So the render
+    locked out at a load (`eng_init`) makes no block late. The tape plays the same after (14 notes in 4 s).
+  - **The question and refusals:** a knob turned there and back, then SAVE + F#, gives `LOAD P1? AGAIN`, and HOME
+    keeps the work. A load while playing gives `STOP TAPE FIRST`.
+  - **A power cycle** (the owner's hands) after the saves: all three projects listed by the companion afterwards. The
+    same run from the fresh start gave the same results.
+  - **Seen once:** in the first run, right after the install, the tape seemed stopped after the first save while
+    playing (0 notes after it, and the PLAY taps after that toggled the other way). It never came back in four runs
+    of the same steps, before and after the power cycle.
+  - **Companion over USB** (`base/tools/fm1_companion.py` against the FM-1): `ls` shows project1-4; `get project1` is
+    CRC-checked (3,836 bytes); `put` as project3 reads back with the same body; a put while the tape plays is refused
+    as busy (exit 5).
+  - **Delete failed on the device** ("the flash refused"): `app_file_delete` wrote its zeros from a `static const`
+    array, which lives in flash, and the driver writes only from RAM. The simulator doesn't care where the bytes come
+    from. Fixed in the next commit; checked on the device below.
+  - **With the fix** (release.yml 46048446680, installed first try, no crash): `rm project3` deleted it, and `ls`
+    shows project1 and project2 left.
+  - **Timing, against 0.7.2** (the same build, with #21's stems in it too, never timed on the FM-1 before):
+    - idle 12-16% by effect (0.7.2: 11-15%; LOFI 16);
+    - all 112 algorithms, eight-note chords, PLATE: average 49.9% (49.5), peak 74% PERC GAMELAN (73), 47.3 frames a
+      second on average (45), lowest 24 STACK CHOIR;
+    - `jam --clear-tape` (the owner's tape kept in P1 and P2): peak 77% (75), LATE 0 and SHED 0 at every stage.
+  - **Found in STEP mode:** the first jam ran with the FM-1 in STEP mode, so REC wrote steps and the numbers were
+    void; it was rerun in TAPE mode. P1 and P2 hold TAPE mode (`seq[0]` 0), so no project load set it. When it
+    switched between the reruns and the jam was not found.
+  - **A real track:** an original 2-bar techno loop at 130 BPM recorded over USB on all four tracks (KIT 909, MONO
+    ACID, SHAPER CZ-RES, STACK CHORD) and saved to P4 (4,556 bytes): 73% average, 85% peak, LATE 0. One REC toggle
+    got out of step in the recording script's first pass (the overdubs caught stray notes); the tracks were cleared
+    (hold REC) and overdubbed again.
+  - **Not checked:** the lights with SAVE held by eye, hold SAVE's 0.9 s reset against a slow save chord by hand,
+    the companion page in Chrome against the device (the terminal client was), a delete across a power cycle.
+- [x] **P6. Docs**, all but the answer on issue #12 (when the owner says).
+  - README: a Projects section (the keys, the question, the lights, backing up), the hotkey row, and the warning in
+    "Leave A22 again". The compatibility line's image and SRAM numbers wait for this branch's CI build.
+  - The site: the manual's Projects section, the hotkey row and a question. The build now also publishes fm1-base's
+    companion page at `companion/` (with the `fm1ports.js` it imports), so a backup needs no terminal.
+  - CHANGELOG Unreleased: Projects.
+  - ARCHITECTURE: the projects, and the data area's map.
 
 ## Not in this plan
 

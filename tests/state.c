@@ -10,7 +10,10 @@
  *               ones before it as saved: so adding an engine or effect needs no new version. Also a version 5
  *               state from before SKINS (13 engines, its slot empty) brings SKINS up as new, CYCLE as saved;
  *               and one saved with nine effects (GRAIN, in development builds only) and the ninth in hand
- *               comes up on PLATE, the eight it keeps as saved */
+ *               comes up on PLATE, the eight it keeps as saved
+ *   project     a project's state and loop in place of what plays (h1_project_load): taken whole but TUNE and
+ *               BRIGHT, which stay the unit's; both count as changed (the loop dirty); a refused state changes
+ *               nothing */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -172,6 +175,37 @@ static void new_slots(void)
     CHECK(!memcmp(st.fx_p, v5 + offsetof(H1State, fx_p), NFX * 4), "the effects there are keep their knobs");
 }
 
+static void project(void)
+{
+    uint32_t n, ln;
+    const void *p;
+    static uint8_t proj_state[4096], proj_loop[64];
+    uint8_t *q;
+    h1_init(44100);
+    memcpy(proj_state, v5, sizeof(H1State));
+    proj_state[offsetof(H1State, glo) + 0] = 150;    /* the project's TEMPO, TUNE and BRIGHT */
+    proj_state[offsetof(H1State, glo) + 2] = 80;
+    proj_state[offsetof(H1State, glo) + 3] = 30;
+    (void)h1_loop(&ln);                          /* an empty loop's blob, as a project holds one */
+    memcpy(proj_loop, h1_loop(&ln), ln);
+    st.glo[2] = 61;                              /* the unit's now */
+    st.glo[3] = 77;
+    h1_loop_saved();
+    CHECK(h1_project_load(proj_state, sizeof(H1State), proj_loop, ln) == 0, "a project loads");
+    p = h1_state(&n);
+    q = (uint8_t *)p;
+    CHECK(q[offsetof(H1State, glo) + 0] == 150, "its TEMPO is taken");
+    CHECK(q[offsetof(H1State, glo) + 2] == 61 && q[offsetof(H1State, glo) + 3] == 77, "TUNE and BRIGHT stay the unit's");
+    proj_state[offsetof(H1State, glo) + 2] = 61;
+    proj_state[offsetof(H1State, glo) + 3] = 77;
+    CHECK(!memcmp(p, proj_state, n), "the rest of its state is taken to the byte");
+    CHECK(h1_loop_dirty(), "the loop counts as changed, so the ring saves it");
+    memcpy(proj_state, p, n);
+    proj_state[0] ^= 0x55;
+    CHECK(h1_project_load(proj_state, sizeof(H1State), proj_loop, ln) != 0, "a project whose state is refused is refused");
+    CHECK(q[offsetof(H1State, glo) + 0] == 150 && st.magic == H1_MAGIC, "and changes nothing");
+}
+
 int main(void)
 {
     FILE *f = fopen("tests/state_v4.bin", "rb");
@@ -183,6 +217,7 @@ int main(void)
     version5();
     refused();
     new_slots();
+    project();
     printf("state: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

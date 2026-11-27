@@ -1,0 +1,255 @@
+# Projects' slots (docs/PLAN-projects.md P1): four projects and a spare at 0xAF000..0xC7FFF, five sectors a slot
+# (0xAF000, 0xB4000, 0xB9000, 0xBE000, 0xC3000). A save goes into an erased free slot with its header last, and the
+# slot the project was in before is free then; a power-off part-way leaves the old copy; foreign bytes are a free
+# slot. Run by tests/run_tests.sh in fm1-base's host simulator: ./build.sh --host, then
+# app/build/host/a22_host tests/projects.txt app/build/host
+wait 600
+expect proj.1 -1
+expect proj.4 -1
+# 1  a take, stopped; saved to P1: the first erased slot
+tap REC
+wait 100
+key 12 down
+wait 300
+key 12 up
+wait 400
+tap REC
+wait 1500
+tap PLAY
+wait 1500
+proj save 1
+wait 3000
+proj
+expect proj.1 0
+expect proj_same 1
+expect data.0xAF000 0x41
+# 2  P2 to P4 with the tape playing: slots 1 to 3, and P1's copy as it was
+tap PLAY
+wait 500
+proj save 2
+wait 3000
+proj save 3
+wait 3000
+proj save 4
+wait 3000
+tap PLAY
+wait 1500
+expect proj.2 1
+expect proj.3 2
+expect proj.4 3
+expect proj_same 4
+expect proj_saves 4
+# 3  P1 again: into the spare (slot 4); slot 0 is free then, and erased a sector a frame once it is silent
+proj save 1
+wait 3000
+expect proj.1 4
+expect proj_same 1
+wait 3000
+expect data.0xAF000 255
+expect data.0xB3000 255
+expect ring_erases 5 1
+# 4  a restart keeps them all
+reboot
+wait 800
+proj
+expect proj.1 4
+expect proj.2 1
+expect proj.3 2
+expect proj.4 3
+# 5  an overdub, then a power-off a moment into P2's save: P2 stays the copy before, and the torn slot (0) is
+#    erased before the next save goes in
+tap PLAY
+wait 300
+tap REC
+wait 200
+key 16 down
+wait 300
+key 16 up
+wait 600
+tap REC
+wait 600
+tap PLAY
+wait 1500
+proj save 2
+wait 200
+proj
+# (the save's body is part-way in: its first bytes are in the slot, its header is not)
+expect data.0xAF100 <255
+expect data.0xAF000 255
+power
+wait 800
+proj
+expect proj.2 1
+proj save 2
+wait 4000
+expect proj.2 0
+expect proj_same 2
+# 6  another firmware's bytes in the free slot (1): not a project, erased before a save goes in
+wait 3000
+data_write 0xB4000 41323250010000000300000099
+data_write 0xB5100 00
+reboot
+wait 800
+proj
+expect proj.2 0
+expect proj.3 2
+proj save 3
+wait 4000
+expect proj.3 1
+expect proj_same 3
+# 7  a take while P4 saves (a longer tape, so the save takes about 50 frames): the save starts again once the
+#    take is in, and holds it
+wait 3000
+tap PLAY
+wait 300
+tap REC
+wait 100
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+tap REC
+wait 2500
+proj save 4
+wait 150
+proj
+tap REC
+wait 50
+key 19 down
+wait 300
+key 19 up
+wait 600
+tap REC
+wait 4000
+tap PLAY
+wait 1500
+expect proj_same 4
+# 8  a full tape: 2,048 events fit a slot with the state
+tap PLAY
+wait 200
+tap REC
+wait 100
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+strum 0 15 20
+tap REC
+wait 2000
+tap PLAY
+wait 1500
+proj save 1
+wait 4000
+proj
+expect proj_same 1
+reboot
+wait 800
+expect proj_same 1
+# 9  a delete (the companion's, tests/projfiles.py) marks the record in place: P2 empty after a restart, the rest kept
+proj rm 2
+expect proj.2 -1
+reboot
+wait 800
+proj
+expect proj.2 -1
+expect proj_same 1
+# 10 a delete with an older copy of the project still in a free slot (the tape plays, so no slot is erased): every
+#    copy is marked, and nothing comes back after a restart
+tap PLAY
+wait 300
+proj save 3
+wait 2500
+proj save 3
+wait 2500
+proj
+proj rm 3
+reboot
+wait 800
+proj
+expect proj.3 -1

@@ -152,6 +152,27 @@ sector a frame once the tape is stopped. Since 0.7.2 every 4 KiB erase, the ring
 of about 1 ms with the sound on between them (fm1-base's sliced erase, `FM1B_ERASE_SLICED` in `app/app.h`) instead of
 one window of about 18 ms.
 
+**Projects** (`app/app.c`, docs/PLAN-projects.md) are copies of the state and the tape, kept apart from what plays, in
+five slots of five sectors just under the ring: four projects and a spare. A record is like the ring's: a header page
+(magic "A22P", version, project, sequence number, the state's and the loop's lengths, the body's CRC-32, the header's
+own), then `h1_state` and `h1_loop` page-aligned. `H1_STATE_MAX` (3,584) keeps header, state and a full loop within a
+slot. A save goes into an erased free slot a page a frame, through the same deferral as the ring's (`flash_go`), with
+the header last. Then the slot that held the project before is free, and it is erased a sector a frame in silence.
+`proj_step` runs before `ring_step`, and the two never write in the same frame. A load (`proj_load_step`) silences the
+sound (`h1_silence`, as hold HOME), waits for the render to take that and for the tails, then hands the record, read
+in place, to `h1_project_load` under `plat_lock`: the same path as a start, TUNE and BRIGHT kept. The panel's side is
+in `core/ui.c` (`h1_proj_take`, `h1_proj_news`, `h1_proj_done`). Over USB, fm1-base's companion lists the four as
+files (`APP_FILES`): a write goes into a free slot as it comes, and its header is written at commit once it checks.
+
+The flash's data area as A22 uses it:
+
+| Range | What |
+|---|---|
+| 0x97000..0xAEFFF | free (a bigger app slot could end at 0xAF000) |
+| 0xAF000..0xC7FFF | projects: five slots of 20 KB |
+| 0xC8000..0xDBFFF | the tape's ring: four slots of 20 KB |
+| 0xDC000, 0xDE000 | the panel's calibration and the loop's old store pair (`APP_STORE_MAP`) |
+
 The step sequencer is 64 steps of up to eight notes, on a 1/8, 1/16 or 1/32 grid, each note with its
 track and velocity, and is saved with the rest of the state. Riff (64 steps, transposed from the key
 held) and Shake (up to six balls in a spinning cage) are modes of the arpeggiator. `eng_seq_info`
@@ -258,7 +279,7 @@ sent to the panel a frame, all since it was last asked, and the bytes of each st
 the start. A build with the second core (the default) adds `CORES 2 n` or `CORES 1 why`. Since 0.6.0 it ends with
 `STAGE seq voices wait mix fx master`, the slowest render since the last PERF split by stage (`h1_stages`, in percent
 of the block), `FLASH n max`, the tape's flash writes and the longest in microseconds, `ERASE n max`, the ring's
-sector erases and the most erase time in one frame, and (0.7.2) `HELD n`, erases since the start that had to hold the
+sector erases (the projects' too) and the most erase time in one frame, and (0.7.2) `HELD n`, erases since the start that had to hold the
 sound for the whole erase (a flash part that does not suspend one).
 `tools/fm1_profile.py` drives every algorithm over USB and collects these. If RAM gets tight, the first
 things to shrink are the tape tricks' buffer and the path mask (no A22 engine draws with it).

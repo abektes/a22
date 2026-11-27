@@ -132,8 +132,26 @@ int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else
 int h1_loop_dirty(void);
 int h1_quiet(void);                              /* 1: silent enough for a flash erase (nothing playing, tails gone) */
 int h1_loop_quiet(void);                         /* 1: the loop is stopped (or empty), no take going */
+int h1_loop_taking(void);                        /* 1: a take is going in (REC or an overdub) */
+/* Projects (docs/PLAN-projects.md): a saved state and loop in place of what plays now. h1_silence stops the tape and
+ * every voice as hold HOME does (CC 123 out on the four channels); once h1_quiet, h1_project_load takes the state and
+ * the loop with the render locked out (the caller's: plat_lock), as a start does. TUNE and BRIGHT stay the unit's.
+ * Both then count as changed, so they are saved as the state and loop that play. 0 = taken; -1: the state was
+ * refused and nothing changed. A loop that does not load leaves the tape empty. */
+void h1_silence(void);
+int h1_project_load(const void *state, uint32_t state_size, const void *loop, uint32_t loop_size);
+/* The panel's side: SAVE + F#, G#, A# or C# (the first four black keys) asks to load project 0..3, with EDIT held to
+ * save. h1_proj_take gives the ask once (0 none, 1 save, 2 load) and its project; the port says each frame which
+ * projects hold a record (bit p) and which is being saved (-1 none), and how an ask ended (kind 3: a computer wrote
+ * project p over USB). h1_proj_said gives the
+ * words of a project toast once ("" none), for a screen reader. */
+int h1_proj_take(int *p);
+void h1_proj_news(uint32_t have, int saving);
+void h1_proj_done(int kind, int p, int ok);
+const char *h1_proj_said(void);
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */
+#define H1_STATE_MAX 3584u                      /* the saved state's most: a project's slot holds it and a full loop */
 uint32_t h1_loop_gen(void);                     /* moves whenever what is recorded changes */
 int h1_loop_room(void);                          /* notes that still fit in the loop (0: full) */
 
@@ -150,6 +168,7 @@ int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current engine, 0..7 */
 int h1_page(void);                               /* 0 = home, else a settings page */
 int h1_fx_held(void);                            /* 1 while FX is held on its own (the PUNCH strip is up) */
+int h1_edit_held(void);                          /* 1 while EDIT is held (SELECT is then the track's volume) */
 int h1_punch(void);                              /* the punch the hand holds, 1-8, else 0 */
 const char *h1_punch_name(int p);                /* "BRAKE", "ST 1/8" .. "GATE" ("" for none) */
 const char *h1_toast_now(void);                  /* the toast showing, "" when none */

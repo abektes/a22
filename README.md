@@ -2,7 +2,7 @@
 
 Custom firmware for the M-VAVE FM-1 that makes it an FM workstation: fourteen synth and drum engines with eight
 algorithms and four live knobs each, drawn in colour vector graphics; eight effects; a four-track tape with knob
-automation; a mixer; Riff and Shake sequencers, an arpeggiator, a step sequencer and eight snapshots.
+automation; four projects; a mixer; Riff and Shake sequencers, an arpeggiator, a step sequencer and eight snapshots.
 
 Nearly all of it is synthesised. KIT's 909, CRISP, LOFI and WORLD kits layer in short CC0 drum recordings, SKINS is
 made of them ([docs/SAMPLES.md](docs/SAMPLES.md)), and CYCLE plays single cycles of recorded instruments from
@@ -128,6 +128,29 @@ loads on 0.6.0 without the lane or its punches.
 SELECT moves the cursor and a tap of EDIT leaves a rest. The pattern takes the ROOT and SCALE in force when its first
 step is written, and a KEY track plays it in the key set now, as it does the tape.
 
+## Projects
+
+The FM-1 keeps four projects beside what plays. A project is the tape and every setting, the eight snapshots
+included, except TUNE and BRIGHT, which stay with the unit. The keys are the first four black keys from the lowest F:
+F#, G#, A# and C# for projects 1 to 4.
+
+- **SAVE + EDIT + the key** saves what plays to that project: **SAVING P2**, then **P2 SAVED**. It works while the tape
+  plays, but not while a take goes in (**RECORDING**).
+- **SAVE + the key** loads it, with the tape stopped (**STOP TAPE FIRST** otherwise, **REC ARMED** while REC waits for
+  its first key). If what plays has changed since
+  it was last saved to a project or loaded from one, the screen asks **LOAD P2? AGAIN**: the same keys within three
+  seconds load it, and anything else keeps your work. The sound stops for the load (CC 123 goes out), and from then on
+  the project's tape and settings are what plays, saving themselves as always.
+- With **SAVE** held, the black keys that hold a project light up.
+
+**Back them up.** The projects live in the part of the FM-1's flash that firmwares share, so one installed after A22
+may write over them. Keep them on a computer before you switch: the [companion page](https://abektes.github.io/a22/companion/)
+(Chrome or Edge, the FM-1 on USB, the tape stopped) lists `project1.a22` to `project4.a22`. **Back up all** saves them in one
+zip, and **Restore from a backup** puts them back. From a terminal in a clone:
+`python3 base/tools/fm1_companion.py get project1.a22` and
+`python3 base/tools/fm1_companion.py put project1.a22 project3.a22`.
+A project file put back under any number becomes that project.
+
 ## Riff and Shake
 
 Modes of the SEQ page (ARP, then ALGORITHM; or hold EDIT and turn ALGORITHM anywhere).
@@ -174,6 +197,7 @@ MIDI in is never made into chords. MONO plays the root alone. A chord takes a vo
 | EDIT + ENV | Back to the knobs before the last roll, and again to the roll |
 | SAVE | Save the settings now |
 | SAVE + white key 1–8 | Load that snapshot, or save to it if empty. **SAVE + EDIT + key** saves over it |
+| SAVE + F#, G#, A#, C# | Load project 1 to 4 (the tape stopped). **SAVE + EDIT + key** saves to it (see Projects) |
 | hold SAVE | Reset the algorithm's knobs. About two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages |
 | hold SEQ | Swap TAPE and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
@@ -247,7 +271,8 @@ answers afterwards. Update anything older than V15 with M-VAVE's updater first.
 A22's package carries fm1-base's update loader, so other installers can replace it: use another firmware's own
 installer or its card on [The Firmware Hub](https://thefirmwarehub.com), or press **Back to official V15** in the
 Hub's [Official firmware](https://thefirmwarehub.com/#official) box. A22 saves only its own settings, so leaving it
-doesn't bring back what an earlier firmware saved.
+doesn't bring back what an earlier firmware saved. Back up your projects first (see [Projects](#projects)): another
+firmware may write over them.
 
 ## If something goes wrong
 
@@ -269,7 +294,7 @@ From fm1-base, which A22 is built on:
   no Bluetooth.
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, algorithm, page and
   each control's value as it changes.
-- The image is about 556 KB of the 582 KB flash slot; it uses about 465 KB of the chip's 475 KB of SRAM.
+- The image is about 563 KB of the 582 KB flash slot; it uses about 466 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 
