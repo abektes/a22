@@ -194,7 +194,7 @@ const void *h1_state(uint32_t *size)
     return &st;
 }
 
-typedef char a22_state_fits_store[sizeof(H1State) <= 3840u ? 1 : -1];
+typedef char a22_state_fits_store[sizeof(H1State) <= 3840u && sizeof(H1State) <= H1_STATE_MAX ? 1 : -1];
 typedef char a22_slots_valid[NINST <= NSLOT && NFX <= NFXSLOT && NSLOT * NALGO < 255 ? 1 : -1];
 
 /* Version 4 (A22 0.1.0 to 0.4.0): twelve engine slots and eight effect slots, the rest as version 5. Only its
@@ -443,6 +443,7 @@ int h1_loop_load(const void *blob, uint32_t size)
 uint32_t h1_loop_gen(void) { return eng_loop_gen(); }
 int h1_loop_room(void) { return (NLEV - eng_loop_used()) / 2; }
 int h1_loop_quiet(void) { return eng_loop_quiet(); }
+int h1_loop_taking(void) { return eng_loop_taking(); }
 int h1_quiet(void) { return eng_quiet(); }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && !eng_loop_taking(); }
 void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }

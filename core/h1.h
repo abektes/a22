@@ -132,8 +132,10 @@ int h1_loop_load(const void *blob, uint32_t size);   /* 0 = taken; anything else
 int h1_loop_dirty(void);
 int h1_quiet(void);                              /* 1: silent enough for a flash erase (nothing playing, tails gone) */
 int h1_loop_quiet(void);                         /* 1: the loop is stopped (or empty), no take going */
+int h1_loop_taking(void);                        /* 1: a take is going in (REC or an overdub) */
 void h1_loop_saved(void);
 #define H1_LOOP_MAX 16396u                       /* 12 + 8 x 2048 */
+#define H1_STATE_MAX 3584u                      /* the saved state's most: a project's slot holds it and a full loop */
 uint32_t h1_loop_gen(void);                     /* moves whenever what is recorded changes */
 int h1_loop_room(void);                          /* notes that still fit in the loop (0: full) */
 

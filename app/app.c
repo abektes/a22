@@ -240,6 +240,7 @@ static void input(void)
 #include <stdlib.h>
 #include <string.h>
 static void ring_dump(void);
+static int proj_host_cmd(const char *cmd, const char *a, const char *b);
 static int host_bad_start;                                  /* the tests' "badstart": the next start is one */
 static uint32_t host_er_n, host_er_frame, host_er_max;      /* the ring's sector erases from frames: in all, this
                                                              * frame's, the most in one frame (expect ring_erases) */
@@ -261,6 +262,8 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         ring_dump();
         return 1;
     }
+    if (proj_host_cmd(cmd, a, b))                /* proj save N, proj, expect proj.N / proj_same N / proj_saves N */
+        return 1;
     if (!strcmp(cmd, "expect") && !strcmp(a, "ring_erases")) {   /* expect ring_erases MIN MAX_A_FRAME: the ring's sector
                                                                   * erases since the start, at least MIN, and at most
                                                                   * MAX_A_FRAME of them in one frame */
@@ -373,6 +376,7 @@ static void ring_boot_state(void)
 static const uint8_t *ring_src;          /* the blob being written, as h1_loop gave it: it holds until a take
                                           * records again (then the loop is dirty again, and saved anew) */
 #define RING_MAX (RING_SLOT_BYTES - RING_BODY)
+static uint8_t wpage[RING_PAGE];         /* a page on its way to the flash: the ring's or a project's (one a frame) */
 
 static uint32_t ring_off(int slot) { return RING_BASE + (uint32_t)slot * RING_SLOT_BYTES; }
 static uint32_t ring_pages(uint32_t n) { return (n + RING_PAGE - 1u) & ~(RING_PAGE - 1u); }
@@ -509,11 +513,12 @@ static void ring_drop(void)
  * in all, not a page: a jam is heavy all the time, and a save stretched over many seconds would be dropped by every
  * take meanwhile (h1_loop_gen) and leave the last one off the flash at a power-off. Then a write waits for a render to
  * have just finished, which leaves it the most time before the next, sending the panel's rectangles meanwhile.
- * (Not on the host: its renders do not come by themselves while the main loop waits.) */
-static int ring_go(void)
+ * (Not on the host: its renders do not come by themselves while the main loop waits.) The projects' saves go by it
+ * too, with a count of their own. */
+static int flash_go(uint32_t *defer)            /* (the ring's and the projects' saves: each its own count) */
 {
-    if (au_recent * 100u >= RING_HEAVY * pf_block_us && ring.defer < RING_DEFER) {
-        ring.defer++;
+    if (au_recent * 100u >= RING_HEAVY * pf_block_us && *defer < RING_DEFER) {
+        (*defer)++;
         return 0;
     }
 #ifndef PLAT_HOST
@@ -569,10 +574,10 @@ static void ring_step(void)
     }
     if (ring.to >= 0) {
         uint32_t off = ring_off(ring.to) + ring.to_at, n = ring.len - ring.at;
-        if (!ring_go())
+        if (!flash_go(&ring.defer))
             return;                              /* (the renders are heavy: this frame's page waits) */
         if (n) {
-            static uint8_t page[RING_PAGE];      /* (a page copied out first: what is written is what the CRC
+            uint8_t *page = wpage;               /* (a page copied out first: what is written is what the CRC
                                                   * covers, even where the engine's bytes move meanwhile) */
             uint32_t k;
             if (n > RING_PAGE)
@@ -654,6 +659,273 @@ static void ring_dump(void)
 }
 #endif
 
+/* ---- projects: four tapes and their settings, kept apart from the one playing (docs/PLAN-projects.md) -------------
+ * Five slots of five sectors just under the tape's ring, 0xAF000..0xC7FFF: four projects and a spare. 0x97000..0xAEFFF
+ * stays free (a bigger app slot could end at 0xAF000). A project is a record as the ring's are: a header page, then
+ * the state (h1_state) and the loop (h1_loop), each page-aligned. The header (magic, version, the project's number, a
+ * sequence number, the two lengths, the body's CRC-32, and its own CRC-32) goes last, so a record whose header reads
+ * right holds a whole project. A save goes into a free slot, erased first, and once its header is whole the slot that
+ * held that project before is free: a power-off at any point leaves the old copy in charge. At start the newest whole
+ * record of each project wins; anything else (erased, a torn save, another firmware's bytes) is a free slot, never
+ * loaded, erased before a save goes in. The data area is shared: a firmware installed after A22 may write here. */
+#define PROJ_N 4
+#define PROJ_SLOTS 5
+#define PROJ_SECT 5u
+#define PROJ_SLOT_BYTES (PROJ_SECT * 4096u)
+#define PROJ_BASE (RING_BASE - (uint32_t)PROJ_SLOTS * PROJ_SLOT_BYTES)   /* 0xAF000: just under the ring */
+#define PROJ_MAGIC 0x50323241u           /* "A22P" */
+#define PROJ_VERSION 1u
+#define PROJ_HEAD 32u                    /* the header's bytes, at the start of its page (RING_BODY) */
+#define PAGES(n) (((n) + RING_PAGE - 1u) & ~(RING_PAGE - 1u))
+typedef char proj_in_the_data_area[PROJ_BASE == 0xAF000u && PROJ_BASE >= PLAT_DATA_LO ? 1 : -1];
+typedef char proj_fits_a_slot[RING_BODY + PAGES(H1_STATE_MAX) + PAGES(H1_LOOP_MAX) <= PROJ_SLOT_BYTES ? 1 : -1];
+
+static struct {
+    int8_t of[PROJ_N];                   /* the slot holding project n, -1 none */
+    uint8_t clean[PROJ_SLOTS];           /* 1: the slot is erased whole, and a save may go in */
+    uint32_t seq;                        /* the newest record's sequence number */
+    int want;                            /* a save asked for: the project, -1 none */
+    int doing;                           /* the project being saved */
+    int to;                              /* the slot it goes into, -1 none */
+    int er;                              /* the slot being erased, a sector a frame, -1 none */
+    uint32_t er_k;                       /* its next sector */
+    uint32_t slen, llen;                 /* the save's state and loop, their bytes */
+    uint32_t at, crc, gen, defer;        /* how far into the body, its CRC so far, h1_loop_gen at the start, waits */
+    uint32_t saves, fails;               /* saves done and given up since the start */
+} proj = {{-1, -1, -1, -1}, {0}, 0, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+static uint32_t proj_off(int s) { return PROJ_BASE + (uint32_t)s * PROJ_SLOT_BYTES; }
+
+static int proj_free(int s)              /* no project in it, and no save going into it */
+{
+    int p;
+    for (p = 0; p < PROJ_N; p++)
+        if (proj.of[p] == s)
+            return 0;
+    return s != proj.to;
+}
+
+/* a slot's record: 1 when it is whole (the header and the body check), with its project and number */
+static int proj_read(int s, uint32_t *p, uint32_t *seq)
+{
+    const uint8_t *h = plat_data(proj_off(s));
+    uint32_t sl, ll, c;
+    if (!h || rd32(h) != PROJ_MAGIC || rd32(h + 4) != PROJ_VERSION || crc32_of(h, PROJ_HEAD - 4u) != rd32(h + 28))
+        return 0;
+    *p = rd32(h + 8);
+    *seq = rd32(h + 12);
+    sl = rd32(h + 16);
+    ll = rd32(h + 20);
+    if (*p >= (uint32_t)PROJ_N || sl > H1_STATE_MAX || ll > H1_LOOP_MAX)
+        return 0;
+    c = crc32_run(0xFFFFFFFFu, h + RING_BODY, sl);
+    c = crc32_run(c, h + RING_BODY + PAGES(sl), ll);
+    return ~c == rd32(h + 24);
+}
+
+/* at start (before the sound, a failed start too: nothing is loaded from here): which slot holds which project */
+static void proj_start(void)
+{
+    uint32_t p, seq, best[PROJ_N] = {0};
+    int s, any = 0;
+    proj.want = proj.to = proj.er = -1;
+    proj.seq = 0;
+    for (s = 0; s < PROJ_N; s++)
+        proj.of[s] = -1;
+    for (s = 0; s < PROJ_SLOTS; s++) {
+        const uint8_t *d = plat_data(proj_off(s));
+        proj.clean[s] = (uint8_t)(d && ring_blank(d, PROJ_SLOT_BYTES));
+        if (!proj_read(s, &p, &seq))
+            continue;
+        if (!any || (int32_t)(seq - proj.seq) > 0)
+            proj.seq = seq;
+        any = 1;
+        if (proj.of[p] < 0 || (int32_t)(seq - best[p]) > 0) {
+            proj.of[p] = (int8_t)s;      /* (an older copy of the same project: a free slot, erased later) */
+            best[p] = seq;
+        }
+    }
+}
+
+/* a free slot back to erased, a sector a frame (the sliced erase: the sound goes on). Sector 0, its header, first */
+static void proj_erase_some(int s)
+{
+    if (proj.er != s) {
+        proj.er = s;
+        proj.er_k = 0;
+        proj.clean[s] = 0;
+    }
+    if (ring_sector_erase(proj_off(s) + proj.er_k * 4096u) == 0 && ++proj.er_k < PROJ_SECT)
+        return;
+    {                                            /* (done, or an erase failed: the slot read again) */
+        const uint8_t *d = plat_data(proj_off(s));
+        proj.clean[s] = (uint8_t)(d && ring_blank(d, PROJ_SLOT_BYTES));
+    }
+    proj.er = -1;
+}
+
+/* a page of the save under way, or its header once the body is in */
+static void proj_write(void)
+{
+    uint32_t off = proj_off(proj.to), body = PAGES(proj.slen) + proj.llen, n = 0, k, p, seq;
+    const uint8_t *src;
+    if (h1_loop_gen() != proj.gen) {             /* a take moved the loop under it: the save again, from the start */
+        proj.want = proj.want >= 0 ? proj.want : proj.doing;
+        proj.to = -1;                            /* (the slot is free and not erased: erased before it is used) */
+        return;
+    }
+    if (!flash_go(&proj.defer))
+        return;
+    if (proj.at < body) {
+        if (proj.at < PAGES(proj.slen)) {        /* the state, then the loop from the next page */
+            src = (const uint8_t *)h1_state(0) + proj.at;
+            n = proj.slen - proj.at;
+        } else {
+            src = (const uint8_t *)h1_loop(0) + (proj.at - PAGES(proj.slen));
+            n = body - proj.at;
+        }
+        if (n > RING_PAGE)
+            n = RING_PAGE;
+        for (k = 0; k < n; k++)
+            wpage[k] = src[k];
+        proj.crc = crc32_run(proj.crc, wpage, n);
+        if (ring_write(off + RING_BODY + proj.at, wpage, n) != 0) {
+            proj.fails++;                        /* (given up: the slot is free and erased before it is used) */
+            proj.to = -1;
+            return;
+        }
+        proj.at = proj.at < PAGES(proj.slen) ? PAGES(proj.at + n) : proj.at + n;
+        return;
+    }
+    wr32(wpage, PROJ_MAGIC);
+    wr32(wpage + 4, PROJ_VERSION);
+    wr32(wpage + 8, (uint32_t)proj.doing);
+    wr32(wpage + 12, proj.seq + 1u);
+    wr32(wpage + 16, proj.slen);
+    wr32(wpage + 20, proj.llen);
+    wr32(wpage + 24, ~proj.crc);
+    wr32(wpage + 28, crc32_of(wpage, PROJ_HEAD - 4u));
+    if (ring_write(off, wpage, PROJ_HEAD) == 0 && proj_read(proj.to, &p, &seq) && p == (uint32_t)proj.doing) {
+        proj.of[proj.doing] = (int8_t)proj.to;   /* (the slot it was in before is free now) */
+        proj.seq++;
+        proj.saves++;
+    } else
+        proj.fails++;
+    proj.to = -1;
+}
+
+/* every frame, before the ring: 1 when the projects had the flash this frame (the ring waits). A save asked for
+ * begins once no take is going and the ring is not part-way through one; it waits for a free slot to be erased first
+ * if none is. Stopped and silent, the free slots go back to erased, a sector a frame, so the next save starts at once. */
+static int proj_step(void)
+{
+    int s;
+    if (proj.to >= 0) {
+        proj_write();
+        return 1;
+    }
+    if (proj.want >= 0 && ring.to < 0 && !h1_loop_taking()) {
+        for (s = 0; s < PROJ_SLOTS; s++)
+            if (proj_free(s) && proj.clean[s])
+                break;
+        if (s == PROJ_SLOTS) {                   /* none erased: one erased first (five frames) */
+            for (s = 0; s < PROJ_SLOTS && !proj_free(s); s++)
+                ;
+            proj_erase_some(proj.er >= 0 ? proj.er : s);
+            return 1;
+        }
+        proj.doing = proj.want;
+        proj.want = -1;
+        proj.to = s;
+        proj.clean[s] = 0;
+        h1_state(&proj.slen);
+        (void)h1_loop(&proj.llen);
+        proj.gen = h1_loop_gen();
+        proj.at = proj.defer = 0;
+        proj.crc = 0xFFFFFFFFu;
+        proj_write();
+        return 1;
+    }
+    if (h1_quiet() && ring.to < 0 && er_slot < 0) {
+        if (proj.er >= 0) {
+            proj_erase_some(proj.er);
+            return 1;
+        }
+        for (s = 0; s < PROJ_SLOTS; s++)
+            if (proj_free(s) && !proj.clean[s]) {
+                proj_erase_some(s);
+                return 1;
+            }
+    }
+    return 0;
+}
+
+#ifdef PLAT_HOST
+static void proj_dump(void)
+{
+    int p, s;
+    printf("proj:");
+    for (p = 0; p < PROJ_N; p++)
+        printf(" P%d %d", p + 1, proj.of[p]);
+    printf(", clean");
+    for (s = 0; s < PROJ_SLOTS; s++)
+        printf(" %d", proj.clean[s]);
+    printf(", seq %u, saving %d into %d (%u B in), saves %u, fails %u\n", (unsigned)proj.seq,
+           proj.to >= 0 ? proj.doing + 1 : 0, proj.to, (unsigned)proj.at, (unsigned)proj.saves, (unsigned)proj.fails);
+}
+/* expect proj.N SLOT (project N's slot, -1 none), proj_same N (its record holds the state and the loop as they are
+ * now, byte for byte), proj_saves N */
+static int proj_expect(const char *a, const char *b)
+{
+    long want = strtol(b, 0, 0);
+    if (!strncmp(a, "proj.", 5)) {
+        int p = atoi(a + 5) - 1, got = p >= 0 && p < PROJ_N ? proj.of[p] : -9;
+        if (got != want) {
+            printf("FAIL expect %s == %s, got %d\n", a, b, got);
+            exit(1);
+        }
+        printf("  ok %s == %d\n", a, got);
+        return 1;
+    }
+    if (!strcmp(a, "proj_saves")) {
+        if ((long)proj.saves != want) {
+            printf("FAIL expect proj_saves == %s, got %u\n", b, (unsigned)proj.saves);
+            exit(1);
+        }
+        printf("  ok proj_saves == %u\n", (unsigned)proj.saves);
+        return 1;
+    }
+    if (!strcmp(a, "proj_same")) {
+        int p = (int)want - 1, s = p >= 0 && p < PROJ_N ? proj.of[p] : -1;
+        uint32_t sl, ll;
+        const uint8_t *st = (const uint8_t *)h1_state(&sl), *lp = (const uint8_t *)h1_loop(&ll), *h;
+        h = s >= 0 ? plat_data(proj_off(s)) : 0;
+        if (!h || rd32(h + 16) != sl || rd32(h + 20) != ll || memcmp(h + RING_BODY, st, sl)
+            || memcmp(h + RING_BODY + PAGES(sl), lp, ll)) {
+            printf("FAIL expect proj_same %s: slot %d does not hold the state and loop as they are\n", b, s);
+            exit(1);
+        }
+        printf("  ok proj_same %s (slot %d, state %u B, loop %u B)\n", b, s, (unsigned)sl, (unsigned)ll);
+        return 1;
+    }
+    return 0;
+}
+static int proj_host_cmd(const char *cmd, const char *a, const char *b)
+{
+    if (!strcmp(cmd, "proj") && !strcmp(a, "save")) {   /* proj save N: save to project N (1..4), as SAVE + EDIT + key will */
+        int p = atoi(b) - 1;
+        if (p >= 0 && p < PROJ_N)
+            proj.want = p;
+        return 1;
+    }
+    if (!strcmp(cmd, "proj")) {                  /* proj: which slot holds each project, and the slots erased */
+        proj_dump();
+        return 1;
+    }
+    return !strcmp(cmd, "expect") && proj_expect(a, b);
+}
+#endif
+
 void app_init(void)
 {
     static uint32_t blob[PLAT_STORE_MAX / 4];               /* words: the store fills it, the core reads it */
@@ -670,6 +942,7 @@ void app_init(void)
 #if PLAT_USB_CH >= 8
     h1_stems(plat_usb_ch, PLAT_USB_CH_STRIDE);              /* USB audio's channels 3..10: T1 to T4 */
 #endif
+    proj_start();                                           /* (nothing loaded from there: read on a failed start too) */
     if (last_start_failed()) {
         ring_held = 1;                           /* (the saved tape left alone: ring_step) */
         return;
@@ -777,7 +1050,7 @@ void app_frame(void)
         const void *p = h1_state(&size);
         if (plat_store_save(OBJ_STATE, p, size) == 0)
             h1_state_saved();
-    } else
+    } else if (!proj_step())                                /* (a project's save, or the ring: one a frame) */
         ring_step();
     if (erase_us_frame > pf.erase_max)                      /* (ERASE: the most erase time in one frame) */
         pf.erase_max = erase_us_frame;
