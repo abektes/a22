@@ -882,7 +882,7 @@ int app_file_commit(uint32_t i, uint32_t size, uint32_t crc)
 
 int app_file_delete(uint32_t i)
 {
-    static const uint8_t zero[4] = {0, 0, 0, 0};
+    uint8_t zero[4] = {0, 0, 0, 0};              /* (in RAM: the flash is written only from RAM, never from itself) */
     int s = i < (uint32_t)PROJ_N ? proj.of[i] : -1;
     if (s < 0)
         return 0;
