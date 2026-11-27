@@ -3,7 +3,9 @@
 A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's history is in
 [jakehandy/h1's CHANGELOG](https://github.com/jakehandy/h1/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.8.0
+
+Not released yet. Projects: four tapes kept on the FM-1 and as files over USB, and USB audio stems.
 
 **USB audio stems**
 - The USB audio input has ten channels: the mix on 1 and 2 as before (the same to the bit), and T1 to T4 on 3-4, 5-6,
