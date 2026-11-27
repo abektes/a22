@@ -327,9 +327,18 @@ static int inked(int x, int y, int w, int h)
         for (i = x; i < x + w; i++) n += h1_framebuffer()[j * H1_W + i] != 0;
     return n;
 }
+static uint32_t drawn(int x, int y, int w, int h)      /* the pixels there, as one number */
+{
+    int i, j;
+    uint32_t sum = 2166136261u;
+    for (j = y; j < y + h; j++)
+        for (i = x; i < x + w; i++) sum = (sum ^ (uint32_t)h1_framebuffer()[j * H1_W + i]) * 16777619u;
+    return sum;
+}
 static void screen(void)
 {
     uint8_t last[CHORD_MAX];
+    uint32_t named;
     int i, seen = 0, dark = 0;
     fresh(); pads_on(0);
     CHECK(eng_chord_last(last) == 0, "no chord yet");
@@ -343,6 +352,11 @@ static void screen(void)
     CHECK(seen > 5 && dark > 5, "ARP blinks on CHORDS");
     st.fx_on = 0; go(60);
     CHECK(!(h1_button_leds() & (1u << H1_BTN_FX)), "FX bypassed: FX dark on CHORDS");
+    fresh(); pads_on(0); key(0, 60); hold(H1_BTN_ARP); turn(H1_ENC_SELECT, 1); go(600);
+    named = drawn(10, 22, 220, 24);
+    CHECK(inked(10, 22, 220, 24) > 100, "PLAY: a name drawn");
+    st.rsv[1] = 10; st.keys[0] = 5; go(600);
+    CHECK(drawn(10, 22, 220, 24) == named, "PLAY: SET and ROOT turned, the same name drawn");
 }
 
 static void hold_toggle(void)
