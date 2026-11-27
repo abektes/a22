@@ -147,13 +147,44 @@ feature that needs SRAM has about 1 KB.
     delete. `tests/projects.txt` adds a delete kept through a restart (`proj rm`).
   - **Not done here:** the companion page on A22's own site (`tools/build_site.py`; fm1-base's `web/companion/`).
     That's P6. The flash and SRAM cost comes from this branch's CI build.
-- [ ] **P5. On an FM-1** (the owner's hands; each step asked first). Install a CI test package, then:
-  - save and load all four with the tape playing, then stopped;
-  - PERF's LATE, ERASE and HELD during saves and loads (0.7.2's SAVE: LATE 0, HELD 0);
-  - a power cycle right after a save (the owner's yes);
-  - the companion page's backup and restore, and a project put from a computer;
-  - `fm1_profile.py idle` and `jam --clear-tape` within a point of 0.7.2 (the jam clears the tape: ask first);
-  - `release-all` and `master pot` at the end.
+- [x] **P5. On an FM-1** (the owner's, 2026-11-27; CI test package of `5d49a25`, release.yml 46045658099, installed
+      first try over 0.7.2; no crash recorded throughout). The panel was driven over USB (`fm1_remote`), with PERF read
+      around each step and the tape's notes counted as MIDI out.
+  - **Saves** (SAVE + EDIT + F# / G#), playing and stopped: `SAVING P1`, `P1 SAVED`; LATE 0, HELD 0; 15 page writes of
+    at most 2.06 ms. The tape plays on (14-16 notes in 4 s, before and after).
+  - **A save right after a save** while playing: both in, LATE 0. The spare's erase ran 5 sectors, at most 22-24 ms in
+    a frame, with the tape playing: LATE 0, HELD 0.
+  - **Loads**, stopped, nothing changed: `P1 LOADED` at once; LATE 0, AUDIO peak 29% in that window. So the render
+    locked out at a load (`eng_init`) makes no block late. The tape plays the same after (14 notes in 4 s).
+  - **The question and refusals:** a knob turned there and back, then SAVE + F#, gives `LOAD P1? AGAIN`, and HOME
+    keeps the work. A load while playing gives `STOP TAPE FIRST`.
+  - **A power cycle** (the owner's hands) after the saves: all three projects listed by the companion afterwards. The
+    same run from the fresh start gave the same results.
+  - **Seen once:** in the first run, right after the install, the tape seemed stopped after the first save while
+    playing (0 notes after it, and the PLAY taps after that toggled the other way). It never came back in four runs
+    of the same steps, before and after the power cycle.
+  - **Companion over USB** (`base/tools/fm1_companion.py` against the FM-1): `ls` shows project1-4; `get project1` is
+    CRC-checked (3,836 bytes); `put` as project3 reads back with the same body; a put while the tape plays is refused
+    as busy (exit 5).
+  - **Delete failed on the device** ("the flash refused"): `app_file_delete` wrote its zeros from a `static const`
+    array, which lives in flash, and the driver writes only from RAM. The simulator doesn't care where the bytes come
+    from. Fixed in the next commit; checked on the device below.
+  - **With the fix** (release.yml 46048446680, installed first try, no crash): `rm project3` deleted it, and `ls`
+    shows project1 and project2 left.
+  - **Timing, against 0.7.2** (the same build, with #21's stems in it too, never timed on the FM-1 before):
+    - idle 12-16% by effect (0.7.2: 11-15%; LOFI 16);
+    - all 112 algorithms, eight-note chords, PLATE: average 49.9% (49.5), peak 74% PERC GAMELAN (73), 47.3 frames a
+      second on average (45), lowest 24 STACK CHOIR;
+    - `jam --clear-tape` (the owner's tape kept in P1 and P2): peak 77% (75), LATE 0 and SHED 0 at every stage.
+  - **Found in STEP mode:** the first jam ran with the FM-1 in STEP mode, so REC wrote steps and the numbers were
+    void; it was rerun in TAPE mode. P1 and P2 hold TAPE mode (`seq[0]` 0), so no project load set it. When it
+    switched between the reruns and the jam was not found.
+  - **A real track:** an original 2-bar techno loop at 130 BPM recorded over USB on all four tracks (KIT 909, MONO
+    ACID, SHAPER CZ-RES, STACK CHORD) and saved to P4 (4,556 bytes): 73% average, 85% peak, LATE 0. One REC toggle
+    got out of step in the recording script's first pass (the overdubs caught stray notes); the tracks were cleared
+    (hold REC) and overdubbed again.
+  - **Not checked:** the lights with SAVE held by eye, hold SAVE's 0.9 s reset against a slow save chord by hand,
+    the companion page in Chrome against the device (the terminal client was), a delete across a power cycle.
 - [x] **P6. Docs**, all but the answer on issue #12 (when the owner says).
   - README: a Projects section (the keys, the question, the lights, backing up), the hotkey row, and the warning in
     "Leave A22 again". The compatibility line's image and SRAM numbers wait for this branch's CI build.
