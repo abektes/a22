@@ -1830,6 +1830,20 @@ typedef struct ChSlot {
 static ChSlot chs[CH_SLOTS];
 static uint8_t ch_cnt[128];
 static int ch_ctr = -1;                          /* the last chord's centre (ch_centre), SMOOTH's aim; -1 none */
+static uint8_t ch_last[CHORD_MAX];               /* and its notes, for the screen */
+static volatile int ch_last_n;
+static void ch_keep(const uint8_t *note, int n)
+{
+    int i;
+    for (i = 0; i < n && i < CHORD_MAX; i++) ch_last[i] = note[i];
+    ch_last_n = i;
+}
+int eng_chord_last(uint8_t out[CHORD_MAX])
+{
+    int i, n = ch_last_n;
+    for (i = 0; i < n; i++) out[i] = ch_last[i];
+    return n;
+}
 
 static int ch_scale_up(int root, int steps)                  /* the note `steps` scale notes above root */
 {
@@ -1862,6 +1876,7 @@ static int chord_voice(int *nt, int n, int bass, uint8_t *out)
         if (nt[i] >= 0 && nt[i] <= 127 && (m == 0 || out[m - 1] != nt[i]))
             out[m++] = (uint8_t)nt[i];
     if (!m) out[m++] = (uint8_t)iclamp(bass + 12, 0, 127);
+    ch_keep(out, m);
     return m;
 }
 
@@ -1890,6 +1905,7 @@ static int pad_build(int pad, uint8_t *out)                  /* a pad's chord, f
     int n = ch_pad_notes(st.rsv[1], pad, key_root(eng_key_live()), st.octave, p);
     if (insts[cur_i]->mono) {
         out[0] = (uint8_t)iclamp(p[0], 0, 127);
+        ch_keep(out, 1);
         return 1;
     }
     for (i = 0; i < n; i++) nt[i] = p[i];
@@ -1995,6 +2011,7 @@ static void chord_clear(void)                                /* (the voices are 
     for (i = 0; i < CH_SLOTS; i++) chs[i].used = 0;
     for (i = 0; i < 128; i++) ch_cnt[i] = 0;
     ch_ctr = -1;
+    ch_last_n = 0;
 }
 
 static uint8_t latched_pads;                     /* HOLD's pads: bit p, pad p */

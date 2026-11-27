@@ -2125,10 +2125,121 @@ static void draw_glo_page(void)
     g_color(GC_WHITE);
 }
 
+/* A chord pad's card: its key, root, type and numeral (a minor one underlined, as the lane's), the band blue, or
+ * orange for a chord whose root is outside the set's key. Filled while its key is held; outlined white as the pad in
+ * hand, the one last pressed. */
+static void chord_card(int pad, int root, int dim)
+{
+    static const char *const KEYN[8] = {"F", "G", "A", "B", "C", "D", "E", "F"};
+    int set = st.rsv[1] < NCHSET ? st.rsv[1] : 0, held = key_down[SNAP_KEYS[pad]] == KD_PAD, hand = pad == pad_hand;
+    char num[9];
+    int kind = ch_pad_numeral(set, pad, num), band = kind == CH_NUM_BORROWED ? GC_ORANGE : GC_BLUE;
+    f32 x = 6.0f + (f32)(pad % 4) * 58.0f, y = 45.0f + (f32)(pad / 4) * 63.0f;
+    g_dim(dim ? 0.35f : 1.0f);
+    if (held)      { g_color(band);     g_rect(x, y, 54.0f, 59.0f, 0.30f); }
+    else if (hand) { g_color(GC_WHITE); g_rect(x, y, 54.0f, 59.0f, 0.14f); }
+    g_color(band);
+    g_rect(x, y, 54.0f, 3.0f, held || hand ? 1.0f : 0.75f);
+    if (hand)      { g_color(GC_WHITE); g_box(x, y, 54.0f, 59.0f, 1.8f, 1.0f); }
+    else if (held) { g_color(band);     g_box(x, y, 54.0f, 59.0f, 1.6f, 1.0f); }
+    else           { g_color(GC_SLATE); g_box(x, y, 54.0f, 59.0f, 1.0f, 0.35f); }
+    g_color(GC_SLATE);
+    g_text(x + 4.0f, y + 6.0f, KEYN[pad], 7.0f, 1.0f, 0.8f, 0);
+    g_color(GC_WHITE);
+    fit_text(x + 27.0f, y + 11.0f, O_ROOT[ch_pad_pc(set, pad, root)], 17.0f, 38.0f, 1.0f);
+    fit_text(x + 27.0f, y + 33.0f, CH_TYPES[CH_SETS[set].pad[pad].type].name, 9.0f, 48.0f, 0.95f);
+    g_color(GC_SLATE);
+    fit_text(x + 27.0f, y + 47.0f, num, 7.5f, 48.0f, 0.95f);
+    if (kind == CH_NUM_MINOR) {
+        f32 w = g_text_w(num, 7.5f);
+        g_rect(x + 27.0f - w * 0.5f, y + 56.0f, w, 1.0f, 0.95f);
+    }
+    g_dim(1.0f);
+    g_color(GC_WHITE);
+}
+
+static void draw_chord_pads(void)
+{
+    uint8_t key = eng_key_live();
+    int set = st.rsv[1] < NCHSET ? st.rsv[1] : 0, drum = pads_drum(), i;
+    char head[20];
+    if (st.chord[0] != CHORD_PADS) {             /* the one-key modes: which one, and how it is switched */
+        g_color(GC_WHITE);
+        g_text(120.0f, 80.0f, O_CHMODE[st.chord[0] <= CHORD_PADS ? st.chord[0] : 0], 22.0f, 2.6f, 1.0f, 1);
+        g_color(GC_SLATE);
+        g_text(120.0f, 120.0f, "EDIT+GLO: ON / OFF", 8.5f, 1.2f, 0.9f, 1);
+        g_color(GC_WHITE);
+        return;
+    }
+    g_color(GC_GOLD);
+    g_text(8.0f, 31.0f, CH_SET_NAMES[set], 9.0f, 1.3f, 1.0f, 0);
+    if (drum)
+        put_s(head, "NOT ON DRUMS");
+    else
+        put_s(put_s(put_s(head, O_ROOT[key_root(key) % 12]), " "), O_SCALE[key_scale(key)]);
+    g_color(GC_SLATE);
+    g_text(232.0f, 31.0f, head, 9.0f, 1.3f, 0.95f, 2);
+    for (i = 0; i < 8; i++)
+        chord_card(i, key_root(key), drum);
+}
+
+/* three octaves of keys from the C at `base`, the notes given lit */
+static void chord_keyboard(f32 y, f32 h, int base, const uint8_t *note, int n, int col)
+{
+    static const uint8_t WHITE[7] = {0, 2, 4, 5, 7, 9, 11};
+    int o, i, j, black;
+    for (black = 0; black < 2; black++)
+        for (o = 0; o < 3; o++)
+            for (i = 0; i < 7; i++) {
+                int semi = o * 12 + WHITE[i] + black, on = 0;
+                f32 x = 9.0f + (f32)(o * 7 + i) * 10.6f + (black ? 6.4f : 0.0f);
+                f32 w = black ? 6.4f : 9.0f, kh = black ? h * 0.6f : h;
+                if (black && (i == 2 || i == 6)) continue;      /* (no black key after E or B) */
+                for (j = 0; j < n; j++) on |= (int)note[j] - base == semi;
+                if (black) { g_mode(G_PAINT); g_rect(x, y, w, kh, 0.0f); g_mode(G_MAX); }
+                g_color(on ? col : GC_SLATE);
+                if (on) g_rect(x, y, w, kh, 0.95f);
+                else g_box(x, y, w, kh, 1.0f, 0.5f);
+            }
+    g_color(GC_WHITE);
+}
+
+/* PLAY: the chord last played, by name and on the keys */
+static void draw_chord_play(void)
+{
+    uint8_t note[CHORD_MAX];
+    int n = eng_chord_last(note), i;
+    char name[16], list[CHORD_MAX * 4 + 1], *d = list;
+    if (n <= 0) {
+        g_color(GC_SLATE);
+        g_text(120.0f, 80.0f, "PLAY A CHORD", 10.0f, 1.5f, 0.9f, 1);
+        g_color(GC_WHITE);
+        return;
+    }
+    if (st.chord[0] == CHORD_PADS) {
+        int set = st.rsv[1] < NCHSET ? st.rsv[1] : 0;
+        int pc = ch_pad_pc(set, pad_hand, key_root(eng_key_live()));
+        put_s(put_s(put_s(name, O_ROOT[pc]), " "), CH_TYPES[CH_SETS[set].pad[pad_hand & 7].type].name);
+    } else
+        put_s(name, O_ROOT[note[0] % 12]);
+    list[0] = 0;
+    for (i = 0; i < n; i++) {
+        if (i) d = put_s(d, "  ");
+        d = put_s(d, O_ROOT[note[i] % 12]);
+    }
+    g_color(GC_WHITE);
+    fit_text(120.0f, 33.0f, name, 18.0f, 220.0f, 1.0f);
+    g_color(GC_SLATE);
+    fit_text(120.0f, 57.0f, list, 9.0f, 220.0f, 0.95f);
+    chord_keyboard(72.0f, 42.0f, note[0] / 12 * 12, note, n, KCOL[st.track & 3]);
+}
+
 static void draw_chords_page(void)
 {
     int sub = subpage[PG_CHORD];
     draw_topbar(O_TRK[st.track], sub ? "CHORD PLAY" : "CHORD PADS", sub ? "2/2" : "1/2");
+    if (sub) draw_chord_play();
+    else draw_chord_pads();
     draw_bottom_cols(PG_CHORD, 182.0f);
 }
 
@@ -2547,7 +2658,16 @@ uint32_t h1_key_leds(void)
         return m;
     }
     if (eng_seq_leds(&m, page == PG_SEQ, fractf(tsec * 2.2f) < 0.6f)) return m;
-    return eng_sounding_lo();
+    m = eng_sounding_lo();
+    if (st.chord[0] == CHORD_PADS && !pads_drum()) {   /* a pad's key lights while held, not when a note of a
+                                                       * chord happens to sit on it */
+        int i;
+        for (i = 0; i < 8; i++) {
+            m &= ~(1u << SNAP_KEYS[i]);
+            if (key_down[SNAP_KEYS[i]] == KD_PAD) m |= 1u << SNAP_KEYS[i];
+        }
+    }
+    return m;
 }
 
 uint32_t h1_button_leds(void)

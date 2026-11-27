@@ -8,7 +8,8 @@
  *   sequencers  the tape, STEP and RIFF take a pad's notes
  *   smooth      SMOOTH voicing: each chord close to the last, and OCT still moves it
  *   saved       MODE PADS, the set and SMOOTH in the saved state, nonsense clamped
- *   controls    the CHORDS page: hold ARP, its two subpages' columns, EDIT + GLO, GLO without CHORD */
+ *   controls    the CHORDS page: hold ARP, its two subpages' columns, EDIT + GLO, GLO without CHORD
+ *   screen      the eight cards drawn, the held pad alone lit, the last chord's notes, the buttons' lights */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -317,6 +318,31 @@ static void page_controls(void)
     CHECK(col(H1_ENC_K1, "TEMPO", 0), "GLO has two subpages");
 }
 
+static int inked(int x, int y, int w, int h)
+{
+    int i, j, n = 0;
+    for (j = y; j < y + h; j++)
+        for (i = x; i < x + w; i++) n += h1_framebuffer()[j * H1_W + i] != 0;
+    return n;
+}
+static void screen(void)
+{
+    uint8_t last[CHORD_MAX];
+    int i, seen = 0, dark = 0;
+    fresh(); pads_on(0);
+    CHECK(eng_chord_last(last) == 0, "no chord yet");
+    down(0);
+    CHECK((h1_key_leds() & 0x1AD5u) == 1u, "only the pad held is lit, not the keys its notes sit on");
+    CHECK(eng_chord_last(last) == 3 && last[0] == 48 && last[1] == 52 && last[2] == 55, "its notes");
+    up(0); CHECK((h1_key_leds() & 0x1AD5u) == 0, "dark again");
+    hold(H1_BTN_ARP); go(600);
+    for (i = 0; i < 8; i++) CHECK(inked(6 + (i % 4) * 58, 45 + (i / 4) * 63, 54, 59) > 150, "eight cards");
+    for (i = 0; i < 40; i++) { go(50); if (h1_button_leds() & (1u << H1_BTN_ARP)) seen++; else dark++; }
+    CHECK(seen > 5 && dark > 5, "ARP blinks on CHORDS");
+    st.fx_on = 0; go(60);
+    CHECK(!(h1_button_leds() & (1u << H1_BTN_FX)), "FX bypassed: FX dark on CHORDS");
+}
+
 int main(void)
 {
     sets();
@@ -326,6 +352,7 @@ int main(void)
     smooth();
     saved();
     page_controls();
+    screen();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
