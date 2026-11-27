@@ -145,11 +145,12 @@ and EDIT + PLAY pastes them at the current bar.
 
 The saved tape is the header and those events as they lie in RAM (`eng_loop_blob`, little-endian, no
 copy, at most `H1_LOOP_MAX` = 16,396 bytes). The device keeps it in a ring of its own in the data area
-(`app/app.c`, from 0xC8000: four slots of five sectors). A store save would erase first, and an erase
-stalls the sound for about 50 ms, so a save goes into space that is already erased, a 256-byte page a
-frame, with a header (magic, sequence, length, CRC-32) written last. That happens as soon as no take is
-going in, while the tape plays. The newest record whose header reads right is the tape. Used slots are
-erased at start, before the sound, or once the tape is stopped and nothing sounds.
+(`app/app.c`, from 0xC8000: four slots of five sectors). A save goes into space already erased, a 256-byte page a
+frame, with its header (magic, sequence, length, CRC-32) written last, as soon as no take is going in, while the tape
+plays. The newest record whose header reads right is the tape. Used slots are erased at start, before the sound, or a
+sector a frame once the tape is stopped. Since 0.7.2 every 4 KiB erase, the ring's and the settings', runs in windows
+of about 1 ms with the sound on between them (fm1-base's sliced erase, `FM1B_ERASE_SLICED` in `app/app.h`) instead of
+one window of about 18 ms.
 
 The step sequencer is 64 steps of up to eight notes, on a 1/8, 1/16 or 1/32 grid, each note with its
 track and velocity, and is saved with the rest of the state. Riff (64 steps, transposed from the key
@@ -168,18 +169,21 @@ ceiling, with a soft knee above 0.6 (`limit` in `synth.c`). `tests/basics.c` run
 through it.
 
 DELAY, SHIFT, CHORUS and TANK sleep the way PLATE does: once the line has gone round with only zeros written,
-nothing comes in and the effect's filters hold exactly 0, an effect only moves its clocks (`echo_asleep` in
-`fx.c`). The sound is the same to the bit; `tests/sleep.c` plays each into its sleep and out with the sleep on and
-off and compares.
+nothing comes in and the effect's filters are at 0, an effect only moves its clocks (`echo_asleep` in `fx.c`). The
+FM-1's FPU keeps denormals, so a decaying filter state stops at the smallest float instead of 0: for the sleep's
+test a state below 1e-20 counts as 0 (`snap0`). Denormal arithmetic itself runs at full speed on the FM-1
+(docs/PLAN-0.7.2.md K4). The sound is the same to the bit; `tests/sleep.c` plays each into its sleep and out, with
+the sleep on and off and with denormals kept, and compares.
 
 When the audio runs late (`h1_late`: two late halves in a row), a voice lets go fast, one at a time, a
 note the player is not holding first, so the sound gets back in time instead of starving the main loop.
 `tests/overload.c` holds it.
 
-MIDI out (`h1_midi_out`): what the keys, the arpeggiator and the sequencer play, on channel 1, and
-CC 20-23 as the home knobs turn. Never a note or a CC 123 that came in over MIDI, so a computer that
-echoes its input does not loop. A note-on or a knob goes out only while the USB queue has room to spare
-(app.c), so a full queue never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack
+MIDI out (`h1_midi_out`): the tape's and the step pattern's notes on their track's channel (T1 on 1 to T4 on 4),
+the keys', chords' and arpeggiator's on the track in hand's, CC 20-23 as the home knobs turn, and MIDI clock with
+Start and Stop. Never a note or a CC 123 that came in over MIDI, so a computer that echoes its input does not loop.
+The device's queue keeps tiers (`app/midi_tiers.h`): when it is nearly full a note-on or a knob waits, so a full queue
+never leaves a note-off out. The device sends it over USB; the FM-1's TRS jack
 is an input only. OCT- and OCT+ held turn the USB port into a host for a USB-MIDI keyboard
 (`h1_usb_host_fn`).
 
@@ -253,7 +257,9 @@ times in milliseconds a frame, the audio as a percentage of each block, the kilo
 sent to the panel a frame, all since it was last asked, and the bytes of each stack never used since
 the start. A build with the second core (the default) adds `CORES 2 n` or `CORES 1 why`. Since 0.6.0 it ends with
 `STAGE seq voices wait mix fx master`, the slowest render since the last PERF split by stage (`h1_stages`, in percent
-of the block), and `FLASH n max`, the tape's flash writes and the longest in microseconds.
+of the block), `FLASH n max`, the tape's flash writes and the longest in microseconds, `ERASE n max`, the ring's
+sector erases and the most erase time in one frame, and (0.7.2) `HELD n`, erases since the start that had to hold the
+sound for the whole erase (a flash part that does not suspend one).
 `tools/fm1_profile.py` drives every algorithm over USB and collects these. If RAM gets tight, the first
 things to shrink are the tape tricks' buffer and the path mask (no A22 engine draws with it).
 
@@ -263,9 +269,13 @@ other has filled the memory.
 
 Code that runs in every block whatever plays is kept in RAM on the device (`H1_HOT` in `core/mathx.h`, fm1-base's
 `.app_ram`), out of the way of the instruction cache both cores share: PLATE's halves, the master bus's EQ and
-drive, `voice_out` and `eng_out`. Such a function may call nothing in flash and nothing through a pointer, so it is
-flattened (every helper inlined into it); code in flash calls it through `H1_FAR`. fm1-base's build checks the
-disassembly. On the host, the simulator and the tests these are plain functions.
+drive, `voice_out` and `eng_out`. Since 0.7.2 so are the voice renders of seven engines (PERC, FM-4, SHAPER, STACK,
+HAZE, ELECTRIC, KIT: about 50 KB), which took a dense four-layer jam from 91% to 75% of the audio time. Moving only
+some of them made the engines left in flash slower (the flash's code moves, and the cache with it), so measure on an
+FM-1 before moving another (docs/PLAN-0.7.2.md K5). Such a function may call nothing in flash and nothing through a
+pointer, so it is flattened (every helper inlined into it); code in flash calls it through `H1_FAR` or, for a render,
+through InstDef's pointer. fm1-base's build checks the disassembly. On the host, the simulator and the tests these are
+plain functions.
 
 ## What the FM-1 does not forgive
 
