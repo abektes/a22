@@ -5,6 +5,8 @@ The [README](../README.md) is the manual and the install guide. The rest:
 **Current**
 - [ARCHITECTURE.md](ARCHITECTURE.md): how A22 is built: the core and its ports, the two cores, the picture, an
   engine, the tape, the saved state, RAM and flash on the device, and the rules the FM-1 enforces.
+- [PLAN-chords.md](PLAN-chords.md): chord pads and a chord loop, in four sprints; the design and each sprint's plan
+  are in [superpowers/](superpowers/).
 - [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md): what has to be true before a tag, with what each release was checked
   doing.
 - [SAMPLES.md](SAMPLES.md) and [WAVETABLES.md](WAVETABLES.md): every recording A22 carries, and where it came from.
