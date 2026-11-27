@@ -1,16 +1,16 @@
 # A22
 
-Custom firmware for the M-VAVE FM-1: an FM workstation. Fourteen synth and drum engines, each with eight
-algorithms and four live knobs, drawn in colour vector graphics. Eight selectable effects, a
-four-track tape with knob automation, a mixer, Riff and Shake sequencers, an arpeggiator, a step
-sequencer and eight patch snapshots. Almost everything is synthesised: KIT's 909, CRISP, LOFI and WORLD kits
-layer in short CC0 recordings of real drums (h1's PLUNK hits; see [docs/SAMPLES.md](docs/SAMPLES.md)), SKINS'
-two kits are made of them, and CYCLE plays single cycles of recorded instruments from Adventure Kid Waveforms (CC0; see
-[docs/WAVETABLES.md](docs/WAVETABLES.md)).
+Custom firmware for the M-VAVE FM-1 that makes it an FM workstation: fourteen synth and drum engines with eight
+algorithms and four live knobs each, drawn in colour vector graphics; eight effects; a four-track tape with knob
+automation; a mixer; Riff and Shake sequencers, an arpeggiator, a step sequencer and eight snapshots.
+
+Nearly all of it is synthesised. KIT's 909, CRISP, LOFI and WORLD kits layer in short CC0 drum recordings, SKINS is
+made of them ([docs/SAMPLES.md](docs/SAMPLES.md)), and CYCLE plays single cycles of recorded instruments from
+Adventure Kid Waveforms, also CC0 ([docs/WAVETABLES.md](docs/WAVETABLES.md)).
 
 A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and built on fm1-base.
 
-**[The guide and website](https://abektes.github.io/a22/)** · **[Play it in your browser](https://abektes.github.io/a22/sim/)** ·
+**[Guide and website](https://abektes.github.io/a22/)** · **[Play it in your browser](https://abektes.github.io/a22/sim/)** ·
 **[Download](https://github.com/abektes/a22/releases/latest)** · **[☕ Buy me a coffee](https://buymeacoffee.com/abektes)**
 
 <p>
@@ -19,14 +19,14 @@ A22 is derived from [h1](https://github.com/jakehandy/h1) by Jake Handy and buil
 <img src="docs/img/a22/wave.png" width="120" alt="WAVE"> <img src="docs/img/a22/chip.png" width="120" alt="CHIP"> <img src="docs/img/a22/cycle.png" width="120" alt="CYCLE"> <img src="docs/img/a22/skins.png" width="120" alt="SKINS">
 </p>
 
-> **A22 is early.** It has been installed and run on one FM-1 (every engine, effect and the tape driven over
-> USB, with no crash), but not yet played at length by many people. Install it only if you are ready to go
-> back to stock or another firmware if it misbehaves (see [If something goes wrong](#if-something-goes-wrong)).
+> **A22 is early.** Every release is installed and run on one FM-1, with every engine, effect and the tape driven
+> over USB, but few people have played it at length. Install it only if you are ready to go back to stock or another
+> firmware (see [If something goes wrong](#if-something-goes-wrong)).
 
 ## Engines
 
-PRESETS changes the engine, ALGORITHM picks one of its eight algorithms, and the four knobs shape the
-sound and the picture together. Each algorithm keeps its own knob settings.
+PRESETS picks the engine, ALGORITHM one of its eight algorithms, and the four knobs shape the sound and the picture
+together. Each algorithm keeps its own knob settings.
 
 | Engine | Sound | Algorithms | Knobs |
 |---|---|---|---|
@@ -39,16 +39,16 @@ sound and the picture together. Each algorithm keeps its own knob settings.
 | **HAZE** | evolving ambient textures | AETHER, VOX, SOLAR, ICE, MIST, ABYSS, PRISM, GHOST | MORPH, FORMANT, DRIFT, SHIMMER |
 | **MONO** | monophonic leads and basses, with glide | ACID, REESE, SH-LEAD, ZAP-BASS, GROWL, SUB-808, LASER, HOOVER | FM-BITE, CUTOFF, GLIDE, SUB-DRV |
 | **KIT** | drum kits, a drum on every note of the octave | 808, 909, CYCLES, CRISP, LOFI, MODULAR, METAL, WORLD | TUNE, DECAY, PUNCH, FM-GRIT |
-| **PERC** | tuned percussion: eight modes a note, and sympathetic strings in SPACE's top | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
+| **PERC** | tuned percussion: eight modes a note, sympathetic strings at the top of SPACE | HANDPAN, MARIMBA, KALIMBA, TABLA, WOOD, GAMELAN, STEEL, GLITCH | PITCH, MALLET, RING, SPACE |
 | **WAVE** | wavetables: eight banks of fifteen waves, morphing, band-limited per octave | HARMON, ORGAN, VOX, DIGI, PULSE, SYNC, GLASS, GROWL | WAVE, SCAN, SPREAD, FILTER |
 | **CHIP** | 8-bit console voices: pulses, stepped triangle, noise, arpeggios | PULSE, TRI, NOISE, ARP, BASS, LEAD, DRUM, DUET | DUTY, SWEEP, ARP, CRUSH |
-| **CYCLE** | WAVE's player on single cycles of recorded instruments ([AKWF](docs/WAVETABLES.md), CC0): four banks, each smooth and stepped | STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX | WAVE, SCAN, SPREAD, FILTER |
-| **SKINS** | two recorded drum kits ([Virtuosity Drums and VCSL](docs/SAMPLES.md), CC0), a drum on every note of the octave: an acoustic set and a marching and orchestral kit, each dry, in a room, tight and vintage | STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC | TUNE, DECAY, TONE, ROOM |
+| **CYCLE** | WAVE's player on single cycles of recorded instruments ([AKWF](docs/WAVETABLES.md)): four banks, each smooth and stepped | STRING, REED, KEYS, VOICE, STEP-STR, STEP-RD, STEP-KEY, STEP-VOX | WAVE, SCAN, SPREAD, FILTER |
+| **SKINS** | two recorded drum kits ([Virtuosity Drums and VCSL](docs/SAMPLES.md)), a drum on every note: acoustic, and marching and orchestral, each dry, in a room, tight and vintage | STUDIO, LIVE, TIGHT, VINTAGE, ORCH, HALL, MARCH, SHELLAC | TUNE, DECAY, TONE, ROOM |
 
 ## Effects
 
-One effect at a time, chosen on the FX page with ALGORITHM. PLATE, DELAY, SHIFT, CHORUS and TANK are sends: each
-track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix, whatever the sends are.
+One effect at a time, chosen on the FX page with ALGORITHM. PLATE, DELAY, SHIFT, CHORUS and TANK are sends, set per
+track. FILTER, LOFI and THUMP work on the whole mix.
 
 | Effect | Knobs |
 |---|---|
@@ -63,16 +63,15 @@ track sets how much of it it sends. FILTER, LOFI and THUMP work on the whole mix
 
 The master bus has its own three-band EQ and drive (the MIX page's last subpage).
 
-**PUNCH.** Hold FX and one of the eight white keys from the lowest F, and a punch hits the whole mix for as long as
-you hold the key: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF (opens from a dull sound over
-a bar), 6 HPF (the same from the bottom), 7 CRUSH, 8 GATE (1/16). Other keys play notes as usual, a second punch key
-replaces the first, and the key holds its punch even after FX is let go. A strip along the bottom of the screen
-shows the eight, the one held lit, and the screen reader says PUNCH (once FX is held, not on a tap), then the punch's name. FX tapped alone opens the
-FX page when you let go, as before, and EDIT + FX is still the bypass. While the tape records or overdubs, a punch is
-recorded on the track in hand and plays back on the whole mix (not on a muted track); CUT, PASTE and clear treat
-it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A punch you hold by hand wins
-over the tape's, and a punch replaces TRICK while it is held: TRICK's setting is back when the punch ends. A punch
-still held when a take ends is ended there. Punches do not go out over MIDI. A tape with punches loaded into 0.6.0 plays without them.
+**PUNCH.** Hold FX and one of the eight white keys from the lowest F to hit the whole mix for as long as the key is
+held: 1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF and 6 HPF (a sweep over a bar), 7 CRUSH,
+8 GATE (1/16). Other keys play notes, a second punch key replaces the first, and the key keeps its punch after FX is
+let go. A strip at the bottom of the screen shows the eight and lights the one held. FX tapped alone still opens the
+FX page, and EDIT + FX is still the bypass.
+
+While the tape records, a punch goes on the track in hand and plays back on the whole mix (not from a muted track).
+CUT, PASTE and clear treat it like a knob move, REV swaps its start and end, and it ends at stop and at the wrap. A
+punch held by hand wins over the tape's, and TRICK comes back when a punch ends. Punches don't go out over MIDI.
 
 ## Pages
 
@@ -80,12 +79,12 @@ still held when a take ends is ended there. Punches do not go out over MIDI. A t
 <img src="docs/img/a22/fx.png" width="180" alt="The FX page"> <img src="docs/img/a22/mix.png" width="180" alt="The MIX page"> <img src="docs/img/a22/tape.png" width="180" alt="The TAPE page">
 </p>
 
-Each page's four columns are the four knobs. SELECT steps through a page's subpages.
+A page's four columns are the four knobs. SELECT steps through its subpages.
 
 | Page | Button | Columns |
 |---|---|---|
 | FX | FX | The effect's four knobs |
-| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE; KEY: each track's tape follows the key, OFF or ON (DRUM on a drum track) |
+| MIX | SEL | Track volume, pan, FX send (one column a track); master LOW, MID, HIGH, DRIVE; KEY: OFF or ON per track (DRUM on a drum track) |
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM |
@@ -94,213 +93,171 @@ Each page's four columns are the four knobs. SELECT steps through a page's subpa
 
 ## The tape
 
-Four tracks, T1 to T4. Each track keeps its own engine, algorithm, knobs, volume, pan, send and mute.
-The tape is 1 to 32 bars and holds 2,048 events (1,024 notes) across all four tracks, knob moves included.
-When it is full the screen says **TAPE FULL**.
+Four tracks, T1 to T4, each with its own engine, algorithm, knobs, volume, pan, send and mute. The tape is 1 to 32
+bars and holds 2,048 events (1,024 notes) across the four tracks, knob moves included; when it is full the screen
+says **TAPE FULL**. The tape and every setting save themselves and come back after a restart.
 
-- **REC** arms the track in hand and the first key starts the take. REC again closes it and the tape plays
-  on. REC while it plays overdubs.
-- **PLAY** starts and stops the tape.
-- Knobs turned while recording are recorded too, and play back as automation.
-- SPEED plays the tape at half speed, double speed or backwards. TRICK adds a tape brake or stutters.
-- **EDIT + REC** cuts the track in hand's notes (between the loop's in and out bars) to a clipboard, and
-  **EDIT + PLAY** pastes them at the current bar.
-- **EDIT + OCT −** and **EDIT + OCT +** move the loop's in and out bars.
-- **Hold REC** clears the track in hand. Keep holding (about three seconds) and it asks CLEAR ALL?, until
-  it is answered: tap REC within three seconds of letting go to clear the whole tape. Anything else (another
-  button, a key, an encoder, or waiting) keeps it.
+- **REC** arms the track in hand and the first key starts the take. REC again closes it and the tape plays on. REC
+  while it plays overdubs. Knobs turned while recording play back as automation.
+- **PLAY** starts and stops the tape. SPEED plays it at half or double speed or backwards; TRICK adds a brake or
+  stutters.
+- **EDIT + REC** cuts the track in hand's notes between the in and out bars to a clipboard; **EDIT + PLAY** pastes
+  them at the current bar. **EDIT + OCT −** and **EDIT + OCT +** move the in and out bars.
+- **Hold REC** clears the track in hand. Keep holding (about three seconds) for CLEAR ALL?, then tap REC within three
+  seconds of letting go to clear the whole tape. Anything else keeps it.
 
-**KEY.** A track can play its tape in the key you have set. Open MIX (SEL), then SELECT four times to the fifth
-subpage, KEY, and turn a track's knob to ON (it is OFF to begin with). Each note on that track sounds in GLO's
-KEYS ROOT and SCALE, whatever they are now, from the key it was recorded in: ROOT up 2 and the track plays two
-semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its place in the scale; between
-others it moves by the change of ROOT and then snaps to the new scale. CHROM leaves it where the ROOT puts it.
-Drum engines (KIT, SKINS) never move, and say DRUM; a track switched to one stops following, and follows again on a
-melodic engine. A tape recorded on 0.6.0 or earlier plays as recorded,
-and so does a track with KEY off, except that a note recorded over a DEG bar on a KEY track is stored moved down (see
-LANE), so on 0.6.0, or after KEY is turned off, it plays moved down. MIDI out sends the notes as they sound.
+**KEY.** A track can play its tape in the key set now. On MIX (SEL), SELECT four times to KEY and turn a track's knob
+to ON. Its notes then follow GLO's ROOT and SCALE from the key they were recorded in: ROOT up 2 plays the track two
+semitones up. Between two seven-note scales (MAJOR, MINOR, DORIAN) a note keeps its scale step; otherwise it moves
+with ROOT and snaps to the new scale. CHROM moves it with ROOT only. Drum engines (KIT, SKINS) never move and say
+DRUM. Tapes from 0.6.0 and earlier, and tracks with KEY off, play as recorded. MIDI out sends notes as they sound.
 
-**LANE.** The key can change from bar to bar. With the tape in view, tap SEQ, then SELECT twice to the third subpage,
-LANE: BAR (K1) picks a bar, and ROOT (K2), SCALE (K3) and DEG (K4) set that bar's entry. Turn a field below its first
-value for "-" (the screen reader says NONE): all three at "-" is no entry. DEG is the chord degree: IV in C major
-plays F, A, C where the tape has C, E, G (DEG does nothing in CHROM). Each field holds until a later entry sets it
-again, one field at a time: bar 1 SCALE MINOR and bar 3 ROOT D plays D minor from bar 3. Fields no entry has set
-come from GLO's ROOT and SCALE, and DEG I; the lane does not wrap. Only tracks with KEY on (above) follow the lane, and
-drums never do. A change applies from the first tick of its bar, and notes already sounding keep their pitch. The
-cells show a bar each, an entry's bars bright, the bars it carries over dim, and a minor degree's numeral underlined;
-the DECK subpage marks entry bars, and while the tape plays over a lane its header says the key in force, for
-example D MAJ . IV. Live keys and chord memory's SCALE mode snap to the root and scale in force while the tape
-plays (not to DEG), and to GLO's key when it is stopped; STEP mode ignores the lane. Recording over a bar with a
-DEG on a KEY track stores the note moved back down, so it plays as played and follows later changes; a note that is
-not in the bar's scale (from MIDI in, or a chord) is stored as played instead, and does not follow. The lane
-belongs to the whole tape: CUT, PASTE and holding REC leave it, CLEAR ALL clears it, and turning BARS down keeps
-entries past the new end. A tape saved with a lane loads on 0.6.0 without the lane and without its punches (it drops
-what it does not know), and its notes play as recorded.
+**LANE.** The key can change bar by bar. On the tape page, SELECT twice to LANE: BAR (K1) picks a bar, and ROOT (K2),
+SCALE (K3) and DEG (K4) set its entry. Turn a field below its first value for "-" (the screen reader says NONE).
+DEG is the chord degree: IV in C major plays F, A, C where the tape has C, E, G. Each field holds until a later entry
+sets it: bar 1 SCALE MINOR and bar 3 ROOT D play D minor from bar 3. Unset fields come from GLO's ROOT and SCALE, and
+DEG I. Only KEY tracks follow the lane, a change starts on its bar's first tick, and sounding notes keep their pitch.
+While the tape plays, the header names the key in force (for example D MAJ . IV), and the live keys and chord
+memory's SCALE mode snap to its root and scale. STEP ignores the lane.
 
-The tape and every setting are saved by themselves and come back after a restart.
+The lane belongs to the whole tape: CUT, PASTE and holding REC leave it, CLEAR ALL clears it. A note recorded over a
+DEG bar on a KEY track is stored moved back down, so it plays as played and follows later changes. A tape with a lane
+loads on 0.6.0 without the lane or its punches.
 
-**STEP.** Hold SEQ to swap the tape for the step sequencer. REC then turns step writing on and off, PLAY
-runs the pattern, SELECT moves the step cursor and a tap of EDIT leaves a rest. The pattern has one key, the
-ROOT and SCALE when its first step is written; clearing the whole pattern clears it. A track with KEY on plays
-the pattern in the key it has now, as it does the tape. A step written on a track with KEY off while GLO's key differs
-from the pattern's is stored as played, and turning KEY on later maps it from the pattern's key.
+**STEP.** Hold SEQ to swap the tape for the step sequencer. REC turns step writing on and off, PLAY runs the pattern,
+SELECT moves the cursor and a tap of EDIT leaves a rest. The pattern takes the ROOT and SCALE in force when its first
+step is written, and a KEY track plays it in the key set now, as it does the tape.
 
 ## Riff and Shake
 
-Both are modes of the SEQ page (ARP button, then ALGORITHM, or hold EDIT and turn ALGORITHM anywhere).
+Modes of the SEQ page (ARP, then ALGORITHM; or hold EDIT and turn ALGORITHM anywhere).
 
-- **RIFF:** on the SEQ page, REC starts recording a sequence. Play its notes one at a time, tap EDIT for
-  a rest, and REC again to finish. Then hold any key and the sequence plays from it, transposed. Hold
-  REC on the page to clear it.
-- **SHAKE:** every key drops a ball into a spinning cage, and the ball plays its note each time it
-  bounces. GRAV, SPIN, BOUNCE and CAGE shape the cage: the first three on the page, CAGE on its second
-  subpage (SELECT). KNOB 1 stays MODE in SHAKE, as in every mode.
+- **RIFF:** on the SEQ page, REC starts recording. Play notes one at a time, tap EDIT for a rest, and REC to finish.
+  Hold any key and the riff plays from it, transposed. Hold REC on the page to clear it.
+- **SHAKE:** every key drops a ball into a spinning cage, and the ball plays its note each time it bounces. GRAV,
+  SPIN and BOUNCE are on the page, CAGE on its second subpage. KNOB 1 stays MODE.
 
 ## Chord memory
 
-One key plays a chord. Its settings are GLO's third subpage, CHORD (GLO, then SELECT twice):
+One key plays a chord. The settings are GLO's third subpage, CHORD:
 
-- **MODE:** OFF; MEMORY, a chord you play in yourself; SCALE, chords built from the KEYS page's root and
-  scale (with CHROM, the major scale on the root); SHAPE, a fixed chord.
+- **MODE:** OFF; MEMORY, a chord you play in; SCALE, chords from the KEYS page's root and scale (with CHROM, the
+  major scale); SHAPE, a fixed chord.
 - **TYPE:** in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER or OCT.
-- **VOICING:** CLOSE; OPEN (the middle note an octave up); DROP2 (the second note from the top an octave
-  down); +BASS (the root again an octave below).
-- **STRUM:** 0 plays the notes together; up to 60 ms between each, from the bottom up.
+- **VOICING:** CLOSE; OPEN (the middle note up an octave); DROP2 (the second from the top down an octave); +BASS
+  (the root again an octave below).
+- **STRUM:** 0 plays the notes together; up to 60 ms between them, bottom up.
 
-**Hold the chord's keys and press EDIT + GLO** to store it as MEMORY's chord (up to six notes). Each key then
-plays that shape from itself. EDIT + GLO with no keys held turns chords off, and on again.
+**Hold the keys and press EDIT + GLO** to store them as MEMORY's chord (up to six notes); each key then plays that
+shape from itself. EDIT + GLO with no keys held turns chords off and on.
 
-The tape, the step sequencer, the arpeggiator and MIDI out all get the chord's notes, so what was recorded
-plays back as heard. A key lets go of the chord it started even if the settings changed while it was held, and
-two chords sharing a note hold it until both are let go. Notes coming in over MIDI are not made into chords.
-MONO is monophonic and plays the chord's root alone. A chord takes a voice a note, out of eight.
+The tape, the step sequencer, the arpeggiator and MIDI out get the chord's notes, so recordings play back as heard.
+MIDI in is never made into chords. MONO plays the root alone. A chord takes a voice per note, out of eight.
 
 ## Hotkeys
 
 | Control | What it does |
 |---|---|
 | PRESETS | Engine. **Hold EDIT:** the track in hand, T1 to T4 |
-| ALGORITHM | One of the engine's eight algorithms. On the FX page: the effect. On the SEQ page, or with EDIT held: the sequencer mode |
-| KNOB 1–4 | Home screen: the engine's four knobs. On a page: its four columns. On the MIX volume subpage with EDIT held: mute T1 to T4 |
-| SELECT | Home screen: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
+| ALGORITHM | The engine's algorithm. On the FX page: the effect. On the SEQ page, or with EDIT held: the sequencer mode |
+| KNOB 1–4 | Home: the engine's four knobs. On a page: its columns. On the MIX volume subpage with EDIT held: mute T1 to T4 |
+| SELECT | Home: tempo. On a page: the next subpage. Writing steps: the cursor. **Hold EDIT:** the track's volume |
 | MASTER | Volume of everything. **Hold EDIT:** the track's volume |
-| FX SEL ENV LFO GLO ARP SEQ | Open that page. HOME goes back. FX opens its page when you let go, unless you played a punch |
-| hold FX + white key 1–8 | A punch on the whole mix while the key is held (see Effects). The keys are the eight white keys from the lowest F; other keys play notes. With FX held first, SAVE and EDIT do nothing; hold EDIT first, then FX, for the bypass as before |
+| FX SEL ENV LFO GLO ARP SEQ | Open that page; HOME goes back. FX opens its page on release unless a punch was played |
+| hold FX + white key 1–8 | A punch on the whole mix (see Effects). Hold EDIT first, then FX, for the bypass |
 | EDIT | Pins the knob strip on the home screen. Writing steps or Riff: a rest |
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
 | EDIT + ARP | Hold (latch) on and off |
 | EDIT + GLO | With keys held: store them as the chord. With none: chords off, or on again |
 | EDIT + LFO | DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits |
-| EDIT + ENV | Back to the knobs from before the last roll, and again to the roll (compare them) |
-| SAVE + white key 1–8 | Load that snapshot, or save to it if it is empty. **SAVE + EDIT + key** saves over it. The keys are the eight white keys from the lowest F |
-| hold SAVE | Reset the algorithm's knobs. Longer (about two seconds): reset the engine. Four seconds: reset every engine and the GLOBAL and KEYS pages |
+| EDIT + ENV | Back to the knobs before the last roll, and again to the roll |
+| SAVE | Save the settings now |
+| SAVE + white key 1–8 | Load that snapshot, or save to it if empty. **SAVE + EDIT + key** saves over it |
+| hold SAVE | Reset the algorithm's knobs. About two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages |
 | hold SEQ | Swap TAPE and STEP |
 | hold GLO | Metronome: CLICK REC, CLICK ON, CLICK OFF |
 | hold HOME | Silence everything (and send CC 123) |
 | OCT − / + | Octave, two each way. Both together: the middle octave |
 | hold OCT − and OCT + | USB host for a keyboard, or back to the computer |
 
-A button with a hold does its tap when you let go.
+A button with a hold does its tap when it is let go.
 
 ## USB audio and MIDI
 
-Plug the FM-1 into a computer or a phone with a USB cable that carries data. It shows up as one device
-with two parts.
+Over a USB cable that carries data, the FM-1 shows up as one device with an audio input (the whole mix at the MASTER
+volume, like a USB microphone; nothing plays back through it) and MIDI.
 
-**Audio.** An audio input, like a USB microphone: the whole mix at the MASTER volume. Nothing plays back
-through it.
+**MIDI in,** over USB or the TRS jack, any channel: notes play the engine in hand at their velocity (softer is
+quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
 
-**MIDI in,** over USB or the TRS jack, on any channel: notes play the engine in hand at their velocity
-(softer is quieter and darker), CC 20 to 23 turn the four knobs, and CC 123 stops every note.
-
-**MIDI out,** over USB only, each track on its own channel (T1 on 1, T2 on 2, T3 on 3, T4 on 4), so a DAW
-records the four tracks apart:
-- the notes of the tape and the step sequencer on their track's channel, and those of the keys, chords and the
-  arpeggiator on the channel of the track in hand (a note ends on the channel it started on);
-- CC 20 to 23 as the knobs turn, and as the tape plays its recorded knob moves back (not those that came in
-  over MIDI);
-- MIDI clock, 24 a beat at TEMPO, all the time, with Start when the tape or the step pattern starts (PLAY, or
-  the first key of a take), sent before the note that starts it, and Stop when it stops. A DAW set to follow
-  external MIDI clock can take A22's tempo, Start and Stop from it. When the tape jumps back to IN while it plays
-  (BARS turned down, IN or OUT moved past it), it sends Stop and Start again; a computer that connects while the
-  tape plays gets Stop and Start when the tape next comes round to IN;
+**MIDI out,** over USB only, a channel per track (T1 on 1 to T4 on 4), so a DAW records the tracks apart:
+- tape and step notes on their track's channel; the keys, chords and arpeggiator on the track in hand's;
+- CC 20 to 23 as the knobs turn, live or from the tape;
+- MIDI clock at TEMPO all the time, with Start when the tape or step pattern starts and Stop when it stops (and Stop
+  then Start when the tape jumps back to IN);
 - CC 123 on channels 1 to 4 when HOME is held.
 
-A note that came in over MIDI isn't sent back out. A synth played from A22's MIDI out hears T2 to T4 only if it
-listens on every channel (omni). A keyboard on USB host gets no clock, Start or Stop.
+Notes that came in over MIDI aren't sent back. A synth on A22's MIDI out hears T2 to T4 only in omni mode.
 
-**A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** together for a second and the USB port
-turns host for a USB-MIDI keyboard. The keyboard needs its own power or a powered hub. Hold both again to
-go back. It's never kept, so the FM-1 always starts as a USB device.
+**A USB keyboard, with no computer.** Hold **OCT −** and **OCT +** for a second and the port becomes a USB-MIDI host.
+The keyboard needs its own power or a powered hub, and gets no clock. Hold both again to go back; the FM-1 always
+starts as a USB device.
 
 ## Install
 
-Releases are on [GitHub](https://github.com/abektes/a22/releases), and A22 is listed on
-[The Firmware Hub](https://thefirmwarehub.com), which offers each new release a few hours after it is out.
+Releases are on [GitHub](https://github.com/abektes/a22/releases), and [The Firmware Hub](https://thefirmwarehub.com)
+offers each one a few hours after it is out.
 
-### Before you install
-
-- **Back up first.** Every firmware keeps its work in the FM-1's flash in its own way. Save what the
-  firmware you are leaving has made with its own backup. The Firmware Hub's notes on this are
-  [here](https://thefirmwarehub.com/kb/#data).
+**Before you install:**
+- **Back up first.** Each firmware keeps its work in the FM-1's flash its own way; save what the firmware you are
+  leaving made with its own backup ([the Hub's notes](https://thefirmwarehub.com/kb/#data)).
 - Charge the FM-1 and use a USB cable that carries data.
-- A22 is community firmware with no warranty, and it has nothing to do with M-VAVE. You install it at
-  your own risk.
+- A22 is community firmware with no warranty and nothing to do with M-VAVE. You install it at your own risk.
 
-### Get the package
+**The package.** Download `a22-X.Y.Z.fwsc` from the [latest release](https://github.com/abektes/a22/releases/latest);
+release X.Y.Z answers `FM-1_4122XXYYZZ`. Every push to `main` also builds a development package: the `a22-dev-build`
+artifact of the latest successful **Actions** run holds `a22.fwsc` (identity `FM-1_412200`), and `a22-release-test`
+is the next release as it will be built.
 
-Download `a22-X.Y.Z.fwsc` from the [latest release](https://github.com/abektes/a22/releases/latest) (a release
-X.Y.Z answers `FM-1_4122XXYYZZ`). Between releases, every push to `main` builds a development package: open
-the latest successful run under **Actions**, download the `a22-dev-build` artifact and unzip it for
-`a22.fwsc` (identity `FM-1_412200`). The `a22-release-test` artifact is the next release built as it will be.
-
-### From a terminal
-
-From a clone of this repo (`git clone --recurse-submodules`), with the FM-1 on USB:
+**From a terminal,** in a clone of this repo (`git clone --recurse-submodules`), with the FM-1 on USB:
 
 ```
 pip3 install mido python-rtmidi
 python3 base/tools/fm1_install.py a22.fwsc
 ```
 
-It works from the stock firmware (V15) and from other custom firmwares, asks before it writes, and checks
-what the FM-1 answers afterwards. If the FM-1 runs something older than V15, update it with M-VAVE's
-updater first.
+It works from the stock firmware (V15) and other custom firmwares, asks before it writes, and checks what the FM-1
+answers afterwards. Update anything older than V15 with M-VAVE's updater first.
 
 ## Leave A22 again
 
-A22's package carries fm1-base's update loader, so other installers can replace it:
-
-- **Another custom firmware:** use its own installer, or its card on
-  [The Firmware Hub](https://thefirmwarehub.com).
-- **Back to stock:** press **Back to official V15** in the Hub's
-  [Official firmware](https://thefirmwarehub.com/#official) box.
-
-A22 only saves its own settings. Leaving it doesn't bring back what an earlier firmware saved.
+A22's package carries fm1-base's update loader, so other installers can replace it: use another firmware's own
+installer or its card on [The Firmware Hub](https://thefirmwarehub.com), or press **Back to official V15** in the
+Hub's [Official firmware](https://thefirmwarehub.com/#official) box. A22 saves only its own settings, so leaving it
+doesn't bring back what an earlier firmware saved.
 
 ## If something goes wrong
 
-These come from fm1-base, which A22 is built on:
+From fm1-base, which A22 is built on:
 
-- **An install stopped halfway:** plug the FM-1 back in and install again. The loader picks up where it
-  stopped.
-- **A22 doesn't start:** after two failed starts it comes up in SAFE MODE. There is no sound, but USB
-  works, so A22, another firmware or V15 can be installed.
-- **Nothing reaches it:** hold **REC** while you switch it on. That is the chip's own update mode, and the
-  Hub's [rescue page](https://thefirmwarehub.com/tools/rescue/) takes it from there. The chip's
-  bootloader is in ROM and can't be overwritten.
+- **An install stopped halfway:** plug the FM-1 back in and install again; the loader picks up where it stopped.
+- **A22 doesn't start:** after two failed starts it comes up in SAFE MODE, with no sound but working USB, so A22,
+  another firmware or V15 can be installed.
+- **Nothing reaches it:** hold **REC** while switching it on. That is the chip's own update mode, and the Hub's
+  [rescue page](https://thefirmwarehub.com/tools/rescue/) takes it from there. The bootloader is in ROM and can't be
+  overwritten.
 
 ## Compatibility
 
-- **M-VAVE FM-1 only.** Not the SMK-37.
-- **Both flash chips:** the original Puya P25Q80 (JEDEC ID `0x856014`) and the UC25HQ80 (`0xB36014`).
-- USB audio out, USB MIDI in and out, or USB host for a keyboard. MIDI in over the TRS jack. No MIDI out
-  over TRS and no Bluetooth.
-- A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, the
-  algorithm, the page and each control's value as it changes.
-- Package identity `FM-1_4122`. A release X.Y.Z answers `FM-1_4122XXYYZZ`.
-- The firmware's image is 406 KB of its 582 KB flash slot and uses 440 KB of the chip's 475 KB of SRAM.
+- **M-VAVE FM-1 only,** not the SMK-37.
+- **Both flash chips:** the original Puya P25Q80 (JEDEC `0x856014`) and the UC25HQ80 (`0xB36014`). Since 0.7.2 the
+  panel gets its full setup, which the newer units need; reports from them are welcome.
+- USB audio out, USB MIDI in and out, or USB host for a keyboard; MIDI in over the TRS jack. No MIDI out over TRS and
+  no Bluetooth.
+- A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, algorithm, page and
+  each control's value as it changes.
+- The image is about 555 KB of the 582 KB flash slot; it uses about 454 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 
@@ -312,53 +269,46 @@ port/    other builds of the same core: host (pictures, WAVs), rfm1 (browser sim
 tests/   the device app in fm1-base's host simulator, the core alone, and the crash hunt
 ```
 
-- `./build.sh` builds `app/build/a22.fwsc`, a development build with identity `FM-1_412200`. It needs
-  JieLi's toolchain and the AC79 SDK (see `base/README.md`). `./build.sh --release X.Y.Z` builds the
-  release package.
-- `sh tests/run_tests.sh` builds the device app for the host and runs `tests/basic.txt`,
-  `tests/usbhost.txt` and `tests/looppower.txt` in it, then on the core alone: `tests/a22_test.c`
-  (two cores, the tape, snapshots, varispeed, Riff, Shake), `tests/basics.c` (the limiter, velocity,
-  MIDI out), `tests/mixer.c`, `tests/looper.c`, `tests/echo.c`, `tests/cores.c` and `tests/lines.c`. It
-  needs only a C compiler and Pillow.
-- `sh tests/run_fuzz.sh` is the crash hunt: the core under the address and undefined-behaviour checkers,
-  fed any saved state and any panel input.
-- The chip's second core renders half the voices. `FM1B_CPU2=0 ./build.sh` builds the firmware without
-  it: see "Two cores" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- `tools/build_host.sh` builds the core alone as `build/h1host`, a script runner that writes pictures
-  and WAVs. `tools/build_rfm1.sh` builds `dist/a22.rfm1` for `.rfm1` hosts such as
+- `./build.sh` builds `app/build/a22.fwsc` (identity `FM-1_412200`) with JieLi's toolchain and the AC79 SDK (see
+  `base/README.md`); `./build.sh --release X.Y.Z` builds a release.
+- `sh tests/run_tests.sh` runs the device app in fm1-base's host simulator, then the core's tests, most under the
+  address and undefined-behaviour checkers; its header says what each one holds. It needs a C compiler and Python
+  with Pillow, numpy and scipy.
+- `sh tests/run_fuzz.sh` is the crash hunt: any saved state and any panel input, under the same checkers.
+- The second core renders half the voices; `FM1B_CPU2=0 ./build.sh` builds without it (see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+- `tools/build_host.sh` builds `build/h1host`, a script runner that writes pictures and WAVs. `tools/build_rfm1.sh`
+  builds `dist/a22.rfm1` for `.rfm1` hosts such as
   [fm1-browser-simulator](https://github.com/jakehandy/fm1-browser-simulator).
-- CI (`.github/workflows/ci.yml`) runs the tests and the crash hunt and builds the firmware on every push
-  to `main` and every pull request. A tag `vX.Y.Z` runs `.github/workflows/release.yml`, which builds,
-  tests, attests and publishes the release through the shared
+- `tools/fm1_profile.py` times the audio on an FM-1 over USB, per algorithm or in a loop jam.
+- CI runs the tests and builds the firmware on every pull request and push to `main`. A tag `vX.Y.Z` runs
+  `.github/workflows/release.yml`, which builds, tests, attests and publishes the release through the shared
   [fm1-build](https://github.com/zvenson/fm1-build) builder.
 - `firmware.json` is written by the build from `app/fm1.toml`.
 
-`docs/ARCHITECTURE.md` and `docs/RESEARCH.md` come from h1 and describe its instruments, but the
-platform, the two cores and the hardware notes still apply.
+[docs/README.md](docs/README.md) lists the rest of the docs: how A22 is built, the release checklist, and the
+plans and measurements behind each release.
 
 ## On a computer
 
-A22's synth core also runs without the FM-1, in
-[a22-soundtrack](https://github.com/abektes/a22-soundtrack): an agent skill that scores videos offline,
-with music from A22's engines and sound effects timed to the frame. Its demos play at
-[abektes.github.io/a22-soundtrack](https://abektes.github.io/a22-soundtrack/).
+A22's synth core also runs without the FM-1 in [a22-soundtrack](https://github.com/abektes/a22-soundtrack), an agent
+skill that scores videos offline with A22's engines and frame-timed sound effects
+([demos](https://abektes.github.io/a22-soundtrack/)).
 
 ## Support
 
-A22 is free and stays free. If it gave you a good evening, you can
-[buy me a coffee](https://buymeacoffee.com/abektes).
+A22 is free and stays free. If it gave you a good evening, you can [buy me a coffee](https://buymeacoffee.com/abektes).
 
 ## Licence
 
 A22 is [MIT](LICENSE), as h1 is.
 
-The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles
-Vestal and [felucca-bsp](https://github.com/hugelton/felucca-bsp), which come from
-[Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. Both are MPL-2.0,
-unchanged, and their source is the `base` submodule at the commit a release was built from. Their
-notices are in `base/LICENSING.md` and `base/bsp/NOTICE`.
+The firmware package also contains [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles Vestal and
+[felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo
+Kuroshita, Hügelton Instruments. Both are MPL-2.0, unchanged; their source is the `base` submodule at the commit a
+release was built from, and their notices are in `base/LICENSING.md` and `base/bsp/NOTICE`.
 
-CYCLE's wavetables are made from [Adventure Kid Waveforms](https://github.com/KristofferKarlAxelEkstrand/AKWF-FREE)
-by Kristoffer Ekstrand, CC0 1.0 ([docs/WAVETABLES.md](docs/WAVETABLES.md)).
+CYCLE's wavetables are made from [Adventure Kid Waveforms](https://github.com/KristofferKarlAxelEkstrand/AKWF-FREE) by
+Kristoffer Ekstrand, CC0 1.0 ([docs/WAVETABLES.md](docs/WAVETABLES.md)).
 
 M-VAVE and FM-1 are trademarks of their owners. A22 is not affiliated with M-VAVE.

@@ -57,9 +57,9 @@ effects, mixer, sequencers and USB audio/MIDI support that, and the animated col
 
 - Real 240 × 240 screen captures of all fourteen engines: `docs/img/a22/*.png`; page captures `fx.png`, `mix.png`,
   `tape.png`.
-- Measured on an FM-1 with 0.5.0 (2026-11-24): 42 FPS average over its 112 algorithms with an eight-note chord and PLATE
-  (audio 50% average, 75% at its peak); a 30-minute soak with a two-track loop playing (STACK and KIT), steady at 24 FPS
-  and 60% audio, no crash. (0.4.0: 41 FPS over 96.)
+- Measured on an FM-1 with 0.7.2 (2026-11-27): 45 FPS average over the 112 algorithms with an eight-note chord and
+  PLATE (audio 49.5% average, 73% at its peak); a dense four-layer loop jam peaks at 75% audio with no late audio.
+  Each CHANGELOG section lists what its release was measured doing.
 - No testimonials, users counts, press or reviews exist: never invent them.
 
 ## Product Principles

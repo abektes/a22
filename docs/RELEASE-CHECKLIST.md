@@ -10,11 +10,11 @@ screen reader's channel, CC 119's PERF line and the crash history); what needs e
 
 ## Done so far
 
-**0.1.0** (2026-11-21, one unit, the flash chip unknown: A22 doesn't report it). Development builds were
-installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself, then the released
-`a22-0.1.0.fwsc` from GitHub (its `SHA256SUMS` line and build attestation checked first). It answers
-`FM-1_4122000100`. Not done for 0.1.0: section 1 (from stock V15), section 3 (leaving A22), section 5
-(a unit with the other flash chip), section 6, and everything that needs listening.
+Every release from 0.1.0 (2026-11-21) to 0.7.2 (2026-11-27) was installed on the same one FM-1, first as CI's test
+package and then as the released file; each CHANGELOG section says what was measured on it. That unit's flash chip
+is unknown (A22 doesn't report it); its flash suspends an erase (0.7.2's PERF read HELD 0). Still open: section 5 (a
+unit with the other flash chip), section 6, leaving A22 for another custom firmware (section 3), and the items that
+need ears or hands.
 
 ## 0. Before touching an FM-1
 
@@ -93,8 +93,9 @@ installed over another Felucca-based firmware (`FM-1_727`), then over A22 itself
 - [ ] Settings saved by 0.4.0 (version 4) load with everything kept: install 0.4.0, change an engine, an
       algorithm, its knobs and an effect, save; install this release over it: they are all as they were.
 - [ ] Saving on its own waits for silence: no stall heard in a reverb tail or under the metronome. SAVE while
-      the tape plays saves at once (a short stall is expected), and the setting is there after a power-off with
-      the tape still playing.
+      the tape plays saves at once, and the setting is there after a power-off with the tape still playing.
+      *0.7.2, remote: SAVE mid-play twice, LATE 0 both times (the sliced erase; 0.7.1 had LATE 1), kept through a
+      power cycle.*
 - [ ] PR #2 under load: HAZE with two tape tracks and eight keys. CC 119's PERF says LATE and SHED, no
       full-level static at a low MASTER, and the screen, keys and MASTER keep answering.
 - [ ] The SEQ page (abektes/a22#1): KNOB 1 turns through every mode, into SHAKE and out again. In SHAKE,
