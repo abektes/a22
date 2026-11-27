@@ -14,6 +14,7 @@
 #   mixer      each track's volume: the knob, saved, heard (squared), muted, no click
 #   looper     the tape's room (2048 events, TAPE FULL), 1 to 32 bars, a shortened tape kept through a load
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
+#   pads       chord pads: the 24 sets in every root, their names and numerals
 #   state      saved state version 5: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
 #              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
 #              (and a project's state: taken whole but TUNE and BRIGHT)
@@ -108,6 +109,8 @@ $CC -std=c99 $SAN core/*.c tests/looper.c -o build/a22looper -lm
 build/a22looper
 $CC -std=c99 $SAN core/*.c tests/chords.c -o build/a22chords -lm
 build/a22chords
+$CC -std=c99 $SAN core/*.c tests/pads.c -o build/a22pads -lm
+build/a22pads
 $CC -std=c99 $SAN core/*.c tests/state.c -o build/a22state -lm
 build/a22state
 $CC -std=c99 $SAN core/*.c tests/dice.c -o build/a22dice -lm

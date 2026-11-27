@@ -379,6 +379,21 @@ int eng_follows(int trk, int part);             /* KEY on for the track, and not
 #define INST_KIT 8                              /* the drum engines: their notes never follow the key */
 #define INST_SKINS 13
 
+/* chordsets.c: the chord pads' types and sets, a pad's notes and numeral. No engine state: a pure module.
+ * set and pad take any int: out of range is set 0, and pad & 7. */
+#define NCHTYPE 20
+#define NCHSET 24
+typedef struct ChType { char name[8]; int8_t iv[5]; } ChType;        /* semitones above the root, -1 ends */
+typedef struct ChPad { uint8_t off, type; } ChPad;                   /* off: semitones above the key's root, 0..11 */
+typedef struct ChSet { uint8_t minor; ChPad pad[8]; } ChSet;
+enum { CH_NUM_MAJOR, CH_NUM_MINOR, CH_NUM_BORROWED };
+extern const ChType CH_TYPES[NCHTYPE];
+extern const ChSet CH_SETS[NCHSET];
+extern const char *const CH_SET_NAMES[NCHSET];
+int ch_pad_pc(int set, int pad, int root);                           /* the root's pitch class, 0..11 */
+int ch_pad_notes(int set, int pad, int root, int octave, int nt[5]); /* root position from C3, ascending: the count */
+int ch_pad_numeral(int set, int pad, char out[9]);                   /* CH_NUM_*; out: "I".."VII" or "BORROWED" */
+
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];
 extern const char *const FX_KNOBS[NFX][4];
