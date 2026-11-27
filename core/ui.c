@@ -424,6 +424,10 @@ static void proj_key(int p, int save)
         proj_toast("P", p, " EMPTY");
         return;
     }
+    if (seq.loop_state == LOOP_ARMED) {          /* (REC armed, waiting for its first key: the tape is stopped) */
+        proj_toast("REC ARMED", -1, 0);
+        return;
+    }
     if (!eng_loop_quiet()) {
         proj_toast("STOP TAPE FIRST", -1, 0);
         return;
@@ -611,6 +615,7 @@ static APART void open_page(int pg)
 static const char *const PUNCH_NAMES[8] = {"BRAKE", "ST 1/8", "ST 1/16", "ST 1/32", "LPF", "HPF", "CRUSH", "GATE"};
 static int fx_hand, punch_key = -1, punch_n;
 int h1_fx_held(void) { return fx_hand; }
+int h1_edit_held(void) { return (btn_held >> H1_BTN_EDIT) & 1u; }
 int h1_punch(void) { return punch_key >= 0 ? punch_n : 0; }
 const char *h1_punch_name(int p) { return p >= 1 && p <= 8 ? PUNCH_NAMES[p - 1] : ""; }
 

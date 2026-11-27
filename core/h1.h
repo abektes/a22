@@ -168,6 +168,7 @@ int h1_instrument(void);
 int h1_algorithm(void);                          /* of the current engine, 0..7 */
 int h1_page(void);                               /* 0 = home, else a settings page */
 int h1_fx_held(void);                            /* 1 while FX is held on its own (the PUNCH strip is up) */
+int h1_edit_held(void);                          /* 1 while EDIT is held (SELECT is then the track's volume) */
 int h1_punch(void);                              /* the punch the hand holds, 1-8, else 0 */
 const char *h1_punch_name(int p);                /* "BRAKE", "ST 1/8" .. "GATE" ("" for none) */
 const char *h1_toast_now(void);                  /* the toast showing, "" when none */

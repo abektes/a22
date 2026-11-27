@@ -107,7 +107,11 @@ feature that needs SRAM has about 1 KB.
     EDIT + the key saves. EDIT let go after a save doesn't pin the knob strip, and SAVE let go doesn't save the
     settings or reset.
   - **Toasts:** `SAVING P2`, then `P2 SAVED` (or `P2 NOT SAVED`); `P2 LOADED` (or `P2 NOT LOADED`); `P2 EMPTY`;
-    `LOAD P2? AGAIN`; `STOP TAPE FIRST` for a load while the tape plays; `RECORDING` for either while a take goes in.
+    `LOAD P2? AGAIN`; `STOP TAPE FIRST` for a load while the tape plays; `REC ARMED` for one while REC waits for its
+    first key; `RECORDING` for either while a take goes in.
+  - **After review** (PR #23): saves asked while another waits are queued, a bit a project, and saved in turn; a
+    newer load replaces one still waiting for the silence; a delete marks every copy of the project, so an older one
+    in a slot not yet erased can't come back; the reader no longer says TEMPO when EDIT is let go after a save chord.
   - **The confirm:** the same keys again within three seconds load it, and any other key or button cancels it.
     "Changed" means a setting changed (`mark_dirty`) or the tape did (`h1_loop_gen`) since the last project save or
     load. At start, a tape with anything on it counts as changed.

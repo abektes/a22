@@ -239,3 +239,17 @@ wait 800
 proj
 expect proj.2 -1
 expect proj_same 1
+# 10 a delete with an older copy of the project still in a free slot (the tape plays, so no slot is erased): every
+#    copy is marked, and nothing comes back after a restart
+tap PLAY
+wait 300
+proj save 3
+wait 2500
+proj save 3
+wait 2500
+proj
+proj rm 3
+reboot
+wait 800
+proj
+expect proj.3 -1

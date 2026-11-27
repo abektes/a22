@@ -684,7 +684,7 @@ static struct {
     int8_t of[PROJ_N];                   /* the slot holding project n, -1 none */
     uint8_t clean[PROJ_SLOTS];           /* 1: the slot is erased whole, and a save may go in */
     uint32_t seq;                        /* the newest record's sequence number */
-    int want;                            /* a save asked for: the project, -1 none */
+    uint32_t wantm;                      /* saves asked for, bit p project p: each saved in turn (lowest first) */
     int doing;                           /* the project being saved */
     int to;                              /* the slot it goes into, -1 none */
     int er;                              /* the slot being erased, a sector a frame, -1 none */
@@ -697,7 +697,16 @@ static struct {
     int load_rc;                         /* the last load's: 0 taken, -1 no such project, -2 refused (recording, or the
                                           * record no longer checks), -3 its state refused */
     uint32_t loads;                      /* loads done since the start */
-} proj = {{-1, -1, -1, -1}, {0}, 0, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0};
+} proj = {{-1, -1, -1, -1}, {0}, 0, 0, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0};
+
+static int proj_next(void)               /* the next save asked for, -1 none */
+{
+    int p;
+    for (p = 0; p < PROJ_N; p++)
+        if (proj.wantm >> p & 1u)
+            return p;
+    return -1;
+}
 
 static uint32_t proj_off(int s) { return PROJ_BASE + (uint32_t)s * PROJ_SLOT_BYTES; }
 
@@ -737,7 +746,9 @@ static void proj_start(void)
 {
     uint32_t p, seq, best[PROJ_N] = {0};
     int s, any = 0;
-    proj.want = proj.to = proj.er = -1;
+    proj.wantm = 0;
+    proj.to = proj.er = proj.load = -1;
+    proj.load_wait = 0;
     proj.seq = 0;
     proj_file_drop();                            /* (a computer's write cut by the restart: given up) */
     for (s = 0; s < PROJ_N; s++)
@@ -764,7 +775,7 @@ static void proj_start(void)
  * save going into it), its sectors erased as the data reaches them, the body written as it comes; the header is kept
  * in RAM and written last, at commit, once the file's lengths and its body's CRC-32 check, with this project's number
  * and the next sequence number in it. Until then the project is what it was: a write given up leaves a free slot,
- * erased before it is used. A delete marks the record's magic 0 in place (no erase), and the slot is free. */
+ * erased before it is used. A delete marks every copy's magic 0 in place (no erase), and the slot is free. */
 static struct {
     int on;                              /* a write under way */
     uint32_t i;                          /* its project */
@@ -806,7 +817,7 @@ int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n)
 
 int app_file_busy(void)
 {
-    return !h1_loop_quiet() || proj.to >= 0 || proj.want >= 0 || proj.load >= 0;
+    return !h1_loop_quiet() || proj.to >= 0 || proj.wantm || proj.load >= 0;
 }
 
 int app_file_begin(uint32_t i, uint32_t size)
@@ -883,11 +894,15 @@ int app_file_commit(uint32_t i, uint32_t size, uint32_t crc)
 int app_file_delete(uint32_t i)
 {
     uint8_t zero[4] = {0, 0, 0, 0};              /* (in RAM: the flash is written only from RAM, never from itself) */
-    int s = i < (uint32_t)PROJ_N ? proj.of[i] : -1;
-    if (s < 0)
-        return 0;
-    if (ring_write(proj_off(s), zero, sizeof zero) != 0)   /* (bits to 0 in place: the record no longer reads) */
+    uint32_t p, seq;
+    int s;
+    if (i >= (uint32_t)PROJ_N)
         return -1;
+    for (s = 0; s < PROJ_SLOTS; s++)             /* every copy: an older one in a slot not yet erased would come back
+                                                  * at the next start */
+        if (s != proj_file_slot() && proj_read(s, &p, &seq) && p == i
+            && ring_write(proj_off(s), zero, sizeof zero) != 0)   /* (bits to 0 in place: the record no longer reads) */
+            return -1;
     proj.of[i] = -1;
     return 0;
 }
@@ -917,7 +932,7 @@ static void proj_write(void)
     uint32_t off = proj_off(proj.to), body = PAGES(proj.slen) + proj.llen, n = 0, k, p, seq;
     const uint8_t *src;
     if (h1_loop_gen() != proj.gen) {             /* a take moved the loop under it: the save again, from the start */
-        proj.want = proj.want >= 0 ? proj.want : proj.doing;
+        proj.wantm |= 1u << proj.doing;
         proj.to = -1;                            /* (the slot is free and not erased: erased before it is used) */
         return;
     }
@@ -977,7 +992,7 @@ static void proj_load_step(void)
     int p = proj.load, s = proj.of[p];
     uint32_t q, seq, sl, f;
     const uint8_t *h;
-    if (proj.to >= 0 || proj.want >= 0)
+    if (proj.to >= 0 || proj.wantm)
         return;
     if (s < 0 || h1_loop_taking() || !proj_read(s, &q, &seq) || q != (uint32_t)p) {
         proj.load_rc = s < 0 ? -1 : -2;
@@ -1006,15 +1021,15 @@ static void proj_panel(void)
     uint32_t have = 0;
     int p, k = h1_proj_take(&p);
     if (k == 1)
-        proj.want = p;
-    else if (k == 2 && proj.load < 0) {
-        proj.load = p;
+        proj.wantm |= 1u << p;                   /* (queued: a save asked while another waits is kept too) */
+    else if (k == 2) {
+        proj.load = p;                           /* (a newer load in place of one still waiting for the silence) */
         proj.load_wait = 0;
     }
     for (k = 0; k < PROJ_N; k++)
         if (proj.of[k] >= 0)
             have |= 1u << k;
-    h1_proj_news(have, proj.to >= 0 ? proj.doing : proj.want);
+    h1_proj_news(have, proj.to >= 0 ? proj.doing : proj_next());
 }
 
 /* every frame, before the ring: 1 when the projects had the flash this frame (the ring waits). A save asked for
@@ -1027,7 +1042,7 @@ static int proj_step(void)
         proj_write();
         return 1;
     }
-    if (proj.want >= 0 && ring.to < 0 && !h1_loop_taking()) {
+    if (proj.wantm && ring.to < 0 && !h1_loop_taking()) {
         for (s = 0; s < PROJ_SLOTS; s++)
             if (proj_free(s) && proj.clean[s])
                 break;
@@ -1038,8 +1053,8 @@ static int proj_step(void)
                                                   * the write is given up (its next frame is refused, and the
                                                   * computer sends it again), and the slot is free next frame */
                 if (proj_file_slot() < 0) {
-                    h1_proj_done(1, proj.want, 0);
-                    proj.want = -1;
+                    h1_proj_done(1, proj_next(), 0);
+                    proj.wantm &= ~(1u << proj_next());
                 }
                 proj_file_drop();
                 return 0;
@@ -1047,8 +1062,8 @@ static int proj_step(void)
             proj_erase_some(proj.er >= 0 && proj_free(proj.er) ? proj.er : s);
             return 1;
         }
-        proj.doing = proj.want;
-        proj.want = -1;
+        proj.doing = proj_next();
+        proj.wantm &= ~(1u << proj.doing);
         proj.to = s;
         proj.clean[s] = 0;
         h1_state(&proj.slen);
@@ -1137,7 +1152,7 @@ static int proj_host_cmd(const char *cmd, const char *a, const char *b)
     if (!strcmp(cmd, "proj") && !strcmp(a, "save")) {   /* proj save N: save to project N (1..4), as SAVE + EDIT + key will */
         int p = atoi(b) - 1;
         if (p >= 0 && p < PROJ_N)
-            proj.want = p;
+            proj.wantm |= 1u << p;
         return 1;
     }
     if (!strcmp(cmd, "proj") && !strcmp(a, "load")) {   /* proj load N: load project N (1..4), as SAVE + key will */
@@ -1425,6 +1440,7 @@ static void speak(void)
 {
     static uint32_t fx_at;                                  /* when FX went down */
     static int fx_said, fx_was, punch_was, inst_was = -1, algo_was = -1, page_was = -1, lay_was = -1, ask_was = 0, val_was[H1_NENC];
+    static int edit_was;
     char t[96], *d, *end = t + sizeof t - 1;
     int inst = h1_instrument(), algo = h1_algorithm(), page = h1_page(), lay = h1_layers(), k, quiet = 0;
     int ask = h1_clear_all_asked(), answer = h1_clear_all_answer();   /* (taken every frame: it is once) */
@@ -1478,6 +1494,12 @@ static void speak(void)
         for (k = 0; k < H1_NENC; k++) {
             const char *name = 0, *text = 0;
             int v = h1_control(k, 0, 0, &name, &text);
+            /* (EDIT down or up swaps SELECT between TEMPO and the track's volume: that is not a turn, so not said;
+             * a project's save chord, SAVE + EDIT + key, said TEMPO each time) */
+            if (k == H1_ENC_SELECT && h1_edit_held() != edit_was) {
+                val_was[k] = v;
+                continue;
+            }
             if (v != val_was[k] && !quiet && k != H1_ENC_PRESET && k != H1_ENC_ALGO && name && name[0]) {
                 if (d != t)
                     d = say_cat(d, end, ". ");
@@ -1491,6 +1513,7 @@ static void speak(void)
             ann_later(t, ANN_NOW, 250u, plat_ms());
     }
     fx_was = h1_fx_held();
+    edit_was = h1_edit_held();
     punch_was = h1_punch();
     inst_was = inst;
     algo_was = algo;

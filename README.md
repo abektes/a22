@@ -136,7 +136,8 @@ F#, G#, A# and C# for projects 1 to 4.
 
 - **SAVE + EDIT + the key** saves what plays to that project: **SAVING P2**, then **P2 SAVED**. It works while the tape
   plays, but not while a take goes in (**RECORDING**).
-- **SAVE + the key** loads it, with the tape stopped (**STOP TAPE FIRST** otherwise). If what plays has changed since
+- **SAVE + the key** loads it, with the tape stopped (**STOP TAPE FIRST** otherwise, **REC ARMED** while REC waits for
+  its first key). If what plays has changed since
   it was last saved to a project or loaded from one, the screen asks **LOAD P2? AGAIN**: the same keys within three
   seconds load it, and anything else keeps your work. The sound stops for the load (CC 123 goes out), and from then on
   the project's tape and settings are what plays, saving themselves as always.
