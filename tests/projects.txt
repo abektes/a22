@@ -231,3 +231,11 @@ expect proj_same 1
 reboot
 wait 800
 expect proj_same 1
+# 9  a delete (the companion's, tests/projfiles.py) marks the record in place: P2 empty after a restart, the rest kept
+proj rm 2
+expect proj.2 -1
+reboot
+wait 800
+proj
+expect proj.2 -1
+expect proj_same 1

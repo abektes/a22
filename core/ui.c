@@ -458,6 +458,10 @@ void h1_proj_news(uint32_t have, int saving)
 
 void h1_proj_done(int kind, int p, int ok)
 {
+    if (kind == 3) {                             /* (a computer wrote it: the work that plays is as it was) */
+        proj_toast("P", p, " FROM USB");
+        return;
+    }
     if (ok) {
         proj_changed = 0;
         proj_gen = eng_loop_gen();

@@ -115,15 +115,26 @@ in only if the build after P3 leaves its 624 B above the spare.
     words are not checked: the host has no reader.
   - **Note for P5:** hold SAVE resets the algorithm's knobs at 0.9 s (`HOLD_RESET_ALGO`). The lights show at once,
     but looking at them for longer than that resets the knobs. Check on the FM-1 whether that is a trap in practice.
-- [ ] **P4. Project files over USB** (decision 4; fm1-base `companion = true`, `APP_FILES`).
-  - `project1` to `project4`, kind project: read in place.
-  - A write goes into the spare slot frame by frame, the CRC is checked at commit, and it becomes current only then.
-  - Delete empties the slot.
-  - `app_file_busy` is 1 while recording or while a save runs.
-  - This gives backup, restore and swapping tapes from fm1-base's companion page (`web/companion/`, "Back up all"
-    zips every file) and `tools/fm1_companion.py`, with no page of A22's own.
-  - Host test with `fm1_companion.py` on the host simulator (`--serve`): get, put, a put cut halfway, a put while
-    recording.
+- [x] **P4. Project files over USB** (`companion = true` in `app/fm1.toml`; `APP_FILES` in `app/app.h`).
+  - `project1` to `project4`, kind project, room 20,480 bytes. A file is the project's record as its slot holds it
+    (header page, state, loop), read in place.
+  - **A write** goes into a free slot. Each 512-byte frame is written straight to flash as it comes, the sectors
+    erased as the data reaches them (sliced), so there is no file buffer. The header is kept in RAM (32 bytes) and
+    written last, at commit. That happens only if the header is this version's, the lengths add up to the file's
+    size, and the body's CRC-32 matches the header's. The header then gets this project's number and the next
+    sequence number, so a file saved as P1 can be put back as P3.
+  - A put given up halfway leaves the project as it was and a free slot that is erased before it is used.
+  - **A delete** writes the record's magic to 0 in place (no erase), so it stays deleted after a restart.
+  - **Busy** (`app_file_busy`) while the tape plays, a take goes in, or a project saves or loads. Reads go any time.
+  - A project written from a computer shows `P2 FROM USB` and leaves the work that plays alone.
+  - fm1-base builds everything as one file, and its companion has a static `pf`, so `app.c`'s PERF counters are
+    now `perf`.
+  - **Host test:** `tests/projfiles.py` drives the simulator (`a22_host --serve`) with fm1-base's own client
+    (`base/tools/fm1_companion.py`). It covers the list, a CRC-checked read, P1's file put as P2, a damaged body
+    and another version refused, a put cut short then whole, a put refused as busy while the tape plays, and a
+    delete. `tests/projects.txt` adds a delete kept through a restart (`proj rm`).
+  - **Not done here:** the companion page on A22's own site (`tools/build_site.py`; fm1-base's `web/companion/`).
+    That's P6. The flash and SRAM cost comes from this branch's CI build.
 - [ ] **P5. On an FM-1** (the owner's hands; each step asked first). Install a CI test package, then:
   - save and load all four with the tape playing, then stopped;
   - PERF's LATE, ERASE and HELD during saves and loads (0.7.2's SAVE: LATE 0, HELD 0);
@@ -131,12 +142,13 @@ in only if the build after P3 leaves its 624 B above the spare.
   - the companion page's backup and restore, and a project put from a computer;
   - `fm1_profile.py idle` and `jam --clear-tape` within a point of 0.7.2 (the jam clears the tape: ask first);
   - `release-all` and `master pot` at the end.
-- [ ] **P6. Docs.**
-  - README: a Projects section, the hotkeys, and the shared data area's warning with the backup.
-  - The site manual (`tools/build_site.py`).
-  - CHANGELOG Unreleased.
-  - ARCHITECTURE's flash map.
-  - The answer on issue #12, when the owner says.
+- [x] **P6. Docs**, all but the answer on issue #12 (when the owner says).
+  - README: a Projects section (the keys, the question, the lights, backing up), the hotkey row, and the warning in
+    "Leave A22 again". The compatibility line's image and SRAM numbers wait for this branch's CI build.
+  - The site: the manual's Projects section, the hotkey row and a question. The build now also publishes fm1-base's
+    companion page at `companion/` (with the `fm1ports.js` it imports), so a backup needs no terminal.
+  - CHANGELOG Unreleased: Projects.
+  - ARCHITECTURE: the projects, and the data area's map.
 
 ## Not in this plan
 

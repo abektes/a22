@@ -65,6 +65,8 @@ out=app/build/host
 "$out/a22_host" tests/projload.txt "$out"
 # projects on the panel: SAVE + black key loads, with EDIT saves; asked first over changed work; refused playing or recording
 "$out/a22_host" tests/projpanel.txt "$out"
+# the projects as files over USB: the companion's list, read, write, delete, refusals, a put cut short, busy
+python3 tests/projfiles.py "$out/a22_host"
 # settings while the tape plays: written only in silence on their own, at once after SAVE, and kept through a power cut
 "$out/a22_host" tests/statesave.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back

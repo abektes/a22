@@ -4,6 +4,17 @@
 #include "plat.h"
 
 #define APP_NAME "A22"
+/* the companion's files (fm1.toml companion = true): project1 to project4, each a project's record as its slot holds
+ * it (app.c: a header page, the state, the loop). Read in place; a write goes into a free slot and counts at commit,
+ * once its header and body check; busy while the tape plays, a take goes in, or a project saves or loads */
+#define APP_FILES
+int app_file(uint32_t i, plat_file_info_t *f);
+int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n);
+int app_file_begin(uint32_t i, uint32_t size);
+int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n);
+int app_file_commit(uint32_t i, uint32_t size, uint32_t crc);
+int app_file_delete(uint32_t i);
+int app_file_busy(void);
 #define APP_SPLASH                       /* no paper splash: the screen stays the bezel's black until the */
 void app_splash(void);                   /* instrument comes up */
 #define APP_SPLASH_RGB RGB(0, 0, 0)

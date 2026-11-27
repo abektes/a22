@@ -104,7 +104,7 @@ static void send_rest(void)
  * The stages are timed only from the first CC 119 on (stage_clock_on), so a unit nobody profiles reads no clock in
  * its render. */
 #define US(t) ((t) / PLAT_TICKS_PER_US)
-static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max, erase_n, erase_max; } pf;
+static struct { uint32_t frames, draw, draw_max, send, send_max, since_ms, flash_n, flash_max, erase_n, erase_max; } perf;
 static uint32_t erase_us_frame;                 /* this frame's erase time so far (ERASE) */
 static volatile uint32_t pf_blocks, pf_audio, pf_audio_max, pf_block_us = 5805u;
 /* the renders as the tape's flash writes see them (ring_go): one more each render, and the slowest of the last few
@@ -441,7 +441,7 @@ static int ring_sector_erase(uint32_t off)      /* one 4 KiB sector, timed (ERAS
 #endif
     rc = plat_data_erase(off);
     erase_us_frame += US(plat_ticks24() - t0);
-    pf.erase_n++;
+    perf.erase_n++;
     return rc;
 }
 
@@ -488,9 +488,9 @@ static int ring_write(uint32_t off, const void *src, uint32_t n)
     uint32_t t0 = plat_ticks24(), us;
     int rc = plat_data_write(off, src, n);
     us = US(plat_ticks24() - t0);
-    pf.flash_n++;
-    if (us > pf.flash_max)
-        pf.flash_max = us;
+    perf.flash_n++;
+    if (us > perf.flash_max)
+        perf.flash_max = us;
     return rc;
 }
 
@@ -701,9 +701,12 @@ static struct {
 
 static uint32_t proj_off(int s) { return PROJ_BASE + (uint32_t)s * PROJ_SLOT_BYTES; }
 
-static int proj_free(int s)              /* no project in it, and no save going into it */
+static int proj_file_slot(void);
+static int proj_free(int s)              /* no project in it, no save going into it, no file being written into it */
 {
     int p;
+    if (s == proj_file_slot())
+        return 0;
     for (p = 0; p < PROJ_N; p++)
         if (proj.of[p] == s)
             return 0;
@@ -751,6 +754,142 @@ static void proj_start(void)
         }
     }
 }
+
+/* ---- the projects as files over USB (fm1-base's companion: app.h APP_FILES; docs/PLAN-projects.md P4) ---------
+ * projectN is project N's record as its slot holds it: the header page (the header's 32 bytes, then erased bytes),
+ * the state from byte 256 and the loop from the next page. A computer keeps it as a file whatever it holds; written
+ * back to any of the four, it becomes that project. A write goes into a free slot (proj_free: no project in it, no
+ * save going into it), its sectors erased as the data reaches them, the body written as it comes; the header is kept
+ * in RAM and written last, at commit, once the file's lengths and its body's CRC-32 check, with this project's number
+ * and the next sequence number in it. Until then the project is what it was: a write given up leaves a free slot,
+ * erased before it is used. A delete marks the record's magic 0 in place (no erase), and the slot is free. */
+static struct {
+    int on;                              /* a write under way */
+    uint32_t i;                          /* its project */
+    int slot;                            /* the slot it goes into */
+    uint32_t size, erased;               /* the file's bytes; the slot's bytes erased so far */
+    uint8_t head[PROJ_HEAD];             /* the header as it came */
+} fw = {0, 0, -1, 0, 0, {0}};
+
+static uint32_t proj_size(int s)         /* a slot's record as a file: its bytes */
+{
+    const uint8_t *h = plat_data(proj_off(s));
+    return h ? RING_BODY + PAGES(rd32(h + 16)) + rd32(h + 20) : 0u;
+}
+
+int app_file(uint32_t i, plat_file_info_t *f)
+{
+    static const char *const NAMES[PROJ_N] = {"project1", "project2", "project3", "project4"};
+    if (i >= (uint32_t)PROJ_N)
+        return -1;
+    f->name = NAMES[i];
+    f->kind = PLAT_FK_PROJECT;
+    f->flags = PLAT_FF_READ | PLAT_FF_WRITE | PLAT_FF_DELETE;
+    f->size = proj.of[i] >= 0 ? proj_size(proj.of[i]) : 0u;
+    f->room = PROJ_SLOT_BYTES;
+    return 0;
+}
+
+int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n)
+{
+    int s = i < (uint32_t)PROJ_N ? proj.of[i] : -1;
+    const uint8_t *p = s >= 0 ? plat_data(proj_off(s)) : 0;
+    uint32_t k;
+    if (!p || off > proj_size(s) || n > proj_size(s) - off)
+        return -1;
+    for (k = 0; k < n; k++)
+        dst[k] = p[off + k];
+    return 0;
+}
+
+int app_file_busy(void)
+{
+    return !h1_loop_quiet() || proj.to >= 0 || proj.want >= 0 || proj.load >= 0;
+}
+
+int app_file_begin(uint32_t i, uint32_t size)
+{
+    int s;
+    fw.on = 0;
+    if (i >= (uint32_t)PROJ_N || size < RING_BODY + 12u || size > PROJ_SLOT_BYTES)
+        return -1;
+    for (s = 0; s < PROJ_SLOTS && !(proj_free(s) && proj.clean[s]); s++)
+        ;                                        /* (an erased free slot first, else any free one) */
+    if (s == PROJ_SLOTS)
+        for (s = 0; s < PROJ_SLOTS && !proj_free(s); s++)
+            ;
+    if (s == PROJ_SLOTS)
+        return -1;
+    if (proj.er == s)
+        proj.er = -1;                            /* (its erase part-way: done here, as the data reaches it) */
+    fw.erased = proj.clean[s] ? PROJ_SLOT_BYTES : 0u;
+    proj.clean[s] = 0;
+    fw.on = 1;
+    fw.i = i;
+    fw.slot = s;
+    fw.size = size;
+    for (s = 0; s < (int)PROJ_HEAD; s++)
+        fw.head[s] = 0xFFu;
+    return 0;
+}
+
+int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n)
+{
+    uint32_t base = proj_off(fw.slot), k;
+    if (!fw.on || i != fw.i || off > fw.size || n > fw.size - off)
+        return -1;
+    for (k = 0; k < n && off + k < PROJ_HEAD; k++)
+        fw.head[off + k] = src[k];               /* (the header: kept for the commit) */
+    k = off + n > RING_BODY ? (off < RING_BODY ? RING_BODY - off : 0u) : n;
+    if (k >= n)
+        return 0;                                /* (the rest of the header page stays erased) */
+    off += k, src += k, n -= k;
+    while (fw.erased < off + n) {                /* the sectors the data reaches, erased first (sliced) */
+        if (ring_sector_erase(base + fw.erased) != 0)
+            return -1;
+        fw.erased += 4096u;
+    }
+    return ring_write(base + off, src, n);
+}
+
+int app_file_commit(uint32_t i, uint32_t size, uint32_t crc)
+{
+    const uint8_t *h = plat_data(proj_off(fw.slot));
+    uint32_t sl = rd32(fw.head + 16), ll = rd32(fw.head + 20), c, p, seq;
+    (void)crc;                                   /* (the companion checked the file's own CRC-32 as it came) */
+    if (!fw.on || i != fw.i || size != fw.size || !h)
+        return -1;
+    fw.on = 0;
+    if (rd32(fw.head) != PROJ_MAGIC || rd32(fw.head + 4) != PROJ_VERSION || sl > H1_STATE_MAX || ll > H1_LOOP_MAX ||
+        size != RING_BODY + PAGES(sl) + ll)
+        return -1;                               /* (not a project of this version: the slot is free) */
+    c = crc32_run(0xFFFFFFFFu, h + RING_BODY, sl);
+    c = crc32_run(c, h + RING_BODY + PAGES(sl), ll);
+    if (~c != rd32(fw.head + 24))
+        return -1;
+    wr32(fw.head + 8, i);                        /* (this project now, whichever it was saved as) */
+    wr32(fw.head + 12, proj.seq + 1u);
+    wr32(fw.head + 28, crc32_of(fw.head, PROJ_HEAD - 4u));
+    if (ring_write(proj_off(fw.slot), fw.head, PROJ_HEAD) != 0 || !proj_read(fw.slot, &p, &seq) || p != i)
+        return -1;
+    proj.of[i] = (int8_t)fw.slot;                /* (the slot it was in before is free now) */
+    proj.seq++;
+    h1_proj_done(3, (int)i, 1);
+    return 0;
+}
+
+int app_file_delete(uint32_t i)
+{
+    static const uint8_t zero[4] = {0, 0, 0, 0};
+    int s = i < (uint32_t)PROJ_N ? proj.of[i] : -1;
+    if (s < 0)
+        return 0;
+    if (ring_write(proj_off(s), zero, sizeof zero) != 0)   /* (bits to 0 in place: the record no longer reads) */
+        return -1;
+    proj.of[i] = -1;
+    return 0;
+}
+static int proj_file_slot(void) { return fw.on ? fw.slot : -1; }
 
 /* a free slot back to erased, a sector a frame (the sliced erase: the sound goes on). Sector 0, its header, first */
 static void proj_erase_some(int s)
@@ -996,6 +1135,10 @@ static int proj_host_cmd(const char *cmd, const char *a, const char *b)
         }
         return 1;
     }
+    if (!strcmp(cmd, "proj") && !strcmp(a, "rm")) {   /* proj rm N: project N deleted, as the companion's delete */
+        (void)app_file_delete((uint32_t)(atoi(b) - 1));
+        return 1;
+    }
     if (!strcmp(cmd, "proj")) {                  /* proj: which slot holds each project, and the slots erased */
         proj_dump();
         return 1;
@@ -1059,7 +1202,7 @@ void app_init(void)
         else if ((n = plat_store_load(OBJ_LOOP, blob, sizeof blob)) > 0)
             h1_loop_load(blob, (uint32_t)n);                /* (one saved before the ring: it goes there next) */
     }
-    erase_us_frame = pf.erase_n = 0;                        /* (the start's erases, before the sound, are not a frame's) */
+    erase_us_frame = perf.erase_n = 0;                        /* (the start's erases, before the sound, are not a frame's) */
 #ifdef PLAT_HOST
     host_er_frame = 0;
 #endif
@@ -1136,11 +1279,11 @@ void app_frame(void)
     t2 = plat_ticks24();
     sent.bytes += h1_present_bytes();
     sent.rects += (uint32_t)h1_present_rects();
-    pf.frames++;
-    pf.draw += US(t1 - t0);
-    pf.send += US(t2 - t1);
-    if (US(t1 - t0) > pf.draw_max) pf.draw_max = US(t1 - t0);
-    if (US(t2 - t1) > pf.send_max) pf.send_max = US(t2 - t1);
+    perf.frames++;
+    perf.draw += US(t1 - t0);
+    perf.send += US(t2 - t1);
+    if (US(t1 - t0) > perf.draw_max) perf.draw_max = US(t1 - t0);
+    if (US(t2 - t1) > perf.send_max) perf.send_max = US(t2 - t1);
     plat_glow(1);
     plat_leds(h1_button_leds(), h1_key_leds());
     speak();
@@ -1154,8 +1297,8 @@ void app_frame(void)
             h1_state_saved();
     } else if (!proj_step())                                /* (a project's save, or the ring: one a frame) */
         ring_step();
-    if (erase_us_frame > pf.erase_max)                      /* (ERASE: the most erase time in one frame) */
-        pf.erase_max = erase_us_frame;
+    if (erase_us_frame > perf.erase_max)                      /* (ERASE: the most erase time in one frame) */
+        perf.erase_max = erase_us_frame;
     erase_us_frame = 0;
 #ifdef PLAT_HOST
     if (host_er_frame > host_er_max)
@@ -1194,7 +1337,7 @@ static char *say_num(char *d, char *end, uint32_t v)
 static void say_perf(void)
 {
     char t[241], *d, *end = t + sizeof t - 1;
-    uint32_t f, ms = plat_ms() - pf.since_ms, n = pf.frames ? pf.frames : 1u, nb, au, am, stg[H1_NSTG], stg_total;
+    uint32_t f, ms = plat_ms() - perf.since_ms, n = perf.frames ? perf.frames : 1u, nb, au, am, stg[H1_NSTG], stg_total;
     int k;
     f = plat_lock();
     nb = pf_blocks; au = pf_audio; am = pf_audio_max;
@@ -1202,15 +1345,15 @@ static void say_perf(void)
     stg_total = h1_stages(stg);
     plat_unlock(f);
     d = say_cat(t, end, "PERF. FPS ");
-    d = say_num(d, end, ms ? (pf.frames * 1000u + ms / 2u) / ms : 0u);
+    d = say_num(d, end, ms ? (perf.frames * 1000u + ms / 2u) / ms : 0u);
     d = say_cat(d, end, ". DRAW ");
-    d = say_num(d, end, (pf.draw / n + 500u) / 1000u);
+    d = say_num(d, end, (perf.draw / n + 500u) / 1000u);
     d = say_cat(d, end, " MAX ");
-    d = say_num(d, end, (pf.draw_max + 500u) / 1000u);
+    d = say_num(d, end, (perf.draw_max + 500u) / 1000u);
     d = say_cat(d, end, ". SEND ");
-    d = say_num(d, end, (pf.send / n + 500u) / 1000u);
+    d = say_num(d, end, (perf.send / n + 500u) / 1000u);
     d = say_cat(d, end, " MAX ");
-    d = say_num(d, end, (pf.send_max + 500u) / 1000u);
+    d = say_num(d, end, (perf.send_max + 500u) / 1000u);
     d = say_cat(d, end, ". AUDIO ");
     d = say_num(d, end, nb ? (au / nb) * 100u / pf_block_us : 0u);
     d = say_cat(d, end, " MAX ");
@@ -1250,19 +1393,19 @@ static void say_perf(void)
         }
     }
     d = say_cat(d, end, ". FLASH ");                        /* the tape's flash writes, and the longest (us) */
-    d = say_num(d, end, pf.flash_n);
+    d = say_num(d, end, perf.flash_n);
     d = say_cat(d, end, " ");
-    d = say_num(d, end, pf.flash_max);
+    d = say_num(d, end, perf.flash_max);
     d = say_cat(d, end, ". ERASE ");                        /* the ring's sector erases, and the most in a frame (us) */
-    d = say_num(d, end, pf.erase_n);
+    d = say_num(d, end, perf.erase_n);
     d = say_cat(d, end, " ");
-    d = say_num(d, end, pf.erase_max);
+    d = say_num(d, end, perf.erase_max);
     d = say_cat(d, end, ". HELD ");                         /* erases since the start that held the sound whole */
     say_num(d, end, plat_flash_held());
     ann_say(t, 0, ANN_NOW);
-    pf.frames = pf.draw = pf.draw_max = pf.send = pf.send_max = pf.flash_n = pf.flash_max = 0;
-    pf.erase_n = pf.erase_max = 0;
-    pf.since_ms = plat_ms();
+    perf.frames = perf.draw = perf.draw_max = perf.send = perf.send_max = perf.flash_n = perf.flash_max = 0;
+    perf.erase_n = perf.erase_max = 0;
+    perf.since_ms = plat_ms();
 }
 
 static void speak(void)

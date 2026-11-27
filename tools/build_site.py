@@ -169,6 +169,7 @@ HOTKEYS = [("PRESETS", "The engine. With EDIT held: the track in hand, T1 to T4.
            ("EDIT + REC / PLAY", "Cut the track's notes to a clipboard / paste them at the current bar."),
            ("SAVE", "Save the settings now."),
            ("SAVE + white key", "Load that snapshot, or save to it if it is empty. SAVE + EDIT + key saves over it."),
+           ("SAVE + F#, G#, A#, C#", "Load project 1 to 4, the tape stopped. SAVE + EDIT + key saves to it."),
            ("hold SAVE", "Reset the algorithm's knobs. Two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages."),
            ("hold REC", "Clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC to clear the whole tape."),
            ("hold SEQ", "Swap the tape and the step sequencer."), ("hold GLO", "Metronome: CLICK REC, CLICK ON, CLICK OFF."),
@@ -183,7 +184,9 @@ FAQ = [("Will it brick my FM-1?",
        ("How do I go back to stock?",
         "Press Back to official V15 in The Firmware Hub's Official firmware box, or install another custom firmware with its own installer. A22 only saves its own settings."),
        ("Do my settings survive an update?",
-        "Yes, unless a release changes how settings are stored; its notes say so. Your recorded tape is kept either way."),
+        "Yes, unless a release changes how settings are stored; its notes say so. Your recorded tape and your projects are kept either way."),
+       ("Can I keep more than one song?",
+        "Four, as projects: SAVE + EDIT + F#, G#, A# or C# saves the tape and settings to one, and SAVE + the key loads it. Another firmware installed after A22 may write over them, so back them up first with the companion page."),
        ("Can I record it into my computer?",
         "Yes. Over one USB cable the FM-1 is an audio input (the whole mix at the MASTER volume) and a MIDI port: notes in at their velocity, CC 20 to 23 for the knobs, and each track's notes out on its own channel (T1 on 1 to T4 on 4) with MIDI clock, so a DAW records the tracks apart.")]
 
@@ -492,7 +495,7 @@ def front():
     spec = "".join(f"<tr><th scope=\"row\">{esc(k)}</th><td>{esc(v)}</td></tr>" for k, v in [
         ("Sound", "Fourteen engines, eight algorithms each, four live knobs. Eight effects and a master EQ with drive."),
         ("Making music", "A four-track tape with knob automation, a step sequencer, Riff and Shake, an arpeggiator, "
-                         "chord memory and eight snapshots."),
+                         "chord memory, eight snapshots and four projects."),
         ("Pictures", "Every engine draws its own animated colour picture on the FM-1's screen, moving with the sound."),
         ("Connect", "USB audio and MIDI over one cable, MIDI in on the TRS jack, USB host for a keyboard."),
         ("Runs on", "The M-VAVE FM-1, with either flash chip. Not the SMK-37.")])
@@ -683,6 +686,12 @@ def manual():
           <p>Modes of the SEQ page (ARP, then ALGORITHM, or hold EDIT and turn ALGORITHM anywhere). RIFF: REC records a sequence
             a note at a time, EDIT leaves a rest, REC finishes; then hold any key and it plays from there, transposed.
             SHAKE: every key drops a ball into a spinning cage that plays its note each time it bounces.</p>
+          <h3>Projects</h3>
+          <p>Four kept beside what plays, each the tape and every setting but TUNE and BRIGHT. SAVE + EDIT + F#, G#, A# or
+            C# (the first black keys from the lowest F) saves to project 1 to 4; SAVE + the key loads it with the tape
+            stopped. Over changed work it asks LOAD P2? AGAIN first: the same keys within three seconds load it. With
+            SAVE held the keys that hold a project light up. Another firmware may write over them: keep them on a
+            computer with the <a href="companion/">companion page</a> (Chrome or Edge, Back up all).</p>
           <h3>Chord memory</h3>
           <p>Hold a chord and press EDIT + GLO: each key then plays that shape from itself. The CHORD page can also build chords
             from the KEYS page's scale, or play a fixed shape.</p></div>
@@ -763,10 +772,14 @@ def main():
         shutil.copy(os.path.join(ROOT, "docs", "img", "a22", pic + ".png"), os.path.join(out, "img"))
     shutil.copytree(os.path.join(ROOT, "site", "fonts"), os.path.join(out, "fonts"))
     shutil.copytree(os.path.join(ROOT, "web"), os.path.join(out, "sim"))
+    # fm1-base's companion page (the projects as files: backup and restore over Web MIDI), and the port finder it
+    # imports from the site's top (../fm1ports.js), as fm1-base's own sites lay them out
+    shutil.copytree(os.path.join(ROOT, "base", "web", "companion"), os.path.join(out, "companion"))
+    shutil.copy(os.path.join(ROOT, "base", "web", "fm1ports.js"), out)
     os.makedirs(os.path.join(out, "dist"))
     shutil.copy(os.path.join(ROOT, "dist", "a22.rfm1"), os.path.join(out, "dist"))
     open(os.path.join(out, ".nojekyll"), "w").close()
-    print(f"wrote {out}: index.html, manual.html, img/ ({len(ENGINES)} screens), fonts/, sim/, dist/a22.rfm1")
+    print(f"wrote {out}: index.html, manual.html, img/ ({len(ENGINES)} screens), fonts/, sim/, companion/, dist/a22.rfm1")
 
 
 if __name__ == "__main__":

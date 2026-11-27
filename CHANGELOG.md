@@ -18,6 +18,25 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 - Costs: the USB audio ring grows from 2 KB to 10 KB and the stems take 2 KB, 11,024 B of SRAM in all (10,200 B free,
   2 KB past the 8 KB spare the build keeps); the image grows by 1,616 B to 556,240 B of the 581,564 B slot.
 
+**Projects** ([#12](https://github.com/abektes/a22/issues/12); docs/PLAN-projects.md)
+- Four projects kept on the FM-1 beside what plays, each the tape and every setting (the snapshots too) but TUNE and
+  BRIGHT. SAVE + EDIT + F#, G#, A# or C# saves to project 1 to 4, playing or not, but not while a take goes in. SAVE +
+  the key loads it, with the tape stopped. Over work changed since the last project save or load it asks first
+  (LOAD P2? AGAIN: the same keys within three seconds). The load silences the sound as hold HOME does (CC 123 out),
+  and the project's tape and settings then play and save themselves as always. With SAVE held, the keys that hold a
+  project light up; the screen reader says each project toast.
+- In flash: five slots of five sectors at 0xAF000..0xC7FFF (four projects and a spare), just under the tape's ring.
+  A save goes into the spare with its header written last, so a power-off part-way leaves the old copy; another
+  firmware's bytes there count as an empty slot. 0x97000..0xAEFFF stays free.
+- Over USB: fm1-base's companion services (`companion = true`) list `project1` to `project4` as files. The site's new
+  companion page backs them up into one zip and puts them back, and `base/tools/fm1_companion.py` does the same from a
+  terminal. A project file put back under any number becomes that project; one whose body doesn't match its header is
+  refused. Back them up before installing another firmware: it may write over them.
+- Tests: `tests/projects.txt` (slots, a power-off mid-save, foreign bytes, a take mid-save, a full tape, a delete
+  through a restart), `tests/projload.txt` (loading stopped and while playing, refusals, a restart after),
+  `tests/projpanel.txt` (the keys, the question, the lights) and `tests/projfiles.py` (the companion's list, read,
+  write, delete, a put cut short, busy); `tests/state.c` checks that TUNE and BRIGHT stay.
+
 ## 0.7.2
 
 Identity `FM-1_4122000702`. Released 2026-11-27. Performance and the newer fm1-base: SHIFT and TANK asleep again, saving

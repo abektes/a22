@@ -51,6 +51,9 @@ usb_audio_out = false
 # h1_stems): T1 on 3-4, T2 on 5-6, T3 on 7-8, T4 on 9-10, dry. 44.1 kHz only; the ring takes 20 bytes a frame (10 KB
 # instead of 2), and fm1-base keeps TIMER5 at 10 kHz for the stream (input_hz still sets the scan's rate)
 usb_audio_channels = 10
+# The companion services (fm1-base docs/COMPANION.md): the four projects as files over USB, for the companion page's
+# backup and restore and tools/fm1_companion.py (app.h APP_FILES; app.c's slots; docs/PLAN-projects.md P4)
+companion = true
 # firmware.json, for firmware hubs (base/docs/FIRMWARE-JSON.md): the build writes it from these
 # the name people see on a listing; name above is "a22" (file names, id, USB names)
 title = "A22"
