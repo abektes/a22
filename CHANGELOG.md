@@ -35,7 +35,10 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
 - Tests: `tests/projects.txt` (slots, a power-off mid-save, foreign bytes, a take mid-save, a full tape, a delete
   through a restart), `tests/projload.txt` (loading stopped and while playing, refusals, a restart after),
   `tests/projpanel.txt` (the keys, the question, the lights) and `tests/projfiles.py` (the companion's list, read,
-  write, delete, a put cut short, busy); `tests/state.c` checks that TUNE and BRIGHT stay.
+  write, delete, a put cut short, busy, a panel save winning over a put); `tests/state.c` checks that TUNE and BRIGHT
+  stay.
+- Costs, on top of the stems: the image grows by 7,232 B to 563,472 B of the 581,564 B slot (projects and fm1-base's
+  companion with its files); 864 B more SRAM, 9,336 B free (1,144 B past the 8 KB spare the build keeps).
 
 ## 0.7.2
 

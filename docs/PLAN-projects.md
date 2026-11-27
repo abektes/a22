@@ -68,6 +68,10 @@ the projects it overwrote are gone. The README says so, and P4's backup is the w
 The numbers come from #21's CI build and fm1-base's COMPANION.md. Each step's CI build gives the real ones. P4 goes
 in only if the build after P3 leaves its 624 B above the spare.
 
+**As built** (PR abektes/a22#23's CI, `f170109`, P1 to P4 together): image 563,472 B (+7,232 B on #21's), about
+18 KB of the slot left; SRAM 9,336 B free (864 B more used), 1,144 B past the 8 KB spare. So P4 fits, and the next
+feature that needs SRAM has about 1 KB.
+
 ## Steps
 
 - [x] **P1. The slots** (`app/app.c`, beside the ring; `06528d0`).

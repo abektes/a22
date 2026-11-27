@@ -292,7 +292,7 @@ From fm1-base, which A22 is built on:
   no Bluetooth.
 - A screen reader ([fm1-reader](https://github.com/charlesvestal/fm1-reader)) hears the engine, algorithm, page and
   each control's value as it changes.
-- The image is about 556 KB of the 582 KB flash slot; it uses about 465 KB of the chip's 475 KB of SRAM.
+- The image is about 563 KB of the 582 KB flash slot; it uses about 466 KB of the chip's 475 KB of SRAM.
 
 ## For developers
 
