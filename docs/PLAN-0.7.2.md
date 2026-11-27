@@ -44,15 +44,28 @@ engines' renders in RAM), what the FM-1 developer wiki says about this chip
       normal (c = 1e-3) 6,151, zero 6,161, four tries alike: 15.6 ns a multiply-add whatever the operands. **The
       FM-1's FPU keeps denormals and does arithmetic on them at full speed** (the wiki's open question 8). So no
       snaps: a decaying state costs nothing more; only a sleep that waits for exactly 0 needs `snap0` (K0).
-- [ ] K5. The engines' renders in RAM (in progress, stopped 2026-11-27 for the day). The renders call nothing (CI
-      disassembly: fm4, SHAPER, STACK, PERC, HAZE, ANALOG, WIRE, KIT, ELECTRIC, MONO, CHIP, WAVE none; SKINS one,
-      `rd_tick`), and voice_block calls them through InstDef's pointer from the flash, so H1_HOT alone moves one.
-      Sizes (K1's ELF): ANALOG `pulse_render` 21.2 KB, SHAPER `digital_render` 16.8, FM-4 8.6, STACK 8.3, MONO 7.1,
-      ELECTRIC 5.8, KIT 4.5, PERC 4.3, WIRE 3.5, SKINS 3.4, HAZE 2.9. Step 1 (branch `k5-ram`, `0f5fc08`: PERC +
-      FM-4, CI 45915703200): image 554,616 B, RAM code 22,172 B, SRAM free 59,656 B (51.5 KB above the spare); it is
-      installed on the FM-1 and ran without a crash, but its two `all` runs were stopped before any result was kept:
-      rerun both, against K1's run (49.9% average, 75% peak). Step 2 (`k5-ram-2`: + SHAPER, STACK, HAZE, CI
-      45917923613) was still building.
+- [x] **K5. The engines' renders in RAM** (`0f5fc08`, `d39d1d2`, `3fea166`: PERC, FM-4, SHAPER, STACK, HAZE,
+      ELECTRIC and KIT with `H1_HOT`). The renders call nothing (CI disassembly: none of FM-4, SHAPER, STACK, PERC,
+      HAZE, ANALOG, WIRE, KIT, ELECTRIC, MONO, CHIP, WAVE calls out; SKINS calls `rd_tick`), and voice_block calls
+      them through InstDef's pointer from the flash, so `H1_HOT` alone moves one; `ram_code_allow` stays empty.
+      Sizes (K1's ELF): ANALOG `pulse_render` 21.2 KB, SHAPER 16.8, FM-4 8.6, STACK 8.3, MONO 7.1, ELECTRIC 5.8, KIT
+      4.5, PERC 4.3, WIRE 3.5, SKINS 3.4, HAZE 2.9. With all seven (CI 45977698687): image 554,624 B, RAM code
+      60,596 B, SRAM free 21,224 B, **13.0 KB above the 8 KB spare** (ANALOG doesn't fit; MONO would, at 7.1 KB).
+      Measured on the FM-1 (2026-11-27) against the parent build (K2/K3, CI 45914219105, measured the same day),
+      eight-note chords on all 112 algorithms under PLATE, and `jam --clear-tape` (owner's yes) from the same track:
+      | build | all: avg / peak / FPS | jam, 4 layers: avg / peak | + 4 keys: peak | LATE |
+      | parent (K2/K3) | 49.8% / 74% / 44.6 | 73, 72% / 91, 91% | 93, 87% | 0 |
+      | step 1 (PERC, FM-4), 2 runs | 51.0, 50.9% / 73, 73% / 43.8 | | | |
+      | step 3 (all seven), 2 runs | 49.5, 49.5% / 72, 73% / 45.0 | 64, 62% / 75, 75% | 73, 76% | 0 |
+      Step 1 alone did not pay: its two engines gained a point of peak, but the engines left in the flash lost 1-4
+      points (MONO 34->36%, STACK 55->57, ELECTRIC 47->51), the extra time in seq and master, not the voices: the
+      flash's code moved, and the shared instruction cache with it. So did K1's +0.7 (K2/K3 itself costs nothing:
+      49.8 against K1's 49.9). With all seven, each moved engine's peak falls 1-2 points (PERC 74->72, FM-4 71->69,
+      STACK 68->66, KIT 58->56, ELECTRIC 53->51), ANALOG and MONO, still in the flash, rise about 2 (ANALOG peak
+      62->64, MONO 37->39), idle is unchanged (11-15% by effect), and the jam, every layer of which now renders from
+      RAM, falls from 91% to 75% at its peak and from about 73% to 63% on average, FPS 15-18 to 21-25: the tactic
+      pays where many voices of a few engines play, as it did on DUB-1. Step 2 (`k5-ram-2`) was built but not timed
+      on its own. Hashes: the code is unchanged (only its section), and `tests/run_tests.sh` passes.
 - [ ] K6. (only if time) compiler flags, measured
 - [ ] K7. Release
 

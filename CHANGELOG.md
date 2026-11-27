@@ -12,6 +12,11 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   every start with it chosen, ran at 16% of the audio time instead of 11% until another effect was chosen and back.
   States below 1e-20 (-400 dB) are now 0 for the sleep's test, in DELAY, SHIFT and TANK; the sound is otherwise the
   same. `tests/sleep.c` (`denormals`) runs the four echo effects with denormals kept, as the FM-1 does.
+- Dense loop jams have more room: seven engines (PERC, FM-4, SHAPER, STACK, HAZE, ELECTRIC and KIT) render their voices
+  from RAM instead of flash, out of the way of the instruction cache the screen's drawing shares. On the FM-1 a
+  four-layer jam of SHAPER, ELECTRIC, KIT and STACK peaks at 75% of the audio time instead of 91%, and the screen keeps
+  21-25 frames a second instead of 15-18; eight-note chords on each of those engines peak 1-2 points lower. ANALOG and
+  MONO, still in flash, peak about 2 points higher. The sound is the same to the bit.
 
 **Saving**
 - Saving no longer stops the sound for a moment. A save erases a 4 KiB sector of flash first: that ran as one stretch
