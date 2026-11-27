@@ -425,7 +425,9 @@ DOWN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v10M3.5 8.5 8 
 KNOB_VARS = ["var(--k1)", "var(--k2)", "var(--k3)", "var(--k4)"]
 
 
-def head(title, desc, extra_style=""):
+def head(title, desc, extra_style="", up=""):
+    """up: "../" for a page in a folder (companion/), so the fonts and the icon are found"""
+    css = CSS.replace('url("fonts/', f'url("{up}fonts/')
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -435,25 +437,25 @@ def head(title, desc, extra_style=""):
 <meta name="description" content="{esc(desc)}">
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(desc)}">
-<meta property="og:image" content="img/fm4.png">
+<meta property="og:image" content="{up}img/fm4.png">
 <meta name="theme-color" content="#e2e6eb">
-<link rel="icon" href="img/fm4.png">
-<link rel="preload" href="fonts/BarlowSemiCondensed-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="preload" href="fonts/BarlowSemiCondensed-Medium.ttf" as="font" type="font/ttf" crossorigin>
-<style>{CSS}{extra_style}</style>
+<link rel="icon" href="{up}img/fm4.png">
+<link rel="preload" href="{up}fonts/BarlowSemiCondensed-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="{up}fonts/BarlowSemiCondensed-Medium.ttf" as="font" type="font/ttf" crossorigin>
+<style>{css}{extra_style}</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 """
 
 
-def masthead(current):
+def masthead(current, up=""):
     def link(href, label, key):
         cur = ' aria-current="page"' if key == current else ""
         return f'<a href="{href}"{cur}>{label}</a>'
     return f"""<header class="masthead">
-  <a class="mark" href="./">A22</a>
-  <nav aria-label="Site">{link("manual.html", "Manual", "manual")}{link(SIM, "Simulator", "sim")}{link(REPO, "GitHub", "gh")}</nav>
+  <a class="mark" href="{up or './'}">A22</a>
+  <nav aria-label="Site">{link(up + "manual.html", "Manual", "manual")}{link(up + SIM, "Simulator", "sim")}{link(up + "companion/", "Backup", "companion")}{link(REPO, "GitHub", "gh")}</nav>
 </header>
 """
 
@@ -757,6 +759,96 @@ def manual():
 """
 
 
+# the backup page: fm1-base's companion page (base/web/companion/index.html, MPL-2.0: its markup from the status line
+# on and its script, unchanged) in A22's catalogue: the site's head, masthead and footer, A22's words above it, and
+# its classes drawn in the site's tokens
+COMPANION_CSS = """
+.companion { max-width: 860px; margin: 0 auto; padding: clamp(36px, 7vh, 72px) var(--gutter) clamp(56px, 9vw, 112px); }
+.companion > h1 { font-size: clamp(44px, 6vw, 64px); line-height: .95; letter-spacing: -0.02em; }
+.companion > .lede { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.3; color: var(--ink-2); max-width: 34em;
+  margin: 16px 0 32px; }
+.companion h2 { font-size: 30px; margin: 0 0 14px; }
+.companion h3 { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
+  margin: 22px 0 4px; }
+.companion p { margin: 0 0 12px; }
+.companion .status { position: relative; background: var(--sheet); border-radius: 3px; padding: 14px 18px 14px 40px;
+  margin: 0 0 18px; box-shadow: 0 1px 0 var(--rule); }
+.companion .status::before { content: ""; position: absolute; left: 18px; top: 23px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--k2); }
+.companion .status.err::before { background: var(--k4); }
+.companion .status p { margin: 0; }
+.companion #alert { font-weight: 700; }
+.companion #alert:empty { display: none; }
+.companion .card { background: var(--sheet); border-radius: 3px; padding: 24px clamp(18px, 3vw, 28px); margin: 0 0 18px;
+  box-shadow: 0 1px 0 var(--rule); }
+.companion button, .companion label.pick { font: 700 18px/1 var(--face); display: inline-flex; align-items: center;
+  gap: 8px; padding: 14px 22px; border-radius: 3px; border: 1px solid var(--ink); background: var(--ink);
+  color: var(--sheet); cursor: pointer; transition: background-color .15s ease-out, border-color .15s ease-out; }
+.companion button:hover, .companion label.pick:hover { background: #2b3038; border-color: #2b3038; }
+.companion button:active, .companion label.pick:active { transform: translateY(1px); }
+.companion button.plain, .companion label.pick { background: transparent; color: var(--ink); border-color: var(--rule); }
+.companion button.plain:hover, .companion label.pick:hover { background: var(--paper); border-color: var(--ink); }
+.companion button.small, .companion label.pick.small { font-size: 15px; padding: 8px 12px; }
+.companion button:disabled, .companion label.pick.off { opacity: .4; cursor: default; transform: none; }
+.companion button.plain:disabled:hover { background: transparent; border-color: var(--rule); }
+.companion label.pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.companion label.pick:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
+.companion .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.companion progress { appearance: none; width: 100%; height: 6px; margin: 14px 0 4px; border: 0; border-radius: 3px;
+  background: var(--rule-soft); color: var(--ink); }
+.companion progress::-webkit-progress-bar { background: var(--rule-soft); border-radius: 3px; }
+.companion progress::-webkit-progress-value { background: var(--ink); border-radius: 3px; }
+.companion progress::-moz-progress-bar { background: var(--ink); }
+.companion [hidden] { display: none !important; }
+.companion dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 20px; margin: 0; }
+.companion dt { color: var(--ink-2); }
+.companion dd { margin: 0; overflow-wrap: anywhere; }
+.companion .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.companion .chip { font-size: 14px; border: 1px solid var(--rule); border-radius: 2px; padding: 0 8px; }
+.companion table { font-size: 17px; }
+.companion td { border-top: 1px solid var(--rule-soft); padding: 10px 6px 10px 0; vertical-align: middle; }
+.companion tr:last-child td { border-bottom: 1px solid var(--rule-soft); }
+.companion td:first-child { font-weight: 700; }
+.companion td.num { color: var(--ink-2); white-space: nowrap; }
+.companion td.acts { text-align: right; padding-right: 0; }
+.companion td.acts .row { justify-content: flex-end; gap: 6px; }
+.companion .opt { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; color: var(--ink-2); }
+.companion .opt input { margin-top: 7px; accent-color: var(--ink); }
+.companion .param { display: grid; grid-template-columns: minmax(7rem, 1fr) 2fr minmax(5.5rem, auto); gap: 12px;
+  align-items: center; padding: 6px 0; }
+.companion .param input[type=range] { width: 100%; accent-color: var(--ink); }
+.companion .param input[type=number], .companion .param select { font: inherit; width: 100%; padding: 4px 8px;
+  border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); color: var(--ink); }
+.companion .param .ro { color: var(--ink-2); }
+.companion .small { color: var(--ink-2); font-size: 15px; }
+.companion ul.report { margin: 10px 0 0; padding-left: 20px; font-size: 15px; }
+@media (max-width: 34rem) {
+  .companion .param { grid-template-columns: 1fr 1fr; } .companion .param .ctl { grid-column: 1 / -1; grid-row: 2; }
+  .companion td.num { display: none; }
+}
+"""
+
+
+def companion():
+    with open(os.path.join(ROOT, "base", "web", "companion", "index.html"), encoding="utf-8") as f:
+        src = f.read()
+    body = src[src.index('<div class="status"'):src.index("</main>")]
+    script = src[src.index('<script type="module">'):src.rindex("</script>") + len("</script>")]
+    return head("A22 backup", "Keep A22's four projects on a computer: download one, send one back, or back them all up "
+                "in one zip. Chrome or Edge.", COMPANION_CSS, up="../") + masthead("companion", up="../") + f"""<!-- fm1-base's companion page (base/web/companion/index.html, MPL-2.0: Henri David, Charles Vestal), drawn in A22's
+     catalogue by tools/build_site.py; its markup from the status line on and its script are as fm1-base has them -->
+<main id="main" class="companion">
+<h1>Backup</h1>
+<p class="lede">Keep your four projects on this computer: download one, send one back, or back them all up in one zip
+and put them back later. Plug the FM-1 in with a USB data cable, stop the tape, and press Connect. Chrome or Edge,
+nothing to install.</p>
+{body}</main>
+""" + footer() + script + """
+</body>
+</html>
+"""
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
@@ -775,6 +867,8 @@ def main():
     # fm1-base's companion page (the projects as files: backup and restore over Web MIDI), and the port finder it
     # imports from the site's top (../fm1ports.js), as fm1-base's own sites lay them out
     shutil.copytree(os.path.join(ROOT, "base", "web", "companion"), os.path.join(out, "companion"))
+    with open(os.path.join(out, "companion", "index.html"), "w") as f:
+        f.write(companion())                    # (fm1-base's page, in A22's catalogue)
     shutil.copy(os.path.join(ROOT, "base", "web", "fm1ports.js"), out)
     os.makedirs(os.path.join(out, "dist"))
     shutil.copy(os.path.join(ROOT, "dist", "a22.rfm1"), os.path.join(out, "dist"))
