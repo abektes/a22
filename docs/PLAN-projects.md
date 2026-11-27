@@ -11,22 +11,22 @@ A project is the tape and the settings together, as A22 keeps them now: `H1State
 before (the ring at 0xC8000, the state at 0xFC000). A project is a copy of them that you save to or load from. A tape
 from 0.7.2 and earlier keeps working: it is the working tape, and no project holds it until you save one.
 
-## Owner decisions (before P1)
+## Owner decisions
 
-Each has a recommendation. P1 and P2 don't depend on them; P3 does.
+Decided 2026-11-27: the owner took all four as recommended.
 
-1. **The gesture.** SAVE + white key is the snapshots, FX + white key the punches, hold SAVE the reset. Recommended:
+1. **The gesture.** SAVE + white key is the snapshots, FX + white key the punches, hold SAVE the reset. Decided:
    **SAVE + one of the first four black keys** from the lowest F (F#, G#, A#, C#) loads that project, and
    **SAVE + EDIT + that key** saves to it, as snapshots do. Today SAVE + black key plays the note (`h1_key` in
    `core/ui.c` only takes the white keys with SAVE held).
-2. **What a project carries.** Recommended: the whole state, the eight snapshots included, except TUNE and BRIGHT
+2. **What a project carries.** Decided: the whole state, the eight snapshots included, except TUNE and BRIGHT
    (`st.glo[2]`, `st.glo[3]`), which belong to the unit and the room rather than the song. TEMPO and SWING go with the
    project.
-3. **Loading over unsaved work.** Recommended: a project loads only while the tape is stopped and nothing is
+3. **Loading over unsaved work.** Decided: a project loads only while the tape is stopped and nothing is
    recording. When the working tape or settings changed since it was last saved to a project or loaded from one, the
    screen asks `LOAD P2? AGAIN`: the same keys again within three seconds loads it, anything else keeps the work (as
    CLEAR ALL? does). Otherwise it loads at once.
-4. **Project files over USB (P4) in the same release or the next.** Recommended: the same release, if P1 to P3 leave
+4. **Project files over USB (P4) in the same release or the next.** Decided: the same release, if P1 to P3 leave
    the SRAM it needs (below).
 
 ## Flash
