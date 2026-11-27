@@ -143,25 +143,31 @@ EFFECTS = [("PLATE", "plate reverb", "MIX, DECAY, DAMP, MOD"), ("DELAY", "tape p
            ("THUMP", "drive and transient", "PUNCH, DRIVE, BASS, TONE")]
 
 PAGES = [("FX", "FX", "the effect's four knobs"),
-         ("MIX", "SEL", "volume, pan and FX send per track; the master's LOW, MID, HIGH and DRIVE"),
+         ("MIX", "SEL", "volume, pan and FX send per track; the master's LOW, MID, HIGH and DRIVE; "
+                        "KEY: OFF or ON per track (DRUM on a drum track)"),
          ("ENV", "ENV", "ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH"),
          ("LFO", "LFO", "SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan)"),
          ("GLOBAL", "GLO", "TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD; CHORD: MODE, TYPE, VOICING, STRUM"),
          ("SEQ", "ARP", "MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. "
                          "In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE"),
-         ("TAPE", "SEQ", "TRACK, BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK; edit: IN BAR, OUT BAR, SNAP, PITCH")]
+         ("TAPE", "SEQ", "TRACK, BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK; edit: IN BAR, OUT BAR, SNAP, PITCH; "
+                         "LANE: BAR, ROOT, SCALE, DEG")]
 
 HOTKEYS = [("PRESETS", "The engine. With EDIT held: the track in hand, T1 to T4."),
            ("ALGORITHM", "One of the engine's eight algorithms. On the FX page the effect, on the SEQ page (or with EDIT held) the sequencer mode."),
-           ("KNOB 1–4", "Home: the engine's four knobs. On a page: its four columns."),
+           ("KNOB 1–4", "Home: the engine's four knobs. On a page: its four columns. On the MIX volume subpage with EDIT held: mute T1 to T4."),
            ("SELECT", "Home: tempo. On a page: the next subpage. With EDIT held: the track's volume."),
            ("MASTER", "Volume of everything. With EDIT held: the track's volume."),
-           ("FX SEL ENV LFO GLO ARP SEQ", "Open that page. HOME goes back."),
+           ("FX SEL ENV LFO GLO ARP SEQ", "Open that page. HOME goes back. FX opens its page on release unless a punch was played."),
+           ("hold FX + white key 1–8", "A punch on the whole mix (see Effects). Hold EDIT first, then FX, for the bypass."),
            ("EDIT", "Pins the knob strip. Writing steps or a riff: a rest."),
            ("EDIT + FX", "Effect on or bypassed."), ("EDIT + SEL", "Mute the track in hand."),
            ("EDIT + ARP", "Hold (latch) on and off."),
            ("EDIT + GLO", "With keys held: store them as the chord. With none: chords off, or on again."),
+           ("EDIT + LFO", "DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits."),
+           ("EDIT + ENV", "Back to the knobs before the last roll, and again to the roll."),
            ("EDIT + REC / PLAY", "Cut the track's notes to a clipboard / paste them at the current bar."),
+           ("SAVE", "Save the settings now."),
            ("SAVE + white key", "Load that snapshot, or save to it if it is empty. SAVE + EDIT + key saves over it."),
            ("hold SAVE", "Reset the algorithm's knobs. Two seconds: the engine. Four: every engine and the GLOBAL and KEYS pages."),
            ("hold REC", "Clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC to clear the whole tape."),
@@ -179,7 +185,7 @@ FAQ = [("Will it brick my FM-1?",
        ("Do my settings survive an update?",
         "Yes, unless a release changes how settings are stored; its notes say so. Your recorded tape is kept either way."),
        ("Can I record it into my computer?",
-        "Yes. Over one USB cable the FM-1 is an audio input (the whole mix at the MASTER volume) and a MIDI port: notes in at their velocity, CC 20 to 23 for the knobs, and the keys, arpeggiator and tape out on channel 1.")]
+        "Yes. Over one USB cable the FM-1 is an audio input (the whole mix at the MASTER volume) and a MIDI port: notes in at their velocity, CC 20 to 23 for the knobs, and each track's notes out on its own channel (T1 on 1 to T4 on 4) with MIDI clock, so a DAW records the tracks apart.")]
 
 
 
@@ -349,7 +355,7 @@ footer .sep { flex: 1 1 auto; }
 .chart td { color: var(--ink-2); }
 .chart thead th { color: var(--ink-2); font-size: 15px; border-top: 0; }
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 48px; }
-.two h3 { font-size: 22px; margin: 24px 0 8px; }
+.two h3, .chapter > h3 { font-size: 22px; margin: 24px 0 8px; }
 .two p { color: var(--ink-2); }
 .chapter details { border-top: 1px solid var(--rule-soft); padding: 14px 0; max-width: 72ch; }
 .chapter details:last-of-type { border-bottom: 1px solid var(--rule-soft); }
@@ -658,7 +664,18 @@ def manual():
             REC while it plays overdubs, PLAY starts and stops it. Knobs turned while recording play back as automation. SPEED plays
             it at half or double speed or backwards; TRICK adds a tape brake or stutters.</p>
           <p style="margin-top:12px">Hold REC to clear the track in hand. Keep holding and it asks CLEAR ALL?: tap REC within three
-            seconds of letting go to clear the whole tape. Anything else, or waiting, keeps it.</p></div>
+            seconds of letting go to clear the whole tape. Anything else, or waiting, keeps it.</p>
+          <h3>KEY</h3>
+          <p>A track can play its tape in the key set now. On MIX (SEL), SELECT four times to KEY and turn a track's knob to ON:
+            its notes then follow GLO's ROOT and SCALE from the key they were recorded in, so ROOT up 2 plays the track two
+            semitones up. Between two seven-note scales a note keeps its scale step; otherwise it moves with ROOT and snaps to
+            the new scale. Drum engines (KIT, SKINS) never move and say DRUM.</p>
+          <h3>LANE</h3>
+          <p>The key can change bar by bar. On the tape page, SELECT twice to LANE: BAR (K1) picks a bar, and ROOT, SCALE and
+            DEG (the chord degree) set its entry. Each field holds until a later entry sets it, and unset fields come from GLO.
+            DEG IV in C major plays F, A, C where the tape has C, E, G. Only KEY tracks follow the lane; while the tape plays
+            the header names the key in force (D MAJ . IV), and the live keys and chord memory snap to it. The lane belongs to
+            the whole tape: only CLEAR ALL clears it.</p></div>
         <div><h3>Step</h3>
           <p>Hold SEQ to swap the tape for the step sequencer. REC turns step writing on and off, PLAY runs the pattern,
             SELECT moves the cursor and a tap of EDIT leaves a rest. Up to eight notes a step.</p>
@@ -678,6 +695,13 @@ def manual():
         much it sends, while FILTER, LOFI and THUMP work on the whole mix. The master bus has its own
         three-band EQ and drive.</p>
       <table class="chart"><thead><tr><th>Effect</th><th>What it is</th><th>Knobs</th></tr></thead><tbody>{fx}</tbody></table>
+      <h3>PUNCH</h3>
+      <p>Hold FX and one of the eight white keys from the lowest F to hit the whole mix for as long as the key is held:
+        1 BRAKE, 2 ST 1/8, 3 ST 1/16, 4 ST 1/32 (stutters at TEMPO), 5 LPF and 6 HPF (a sweep over a bar), 7 CRUSH,
+        8 GATE (1/16). A second punch key replaces the first, the key keeps its punch after FX is let go, and a strip at the
+        bottom of the screen lights the one held. FX tapped alone still opens the FX page.</p>
+      <p style="margin-top:12px">While the tape records, a punch goes on the track in hand and plays back on the whole mix. CUT,
+        PASTE and clear treat it like a knob move, and a punch held by hand wins over the tape's.</p>
     </section>
 
     <section class="chapter" id="pages" aria-labelledby="h-pages">
@@ -693,8 +717,9 @@ def manual():
           It only goes one way: the FM-1 isn't a sound card.</p></div>
         <div><h3>MIDI in</h3><p>Over USB or the TRS jack, on any channel: notes at their velocity, CC 20 to 23 for the four knobs,
           CC 123 to stop every note.</p></div>
-        <div><h3>MIDI out</h3><p>Over USB on channel 1: the notes of the keys, the arpeggiator and the tape, and CC 20 to 23 as the
-          knobs turn. Notes that came in over MIDI aren't sent back out.</p></div>
+        <div><h3>MIDI out</h3><p>Over USB, a channel per track (T1 on 1 to T4 on 4), so a DAW records the tracks apart: tape and
+          step notes on their track's channel, the keys, chords and arpeggiator on the track in hand's, CC 20 to 23 as the
+          knobs turn, and MIDI clock at TEMPO with Start and Stop. Notes that came in over MIDI aren't sent back out.</p></div>
         <div><h3>USB host</h3><p>Hold OCT − and OCT + for a second and the port turns host for a USB-MIDI keyboard with its own power
           or a powered hub. Hold both again to go back.</p></div>
       </div>
