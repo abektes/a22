@@ -444,6 +444,20 @@ uint32_t h1_loop_gen(void) { return eng_loop_gen(); }
 int h1_loop_room(void) { return (NLEV - eng_loop_used()) / 2; }
 int h1_loop_quiet(void) { return eng_loop_quiet(); }
 int h1_loop_taking(void) { return eng_loop_taking(); }
+void h1_silence(void) { eng_post(EV_PANIC, 0); }
+
+int h1_project_load(const void *state, uint32_t state_size, const void *loop, uint32_t loop_size)
+{
+    uint8_t tune = st.glo[2], bright = st.glo[3];   /* (the unit's and the room's, not the song's) */
+    if (h1_state_load(state, state_size) != 0)
+        return -1;                               /* (refused before anything was taken) */
+    st.glo[2] = tune;
+    st.glo[3] = bright;
+    (void)h1_loop_load(loop, loop_size);
+    loop_saved_gen = eng_loop_gen() - 1u;        /* the ring saves it as the tape that plays */
+    ui_state_changed();
+    return 0;
+}
 int h1_quiet(void) { return eng_quiet(); }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && !eng_loop_taking(); }
 void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }

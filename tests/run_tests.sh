@@ -16,6 +16,7 @@
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORD page
 #   state      saved state version 5: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
 #              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
+#              (and a project's state: taken whole but TUNE and BRIGHT)
 #   dice       EDIT + LFO rolls the knobs near the algorithm's home, EDIT + ENV swaps back; every algorithm
 #              rolled stays within 6 dB of how loud it is at home
 #   skins      SKINS' two kits: every drum on every algorithm sounds and ends, the hat chokes, ROOM spreads,
@@ -60,6 +61,8 @@ out=app/build/host
 "$out/a22_host" tests/ringerase.txt "$out"
 # projects: four slots and a spare, a save cut by a power-off, another firmware's bytes, a take during a save
 "$out/a22_host" tests/projects.txt "$out"
+# a project loaded stopped, while playing with a key held, refused while recording, and kept through a restart
+"$out/a22_host" tests/projload.txt "$out"
 # settings while the tape plays: written only in silence on their own, at once after SAVE, and kept through a power cut
 "$out/a22_host" tests/statesave.txt "$out"
 # DICE: EDIT + LFO rolls the knobs (out as CC 20-23), EDIT + ENV puts them back

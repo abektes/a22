@@ -393,5 +393,6 @@ void fx_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(vo
 
 /* UI (ui.c) */
 void ui_init(void);
+void ui_state_changed(void);               /* the state counts as changed: saved as a knob turned is */
 void ui_frame(uint32_t now_ms);
 int ui_page(void);

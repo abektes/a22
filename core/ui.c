@@ -2362,5 +2362,6 @@ uint32_t h1_button_leds(void)
 }
 
 int h1_state_dirty(void) { return dirty && now - dirty_ms > 1500u; }
+void ui_state_changed(void) { mark_dirty(); }
 void h1_state_saved(void) { dirty = 0; save_asked = 0; }
 int h1_state_asked(void) { int a = save_asked; save_asked = 0; return a; }

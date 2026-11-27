@@ -692,7 +692,12 @@ static struct {
     uint32_t slen, llen;                 /* the save's state and loop, their bytes */
     uint32_t at, crc, gen, defer;        /* how far into the body, its CRC so far, h1_loop_gen at the start, waits */
     uint32_t saves, fails;               /* saves done and given up since the start */
-} proj = {{-1, -1, -1, -1}, {0}, 0, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int load;                            /* a load asked for: the project, -1 none */
+    uint32_t load_wait;                  /* frames since it silenced the sound (0: not yet) */
+    int load_rc;                         /* the last load's: 0 taken, -1 no such project, -2 refused (recording, or the
+                                          * record no longer checks), -3 its state refused */
+    uint32_t loads;                      /* loads done since the start */
+} proj = {{-1, -1, -1, -1}, {0}, 0, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0};
 
 static uint32_t proj_off(int s) { return PROJ_BASE + (uint32_t)s * PROJ_SLOT_BYTES; }
 
@@ -814,6 +819,39 @@ static void proj_write(void)
     proj.to = -1;
 }
 
+/* A project in place of what plays (P2), the main loop's. It waits for a save under way (a load would change what it
+ * writes), refuses while a take goes in, and reads the record again (a computer may have written the slot since). The
+ * sound is silenced first, as hold HOME does (CC 123 out), and the load waits for the render to have taken that (the
+ * load empties the engine's queue) and for the tails to go (PROJ_QUIET frames at most: then what is left is cut). The state and the loop are taken with the render locked out, as at a start: the render
+ * reads them, and the engine starts again from them. Nothing is copied: the record is read in place. */
+#define PROJ_QUIET 30u
+#define PROJ_TAKEN 3u                    /* frames the silence has before the load, quiet or not */
+static void proj_load_step(void)
+{
+    int p = proj.load, s = proj.of[p];
+    uint32_t q, seq, sl, f;
+    const uint8_t *h;
+    if (proj.to >= 0 || proj.want >= 0)
+        return;
+    if (s < 0 || h1_loop_taking() || !proj_read(s, &q, &seq) || q != (uint32_t)p) {
+        proj.load_rc = s < 0 ? -1 : -2;
+        proj.load = -1;
+        return;
+    }
+    if (proj.load_wait++ == 0)
+        h1_silence();
+    if (proj.load_wait < PROJ_TAKEN || (!h1_quiet() && proj.load_wait < PROJ_QUIET))
+        return;                                  /* (the render takes the silence first: the load empties its queue) */
+    h = plat_data(proj_off(s));
+    sl = rd32(h + 16);
+    f = plat_lock();
+    proj.load_rc = h1_project_load(h + RING_BODY, sl, h + RING_BODY + PAGES(sl), rd32(h + 20)) == 0 ? 0 : -3;
+    plat_unlock(f);
+    if (proj.load_rc == 0)
+        proj.loads++;
+    proj.load = -1;
+}
+
 /* every frame, before the ring: 1 when the projects had the flash this frame (the ring waits). A save asked for
  * begins once no take is going and the ring is not part-way through one; it waits for a free slot to be erased first
  * if none is. Stopped and silent, the free slots go back to erased, a sector a frame, so the next save starts at once. */
@@ -887,6 +925,15 @@ static int proj_expect(const char *a, const char *b)
         printf("  ok %s == %d\n", a, got);
         return 1;
     }
+    if (!strcmp(a, "proj_loads") || !strcmp(a, "proj_load_rc")) {
+        long got = a[9] == 's' ? (long)proj.loads : (long)proj.load_rc;
+        if (got != want) {
+            printf("FAIL expect %s == %s, got %ld\n", a, b, got);
+            exit(1);
+        }
+        printf("  ok %s == %ld\n", a, got);
+        return 1;
+    }
     if (!strcmp(a, "proj_saves")) {
         if ((long)proj.saves != want) {
             printf("FAIL expect proj_saves == %s, got %u\n", b, (unsigned)proj.saves);
@@ -916,6 +963,14 @@ static int proj_host_cmd(const char *cmd, const char *a, const char *b)
         int p = atoi(b) - 1;
         if (p >= 0 && p < PROJ_N)
             proj.want = p;
+        return 1;
+    }
+    if (!strcmp(cmd, "proj") && !strcmp(a, "load")) {   /* proj load N: load project N (1..4), as SAVE + key will */
+        int p = atoi(b) - 1;
+        if (p >= 0 && p < PROJ_N) {
+            proj.load = p;
+            proj.load_wait = 0;
+        }
         return 1;
     }
     if (!strcmp(cmd, "proj")) {                  /* proj: which slot holds each project, and the slots erased */
@@ -1026,6 +1081,8 @@ void app_frame(void)
     usb_news();
     h1_master((int)(plat_master() * 1000u / 4096u));        /* shown while it turns; the gain is app_render's */
     t0 = plat_ticks24();
+    if (proj.load >= 0)
+        proj_load_step();                                   /* (a project in place of what plays: before the frame) */
     h1_frame(plat_ms());                                    /* (and most of the last frame goes out meanwhile) */
     t1 = plat_ticks24();
     send_rest();                                            /* what is left of the last frame */

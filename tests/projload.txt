@@ -1,0 +1,91 @@
+# Projects loaded while the sound runs (docs/PLAN-projects.md P2): silenced first (CC 123 out, as hold HOME), then the
+# state and the loop taken with the render locked out, TUNE and BRIGHT kept; the next bar plays the project, and a
+# restart keeps it as the tape that plays. Run by tests/run_tests.sh in fm1-base's host simulator: ./build.sh --host,
+# then app/build/host/a22_host tests/projload.txt app/build/host
+wait 600
+# P1: a take of F (key 12, note 0x41); P2: the track cleared and a take of A (key 16, note 0x45)
+tap REC
+wait 100
+key 12 down
+wait 300
+key 12 up
+wait 400
+tap REC
+wait 1500
+tap PLAY
+wait 1500
+proj save 1
+wait 3000
+expect proj_same 1
+press REC
+wait 1200
+release REC
+wait 500
+tap REC
+wait 100
+key 16 down
+wait 300
+key 16 up
+wait 400
+tap REC
+wait 1500
+tap PLAY
+wait 1500
+proj save 2
+wait 3000
+expect proj_same 2
+# 1  P1 loaded while stopped: the state and the loop are P1's, and PLAY plays its F
+out
+proj load 1
+wait 1000
+expect proj_loads 1
+expect proj_load_rc 0
+expect proj_same 1
+expect_out USB B0 7B 00
+out
+tap PLAY
+wait 2500
+expect_out USB 90 41 7F
+expect_no_out USB 90 45 7F
+# 2  P2 loaded while the tape plays and a key is held: stopped, silenced, P2's A from then on
+key 7 down
+wait 200
+proj load 2
+wait 1000
+key 7 up
+wait 200
+expect proj_loads 2
+expect proj_same 2
+out
+tap PLAY
+wait 2500
+expect_out USB 90 45 7F
+expect_no_out USB 90 41 7F
+tap PLAY
+wait 500
+# 3  an empty project, and a load while a take goes in: refused, and nothing changed
+proj load 4
+wait 300
+expect proj_load_rc -1
+expect proj_loads 2
+tap REC
+wait 100
+key 19 down
+wait 200
+proj load 1
+wait 300
+key 19 up
+wait 300
+expect proj_load_rc -2
+expect proj_loads 2
+tap REC
+wait 1500
+tap PLAY
+wait 500
+# 4  P1 again, then a restart: the state and the tape that play are P1's (saved as the ring and the state are)
+proj load 1
+wait 4000
+expect proj_same 1
+reboot
+wait 800
+expect proj_same 1
