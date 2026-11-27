@@ -702,6 +702,7 @@ static struct {
 static uint32_t proj_off(int s) { return PROJ_BASE + (uint32_t)s * PROJ_SLOT_BYTES; }
 
 static int proj_file_slot(void);
+static void proj_file_drop(void);
 static int proj_free(int s)              /* no project in it, no save going into it, no file being written into it */
 {
     int p;
@@ -738,6 +739,7 @@ static void proj_start(void)
     int s, any = 0;
     proj.want = proj.to = proj.er = -1;
     proj.seq = 0;
+    proj_file_drop();                            /* (a computer's write cut by the restart: given up) */
     for (s = 0; s < PROJ_N; s++)
         proj.of[s] = -1;
     for (s = 0; s < PROJ_SLOTS; s++) {
@@ -890,6 +892,7 @@ int app_file_delete(uint32_t i)
     return 0;
 }
 static int proj_file_slot(void) { return fw.on ? fw.slot : -1; }
+static void proj_file_drop(void) { fw.on = 0; }     /* (its slot free, not erased: erased before it is used) */
 
 /* a free slot back to erased, a sector a frame (the sliced erase: the sound goes on). Sector 0, its header, first */
 static void proj_erase_some(int s)
@@ -1031,7 +1034,17 @@ static int proj_step(void)
         if (s == PROJ_SLOTS) {                   /* none erased: one erased first (five frames) */
             for (s = 0; s < PROJ_SLOTS && !proj_free(s); s++)
                 ;
-            proj_erase_some(proj.er >= 0 ? proj.er : s);
+            if (s == PROJ_SLOTS) {               /* none free: a computer's write holds the spare. The panel wins:
+                                                  * the write is given up (its next frame is refused, and the
+                                                  * computer sends it again), and the slot is free next frame */
+                if (proj_file_slot() < 0) {
+                    h1_proj_done(1, proj.want, 0);
+                    proj.want = -1;
+                }
+                proj_file_drop();
+                return 0;
+            }
+            proj_erase_some(proj.er >= 0 && proj_free(proj.er) ? proj.er : s);
             return 1;
         }
         proj.doing = proj.want;

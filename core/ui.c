@@ -407,6 +407,8 @@ static int proj_work_changed(void) { return proj_changed || eng_loop_gen() != pr
 
 static void proj_key(int p, int save)
 {
+    if (!proj_known)
+        return;                                  /* (a port that keeps no projects: the keys do nothing) */
     if (eng_loop_taking()) {
         proj_toast("RECORDING", -1, 0);
         return;

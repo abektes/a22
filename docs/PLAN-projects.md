@@ -114,7 +114,11 @@ in only if the build after P3 leaves its 624 B above the spare.
   - **Host test:** `tests/projpanel.txt`. The simulator gained `expect toast` and `expect key_leds`. The reader's
     words are not checked: the host has no reader.
   - **Note for P5:** hold SAVE resets the algorithm's knobs at 0.9 s (`HOLD_RESET_ALGO`). The lights show at once,
-    but looking at them for longer than that resets the knobs. Check on the FM-1 whether that is a trap in practice.
+    but looking at them for longer than that resets the knobs. A save chord that takes longer than that to land
+    resets them first, then saves the reset knobs into the project. Check on the FM-1 whether that is a trap in
+    practice.
+  - A port that keeps no projects (it never calls `h1_proj_news`) gets nothing from the keys: no `SAVING P1` that
+    goes nowhere.
 - [x] **P4. Project files over USB** (`companion = true` in `app/fm1.toml`; `APP_FILES` in `app/app.h`).
   - `project1` to `project4`, kind project, room 20,480 bytes. A file is the project's record as its slot holds it
     (header page, state, loop), read in place.
@@ -124,6 +128,10 @@ in only if the build after P3 leaves its 624 B above the spare.
     size, and the body's CRC-32 matches the header's. The header then gets this project's number and the next
     sequence number, so a file saved as P1 can be put back as P3.
   - A put given up halfway leaves the project as it was and a free slot that is erased before it is used.
+  - **The panel wins:** a panel save that finds no free slot because a put holds it (four projects saved, a put in
+    flight or abandoned) gives the put up. The put's next frame is refused, and the companion forgets it, so the
+    computer sends it again from the start. A start drops a put cut by it. Found in review: before this, that save
+    erased the tape ring's first slot, a sector a frame.
   - **A delete** writes the record's magic to 0 in place (no erase), so it stays deleted after a restart.
   - **Busy** (`app_file_busy`) while the tape plays, a take goes in, or a project saves or loads. Reads go any time.
   - A project written from a computer shows `P2 FROM USB` and leaves the work that plays alone.

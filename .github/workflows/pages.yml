@@ -12,6 +12,7 @@ on:
       - dist/a22.rfm1
       - docs/img/a22/**
       - site/**
+      - base                                  # (the submodule moved: its companion page may have changed)
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -29,6 +30,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683   # v4.2.2
+        with:
+          submodules: recursive                # (fm1-base's companion page: base/web/companion, base/web/fm1ports.js)
+          persist-credentials: false
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d   # v6.0.0
       - name: Build the site
         run: python3 tools/build_site.py _site

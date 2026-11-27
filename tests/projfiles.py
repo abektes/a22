@@ -10,6 +10,8 @@ own client, as the companion page and the tool talk to an FM-1.
   cut short     a put given up halfway leaves P4 empty, and the next put of it goes in whole
   busy          a put while the tape plays is refused (exit code 5 for the tool), and goes in once it is stopped
   delete        P2 deleted: empty, the others kept (after a restart too: tests/projects.txt)
+  the panel wins  a panel save while a put holds the last free slot: the put is given up, the save goes in, the
+                tape's ring untouched; the put resumed is refused, and sent again from the start goes in
 
 Run by tests/run_tests.sh after ./build.sh --host: python3 tests/projfiles.py app/build/host/a22_host
 """
@@ -134,6 +136,24 @@ def main():
     expect("proj.1", 0)
     check([f["size"] for f in c.files()] == [len(p1), 0, len(p1), len(p1)], "P2 deleted, the rest kept")
     # (a restart after a delete: tests/projects.txt's "proj rm", the same hook; --serve has no reboot)
+
+    # a panel save while a computer's write holds the last free slot: the panel wins, the write is given up (sent
+    # again, it goes in), and nothing outside the projects' slots is touched (the tape's ring at 0xC8000)
+    panel_save(3)
+    check(all(f["size"] for f in c.files()), "four projects saved")
+    expect("data.0xC8000", 0x41)
+    c.write(0, p1, stop_after=1024)
+    panel_save(5)
+    expect("toast", "P3_SAVED")
+    expect("data.0xC8000", 0x41)
+    expect("proj_same", 3)
+    try:                                         # (the companion resumes where it was: A22 refuses the frame,
+        c.write(0, p1)                           #  and the companion then forgets that write)
+        check(False, "the given-up write, resumed, is refused")
+    except C.CompanionError:
+        check(True, "the given-up write, resumed, is refused")
+    c.write(0, p1)
+    check(c.read(0)[256:] == p1[256:], "and sent again from the start it goes in")
 
     link.close()
     print(f"projfiles: {fails} failed")
