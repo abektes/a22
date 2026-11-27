@@ -320,7 +320,7 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         if (st.riff[i] > 128) st.riff[i] = 0;
     if (st.chord[0] > CHORD_PADS) st.chord[0] = CHORD_OFF;
     if (st.chord[1] >= CHORD_NSHAPE) st.chord[1] = 0;
-    if (st.chord[2] > 3) st.chord[2] = 0;
+    if (st.chord[2] > VOICE_SMOOTH) st.chord[2] = 0;
     if (st.chord[3] > 100) st.chord[3] = 0;
     if (st.chord_n < 1 || st.chord_n > CHORD_MAX) st.chord_n = 1;
     st.chord_mem[0] = 0;

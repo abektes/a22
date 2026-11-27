@@ -116,6 +116,7 @@ enum { PUNCH_LPF = 5, PUNCH_HPF, PUNCH_CRUSH, PUNCH_GATE };   /* punches 1-4 are
 enum { CLICK_REC = 0, CLICK_ON, CLICK_OFF };
 enum { CHORD_OFF = 0, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE, CHORD_PADS };   /* (PADS: a chord a white key) */
 #define CHORD_MAX 6              /* notes a chord can have */
+#define VOICE_SMOOTH 4           /* VOICING: CLOSE, OPEN, DROP2, +BASS, SMOOTH */
 #define CHORD_NSCALE 6           /* SCALE's types: TRIAD, 7TH, SUS2, SUS4, ADD9, 6TH */
 #define CHORD_NSHAPE 8           /* SHAPE's: MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER, OCT */
 
@@ -394,6 +395,9 @@ extern const char *const CH_SET_NAMES[NCHSET];
 int ch_pad_pc(int set, int pad, int root);                           /* the root's pitch class, 0..11 */
 int ch_pad_notes(int set, int pad, int root, int octave, int nt[5]); /* root position from C3, ascending: the count */
 int ch_pad_numeral(int set, int pad, char out[9]);                   /* CH_NUM_*; out: "I".."VII" or "BORROWED" */
+int ch_centre(const int *nt, int n, int octave);       /* where a chord sits: its mean note in 16ths, the octave off */
+int ch_smooth(int *nt, int n, int last, int octave);   /* nt (root position, ascending) voiced nearest `last` (a
+                                                        * centre; < 0: as it is): returns the new centre */
 
 /* FX engine (fx.c) */
 extern const char *const FX_NAMES[NFX];

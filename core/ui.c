@@ -49,7 +49,7 @@ static const char *const O_CHMODE[]  = {"OFF", "MEMORY", "SCALE", "SHAPE", "PADS
 static const char *const O_CHSCALE[] = {"TRIAD", "7TH", "SUS2", "SUS4", "ADD9", "6TH"};
 static const char *const O_CHSHAPE[] = {"MAJ", "MIN", "SUS4", "7", "MIN7", "MAJ7", "POWER", "OCT"};
 static const char *const O_CHMEM[]   = {"MEM"};
-static const char *const O_VOICING[] = {"CLOSE", "OPEN", "DROP2", "+BASS"};
+static const char *const O_VOICING[] = {"CLOSE", "OPEN", "DROP2", "+BASS", "SMOOTH"};
 
 /* color per knob K1..K4 (and tracks T1..T4!) */
 static const int KCOL[4] = {GC_BLUE, GC_GREEN, GC_WHITE, GC_ORANGE};
@@ -193,7 +193,7 @@ const ParamDef *page_param(int pg, int i)
             else if (mode == CHORD_SHAPE) { dyn_p.max = CHORD_NSHAPE - 1; dyn_p.opts = O_CHSHAPE; }
             else { dyn_p.max = 0; dyn_p.opts = O_CHMEM; }
         }
-        else if (i == 2) { dyn_p.kind = PK_ENUM; dyn_p.max = 3; dyn_p.opts = O_VOICING; }
+        else if (i == 2) { dyn_p.kind = PK_ENUM; dyn_p.max = VOICE_SMOOTH; dyn_p.opts = O_VOICING; }
         else { dyn_p.kind = PK_PCT; dyn_p.max = 100; }
         return &dyn_p;
     }

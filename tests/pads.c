@@ -6,7 +6,8 @@
  *               whatever changes while a key is held; MIDI in, SAVE, FX, MONO and drums
  *   latch       HOLD latches pads; HUSH and a state load leave nothing sounding
  *   sequencers  the tape, STEP and RIFF take a pad's notes
- *   saved       MODE PADS and the set in the saved state, nonsense clamped */
+ *   smooth      SMOOTH voicing: each chord close to the last, and OCT still moves it
+ *   saved       MODE PADS, the set and SMOOTH in the saved state, nonsense clamped */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -243,6 +244,21 @@ static void sequencers(void)
     CHECK(st.riff_len == 3, "RIFF takes the notes one by one, as with chord memory");
 }
 
+static void smooth(void)
+{
+    static const int C[3] = {48, 52, 55}, F[3] = {48, 53, 57}, AM[3] = {48, 52, 57}, UP[3] = {60, 64, 67};
+    int nt[3] = {53, 57, 60}, first[3] = {48, 52, 55};
+    ch_smooth(nt, 3, ch_centre(first, 3, 0), 0);
+    CHECK(nt[0] == 48 && nt[1] == 53 && nt[2] == 57, "F after C: second inversion, an octave down");
+    fresh(); pads_on(0); st.chord[2] = VOICE_SMOOTH;
+    key(0, 60); CHECK(only(C, 3), "the first chord is in root position");
+    clear(); key(6, 60); CHECK(only(F, 3), "F stays close to C");
+    clear(); key(4, 60); CHECK(only(AM, 3), "A minor stays close to F");
+    fresh(); pads_on(0); st.chord[2] = VOICE_SMOOTH;
+    key(0, 60); tap(H1_BTN_OCTUP); clear(); key(0, 60);
+    CHECK(only(UP, 3), "OCT + still moves it up");
+}
+
 static void saved(void)
 {
     static uint8_t buf[sizeof(H1State)];
@@ -252,6 +268,10 @@ static void saved(void)
     fresh(); CHECK(h1_state_load(buf, size) == 0 && st.chord[0] == CHORD_PADS && st.rsv[1] == 10, "mode and set kept");
     buf[offsetof(H1State, chord)] = 200; buf[offsetof(H1State, rsv) + 1] = 200;
     CHECK(h1_state_load(buf, size) == 0 && st.chord[0] == CHORD_OFF && st.rsv[1] == 0, "nonsense clamped");
+    buf[offsetof(H1State, chord) + 2] = VOICE_SMOOTH;
+    CHECK(h1_state_load(buf, size) == 0 && st.chord[2] == VOICE_SMOOTH, "SMOOTH is kept");
+    buf[offsetof(H1State, chord) + 2] = 200;
+    CHECK(h1_state_load(buf, size) == 0 && st.chord[2] == 0, "a voicing past SMOOTH is CLOSE");
 }
 
 int main(void)
@@ -260,6 +280,7 @@ int main(void)
     play();
     latch();
     sequencers();
+    smooth();
     saved();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;

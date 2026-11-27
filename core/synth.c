@@ -1829,6 +1829,7 @@ typedef struct ChSlot {
 } ChSlot;
 static ChSlot chs[CH_SLOTS];
 static uint8_t ch_cnt[128];
+static int ch_ctr = -1;                          /* the last chord's centre (ch_centre), SMOOTH's aim; -1 none */
 
 static int ch_scale_up(int root, int steps)                  /* the note `steps` scale notes above root */
 {
@@ -1853,8 +1854,10 @@ static int chord_voice(int *nt, int n, int bass, uint8_t *out)
     if (st.chord[2] == 1 && n >= 3) nt[1] += 12;             /* OPEN */
     else if (st.chord[2] == 2 && n >= 3) nt[n - 2] -= 12;    /* DROP2 */
     else if (st.chord[2] == 3 && n < CHORD_MAX) nt[n++] = bass;        /* +BASS */
+    else if (st.chord[2] == VOICE_SMOOTH) (void)ch_smooth(nt, n, ch_ctr, st.octave);
     for (i = 1; i < n; i++)
         for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+    ch_ctr = ch_centre(nt, n, st.octave);
     for (i = 0; i < n; i++)                                  /* on the keyboard, each once */
         if (nt[i] >= 0 && nt[i] <= 127 && (m == 0 || out[m - 1] != nt[i]))
             out[m++] = (uint8_t)nt[i];
@@ -1991,6 +1994,7 @@ static void chord_clear(void)                                /* (the voices are 
     int i;
     for (i = 0; i < CH_SLOTS; i++) chs[i].used = 0;
     for (i = 0; i < 128; i++) ch_cnt[i] = 0;
+    ch_ctr = -1;
 }
 
 static uint8_t latched_pads;                     /* HOLD's pads: bit p, pad p */

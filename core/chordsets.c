@@ -1,5 +1,5 @@
-/* The chord pads' types and sets, and what is worked out from them: a pad's notes and its numeral. No engine state:
- * a pure module. The sets are A22's own, three a mood. */
+/* The chord pads' types and sets, and what is worked out from them: a pad's notes, its numeral, and SMOOTH's
+ * voicing. No engine state: a pure module. The sets are A22's own, three a mood. */
 #include "internal.h"
 
 /* the order is the sets' (a pad names its type by number) */
@@ -87,4 +87,37 @@ int ch_pad_numeral(int set, int pad, char out[9])
         out[i] = src[i];
     out[i] = 0;
     return kind;
+}
+
+int ch_centre(const int *nt, int n, int octave)
+{
+    int i, sum = 0;
+    for (i = 0; i < n; i++) sum += nt[i];
+    return n > 0 ? sum * 16 / n - 192 * octave : -1;
+}
+
+/* SMOOTH: of the chord's inversions, where it is and an octave down, the first whose centre is nearest the last
+ * chord's. That keeps it within an octave of root position, so a long run of chords never drifts away; the centres
+ * leave the octave out, so OCT still moves the next chord. */
+int ch_smooth(int *nt, int n, int last, int octave)
+{
+    int c[CHORD_MAX], i, j, k, shift, best = -1, best_k = 0, best_shift = 0;
+    if (n > CHORD_MAX) n = CHORD_MAX;
+    if (last < 0 || n < 1) return ch_centre(nt, n, octave);
+    for (shift = 0; shift >= -12; shift -= 12)
+        for (k = 0; k < n; k++) {                            /* (inversion k: the lowest k an octave up) */
+            int d;
+            for (i = 0; i < n; i++) c[i] = nt[i] + shift + (i < k ? 12 : 0);
+            d = ch_centre(c, n, octave) - last;
+            if (d < 0) d = -d;
+            if (best < 0 || d < best) {
+                best = d;
+                best_k = k;
+                best_shift = shift;
+            }
+        }
+    for (i = 0; i < n; i++) nt[i] += best_shift + (i < best_k ? 12 : 0);
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+    return ch_centre(nt, n, octave);
 }
