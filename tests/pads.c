@@ -1,7 +1,12 @@
 /* Chord pads: eight chords under eight keys, from 24 sets. Run by tests/run_tests.sh: the core alone, its panel
  * worked as a hand would, what is played counted on MIDI out and in the voices.
  *
- *   sets        every pad of every set in all twelve roots: in range, ascending, named, numbered */
+ *   sets        every pad of every set in all twelve roots: in range, ascending, named, numbered
+ *   play        MODE PADS: the eight white keys from the lowest F play the set's chords; every note-off matches,
+ *               whatever changes while a key is held; MIDI in, SAVE, FX, MONO and drums
+ *   latch       HOLD latches pads; HUSH and a state load leave nothing sounding
+ *   sequencers  the tape, STEP and RIFF take a pad's notes
+ *   saved       MODE PADS and the set in the saved state, nonsense clamped */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -121,9 +126,141 @@ static void sets(void)
     CHECK(ch_pad_notes(-1, 8, 0, 0, nt) == 3 && nt[0] == 48, "out of range: set 0, pad 0");
 }
 
+static void pads_on(int set) { chord(CHORD_PADS, 0, 0, 0); st.rsv[1] = (uint8_t)set; }
+static int matched(void)
+{
+    int n;
+    for (n = 0; n < 128; n++) if (on_n[n] != off_n[n]) return 0;
+    return gated() == 0;
+}
+static void down(int k) { h1_key(k, 1); go(60); }
+static void up(int k)   { h1_key(k, 0); go(200); }
+
+static void play(void)
+{
+    static const int C[3] = {48, 52, 55}, D[3] = {50, 54, 57}, ONE[1] = {54}, MID[1] = {48};
+    int i;
+    fresh(); pads_on(0);
+    down(0); CHECK(only(C, 3) && gated() == 3, "pad 1 of POP 1 is C major");
+    up(0);   CHECK(offs_are(C, 3) && gated() == 0, "and ends");
+    fresh(); pads_on(0); key(1, 60);
+    CHECK(only(ONE, 1) && matched(), "a key beside the pads is one note");
+    fresh(); pads_on(0); st.keys[0] = 2; key(0, 60);
+    CHECK(only(D, 3), "ROOT moves the pads");
+    fresh(); pads_on(0); st.keys[1] = 2; st.keys[0] = 0; key(6, 60);
+    CHECK(on_n[53] == 1 && on_n[57] == 1 && on_n[60] == 1, "pads are never snapped to the scale");
+
+    fresh(); pads_on(0); down(0);                 /* everything changes while it is held */
+    st.rsv[1] = 9; st.keys[0] = 5; tap(H1_BTN_OCTUP); chord(CHORD_OFF, 0, 0, 0);
+    up(0); CHECK(offs_are(C, 3) && matched(), "the release ends what the press started");
+
+    fresh(); pads_on(0); down(6); down(11); up(6);        /* two pads on F: F MAJ and F ADD9 */
+    CHECK(gated() == 4 && on_n[53] == 1, "shared notes sound once");
+    up(11); CHECK(matched(), "and end with the last");
+    fresh(); pads_on(0); down(11); down(14); up(11);      /* a played G4, which F ADD9 also holds */
+    CHECK(gated() == 1 && off_n[67] == 0, "the played key keeps its note");
+    up(14); CHECK(matched() && on_n[67] == 1, "one on, one off");
+    fresh(); pads_on(0); down(14); down(11); up(14);
+    CHECK(gated() == 4 && off_n[67] == 0, "either order");
+    up(11); CHECK(matched(), "all ended");
+
+    fresh(); pads_on(0); down(0);                 /* the track changes under a held pad */
+    h1_button(H1_BTN_EDIT, 1); go(30); h1_encoder(H1_ENC_PRESET, 1); go(60); h1_button(H1_BTN_EDIT, 0); go(60);
+    up(0); CHECK(st.track == 1 && matched(), "held pad, new track: ends");
+
+    fresh(); pads_on(0); h1_key(0, 1); h1_key(2, 1); go(60);      /* EDIT + GLO with two pads held */
+    h1_button(H1_BTN_EDIT, 1); go(30); tap(H1_BTN_GLO); h1_button(H1_BTN_EDIT, 0); go(60);
+    h1_key(0, 0); h1_key(2, 0); go(200);
+    CHECK(st.chord[0] == CHORD_OFF && st.chord_n == 3 && st.chord_mem[1] == 4 && matched(),
+          "pad keys are no notes held: nothing captured, chords off");
+
+    fresh(); pads_on(0); h1_midi(0x90, 48, 100); go(100);
+    CHECK(gated() == 1, "MIDI in is one note");
+    h1_midi(0x80, 48, 0); go(200); CHECK(matched(), "and ends");
+
+    fresh(); pads_on(0); h1_button(H1_BTN_SAVE, 1); go(40); key(0, 60); h1_button(H1_BTN_SAVE, 0); go(60);
+    CHECK(st.snap[0].used && ons == 0, "SAVE + key wins");
+    fresh(); pads_on(0); h1_button(H1_BTN_FX, 1); go(40); key(0, 60); h1_button(H1_BTN_FX, 0); go(60);
+    CHECK(ons == 0, "FX + key wins");
+    fresh(); pads_on(0); down(0); h1_button(H1_BTN_SAVE, 1); go(40); up(0); h1_button(H1_BTN_SAVE, 0); go(60);
+    CHECK(matched() && !st.snap[0].used, "SAVE down after the press: the release is still the pad's");
+    fresh(); pads_on(0); down(0); h1_button(H1_BTN_FX, 1); go(40); up(0); h1_button(H1_BTN_FX, 0); go(60);
+    CHECK(matched(), "FX too");
+
+    fresh(); pads_on(0); h1_control_set(H1_ENC_PRESET, 7); go(60); clear(); key(0, 60);
+    CHECK(only(MID, 1) && matched(), "MONO plays the pad's root");
+    fresh(); pads_on(0); h1_control_set(H1_ENC_PRESET, INST_KIT); go(60); clear();
+    down(0);
+    CHECK(ons == 1 && on_n[53] == 1 && !strcmp(h1_toast_now(), "NOT ON DRUMS"), "KIT: the key plays a drum");
+    up(0); go(2000); down(0);
+    CHECK(!h1_toast_now()[0], "said once, not on every hit");
+    up(0); h1_control_set(H1_ENC_PRESET, 0); go(60); h1_control_set(H1_ENC_PRESET, INST_KIT); go(2000); down(0);
+    CHECK(!strcmp(h1_toast_now(), "NOT ON DRUMS"), "and again after arriving on drums");
+    up(0);
+    for (i = 0; i < 2; i++) {                    /* the engine changes under a held pad */
+        fresh(); pads_on(0); down(0); h1_control_set(H1_ENC_PRESET, i ? 7 : INST_KIT); go(60); up(0);
+        CHECK(off_n[48] == 1 && off_n[52] == 1 && off_n[55] == 1 && gated() == 0, "held pad, new engine: ends");
+    }
+
+    fresh(); pads_on(0); down(0);
+    for (i = 0; i < 80; i++) eng_post(EV_PUNCH, 0);      /* the queue full, nothing rendered */
+    up(0); CHECK(matched(), "a pad's off gets through a full queue");
+}
+
+static void latch(void)
+{
+    static uint8_t buf[sizeof(H1State)];
+    uint32_t size;
+    fresh(); pads_on(0); st.keys[3] = 1;
+    key(0, 60); CHECK(gated() == 3, "HOLD latches a pad");
+    clear(); key(6, 60); CHECK(off_n[48] == 1 && off_n[55] == 1 && on_n[53] == 1, "the next pad replaces it");
+    st.keys[3] = 0; eng_post(EV_UNLATCH, 0); go(300); CHECK(gated() == 0, "unlatched");
+    fresh(); pads_on(0); st.keys[3] = 1; down(11); down(14); up(11); up(14);
+    st.keys[3] = 0; eng_post(EV_UNLATCH, 0); go(300); CHECK(matched(), "a latched pad and key on one pitch");
+    fresh(); pads_on(0); st.keys[3] = 1; key(0, 60); down(6);
+    h1_button(H1_BTN_HOME, 1); go(1000); h1_button(H1_BTN_HOME, 0); go(200); clear(); up(6);
+    CHECK(gated() == 0 && ons == 0, "HUSH with pads held and latched");
+    fresh(); pads_on(0); { const void *s = h1_state(&size); memcpy(buf, s, size); }
+    down(0); CHECK(h1_state_load(buf, size) == 0, "a load under a held pad"); go(100); up(0);
+    CHECK(gated() == 0, "nothing left sounding");
+}
+
+static void sequencers(void)
+{
+    SeqInfo si;
+    fresh(); pads_on(0); st.seq[1] = 0;
+    tap(H1_BTN_REC); key(0, 150); tap(H1_BTN_REC); chord(CHORD_OFF, 0, 0, 0); clear();
+    go(4 * 60000 / st.glo[0] + 100);
+    CHECK(ons == 3 && on_n[48] == 1 && on_n[52] == 1 && on_n[55] == 1, "the tape plays the pad's chord");
+    tap(H1_BTN_PLAY); go(300);
+    fresh(); pads_on(0);
+    h1_button(H1_BTN_SEQ, 1); go(700); h1_button(H1_BTN_SEQ, 0); go(60); tap(H1_BTN_REC);
+    eng_seq_info(&si); CHECK(si.mode == SEQ_STEP && si.write, "writing steps");
+    key(0, 60);
+    CHECK(st.steps[0][0] == 49 && st.steps[0][1] == 53 && st.steps[0][2] == 56, "the step holds the chord");
+    fresh(); pads_on(0); st.ip[st.inst].arp[0] = ARP_RIFF;
+    tap(H1_BTN_ARP); tap(H1_BTN_REC); key(0, 80); tap(H1_BTN_REC);
+    CHECK(st.riff_len == 3, "RIFF takes the notes one by one, as with chord memory");
+}
+
+static void saved(void)
+{
+    static uint8_t buf[sizeof(H1State)];
+    uint32_t size;
+    fresh(); pads_on(10);
+    { const void *s = h1_state(&size); memcpy(buf, s, size); }
+    fresh(); CHECK(h1_state_load(buf, size) == 0 && st.chord[0] == CHORD_PADS && st.rsv[1] == 10, "mode and set kept");
+    buf[offsetof(H1State, chord)] = 200; buf[offsetof(H1State, rsv) + 1] = 200;
+    CHECK(h1_state_load(buf, size) == 0 && st.chord[0] == CHORD_OFF && st.rsv[1] == 0, "nonsense clamped");
+}
+
 int main(void)
 {
     sets();
+    play();
+    latch();
+    sequencers();
+    saved();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

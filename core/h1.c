@@ -318,7 +318,7 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
     if (st.riff_root > 127) st.riff_root = 60;
     for (i = 0; i < NRIFF; i++)
         if (st.riff[i] > 128) st.riff[i] = 0;
-    if (st.chord[0] > CHORD_SHAPE) st.chord[0] = CHORD_OFF;
+    if (st.chord[0] > CHORD_PADS) st.chord[0] = CHORD_OFF;
     if (st.chord[1] >= CHORD_NSHAPE) st.chord[1] = 0;
     if (st.chord[2] > 3) st.chord[2] = 0;
     if (st.chord[3] > 100) st.chord[3] = 0;
@@ -394,7 +394,7 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
     st.nfx = NFX;
     /* rsv[0] is the step pattern's key: a valid key (the valid bit, a root of 0..11) or none */
     if (!(st.rsv[0] & 0x80u) || (st.rsv[0] & 15u) > 11u) st.rsv[0] = 0;
-    st.rsv[1] = 0;
+    if (st.rsv[1] >= NCHSET) st.rsv[1] = 0;      /* rsv[1] is the chord pads' set */
     eng_init(0);
     ui_init();
     return 0;

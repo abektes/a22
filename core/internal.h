@@ -114,7 +114,7 @@ enum { TRICK_OFF = 0, TRICK_BRAKE, TRICK_STUT8, TRICK_STUT16, TRICK_STUT32 };
 #define TRICK_SMOOTH 16          /* with fx_master_block's trick: a punch's change, faded over 10 ms */
 enum { PUNCH_LPF = 5, PUNCH_HPF, PUNCH_CRUSH, PUNCH_GATE };   /* punches 1-4 are TRICK's own */
 enum { CLICK_REC = 0, CLICK_ON, CLICK_OFF };
-enum { CHORD_OFF = 0, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE };
+enum { CHORD_OFF = 0, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE, CHORD_PADS };   /* (PADS: a chord a white key) */
 #define CHORD_MAX 6              /* notes a chord can have */
 #define CHORD_NSCALE 6           /* SCALE's types: TRIAD, 7TH, SUS2, SUS4, ADD9, 6TH */
 #define CHORD_NSHAPE 8           /* SHAPE's: MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER, OCT */
@@ -298,8 +298,9 @@ enum {
     EV_SNAP_LOAD,                /* load patch from snapshot 0..7 */
     EV_MIDI_OFF,                 /* MIDI's all notes off (CC 123): the notes MIDI plays end, the tape plays on */
     EV_PUNCH,                    /* a punch 1-8 starts, 0 ends it; bit 23: the tape's (the hand's wins) */
-    EV_LANE                      /* the key lane: a = the bar 0-31, bits 16-17 the field (0 ROOT, 1 SCALE, 2 DEG),
+    EV_LANE,                     /* the key lane: a = the bar 0-31, bits 16-17 the field (0 ROOT, 1 SCALE, 2 DEG),
                                   * bits 18-22 its value (ROOT 0-11, SCALE 0-7, DEG 0-6; 31: none) (eng_post_lane) */
+    EV_PAD_ON, EV_PAD_OFF        /* a chord pad down or up: a = the pad 0-7 */
 };
 enum { LOOP_EMPTY, LOOP_IDLE, LOOP_ARMED, LOOP_REC, LOOP_PLAY, LOOP_DUB };
 

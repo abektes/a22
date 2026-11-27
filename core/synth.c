@@ -96,7 +96,7 @@ uint32_t eng_events_dropped(void) { return ev_dropped; }
 static void post(uint32_t e)
 {
     uint32_t w = ev_w, nx = (w + 1u) & 63u, used = (w - ev_r) & 63u;
-    if (nx == ev_r || (used >= 63u - 8u && ((e >> 8) & 255u) != EV_NOTE_OFF)) {
+    if (nx == ev_r || (used >= 63u - 8u && ((e >> 8) & 255u) != EV_NOTE_OFF && ((e >> 8) & 255u) != EV_PAD_OFF)) {
         ev_dropped++;
         return;
     }
@@ -1809,7 +1809,9 @@ static void eff_note(int note, int on, int vel, int from_midi)
  * the arpeggiator and MIDI out all see the chord's notes. Each key keeps the notes it started in a slot, so
  * letting it go ends exactly those, whatever the settings are by then. A note two held chords share sounds
  * once and ends with the last of them (ch_cnt). STRUM sends the notes upward a gap apart, counted in blocks
- * (blkno), and a key let go mid-strum drops what had not sounded yet. */
+ * (blkno), and a key let go mid-strum drops what had not sounded yet. A pad (MODE PADS) keeps its chord in a slot
+ * of its own, found by its number; the keys beside the pads each play their note through a slot too, so a note a
+ * pad and a key share is counted. */
 static const int8_t CH_SHAPE[CHORD_NSHAPE][4] = {          /* semitones; -1 none */
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 5, 7, -1}, {0, 4, 7, 10},   /* MAJ MIN SUS4 7 */
     {0, 3, 7, 10}, {0, 4, 7, 11}, {0, 7, 12, -1}, {0, 12, -1, -1}, /* MIN7 MAJ7 POWER OCT */
@@ -1821,6 +1823,7 @@ static const int8_t CH_DEGREE[CHORD_NSCALE][4] = {         /* steps of the scale
 #define CH_SLOTS 24
 typedef struct ChSlot {
     uint8_t used, root, midi, vel, n, sent;                    /* sent: bit i, note i has gone on */
+    uint8_t pad;                                               /* 0: a key's slot, 1..8: that pad's */
     uint8_t note[CHORD_MAX];
     uint32_t due[CHORD_MAX];                                   /* blkno at which note i goes on */
 } ChSlot;
@@ -1840,10 +1843,29 @@ static int ch_scale_up(int root, int steps)                  /* the note `steps`
     return n;
 }
 
+/* A chord's n notes (nt, in any order; room for one more) in the VOICING set, low to high and each once, into out.
+ * bass: the note +BASS adds. */
+static int chord_voice(int *nt, int n, int bass, uint8_t *out)
+{
+    int i, j, m = 0;
+    for (i = 1; i < n; i++)                                  /* low to high */
+        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+    if (st.chord[2] == 1 && n >= 3) nt[1] += 12;             /* OPEN */
+    else if (st.chord[2] == 2 && n >= 3) nt[n - 2] -= 12;    /* DROP2 */
+    else if (st.chord[2] == 3 && n < CHORD_MAX) nt[n++] = bass;        /* +BASS */
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+    for (i = 0; i < n; i++)                                  /* on the keyboard, each once */
+        if (nt[i] >= 0 && nt[i] <= 127 && (m == 0 || out[m - 1] != nt[i]))
+            out[m++] = (uint8_t)nt[i];
+    if (!m) out[m++] = (uint8_t)iclamp(bass + 12, 0, 127);
+    return m;
+}
+
 static int chord_build(int root, uint8_t *out)
 {
-    int nt[CHORD_MAX + 1], n = 0, i, j, mode = st.chord[0], m = 0;
-    if (mode == CHORD_OFF || insts[cur_i]->mono) {
+    int nt[CHORD_MAX + 1], n = 0, i, mode = st.chord[0];
+    if (mode == CHORD_OFF || mode == CHORD_PADS || insts[cur_i]->mono) {  /* (PADS: a played key is its note) */
         out[0] = (uint8_t)root;
         return 1;
     }
@@ -1856,18 +1878,19 @@ static int chord_build(int root, uint8_t *out)
         const int8_t *d = CH_SHAPE[st.chord[1] % CHORD_NSHAPE];
         for (i = 0; i < 4 && d[i] >= 0; i++) nt[n++] = root + d[i];
     }
-    for (i = 1; i < n; i++)                                  /* low to high */
-        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
-    if (st.chord[2] == 1 && n >= 3) nt[1] += 12;             /* OPEN */
-    else if (st.chord[2] == 2 && n >= 3) nt[n - 2] -= 12;    /* DROP2 */
-    else if (st.chord[2] == 3 && n < CHORD_MAX) nt[n++] = root - 12;   /* +BASS */
-    for (i = 1; i < n; i++)
-        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
-    for (i = 0; i < n; i++)                                  /* on the keyboard, each once */
-        if (nt[i] >= 0 && nt[i] <= 127 && (m == 0 || out[m - 1] != nt[i]))
-            out[m++] = (uint8_t)nt[i];
-    if (!m) out[m++] = (uint8_t)iclamp(root, 0, 127);
-    return m;
+    return chord_voice(nt, n, root - 12, out);
+}
+
+static int pad_build(int pad, uint8_t *out)                  /* a pad's chord, from the set, in the key in force */
+{
+    int nt[CHORD_MAX + 1], p[5], i;
+    int n = ch_pad_notes(st.rsv[1], pad, key_root(eng_key_live()), st.octave, p);
+    if (insts[cur_i]->mono) {
+        out[0] = (uint8_t)iclamp(p[0], 0, 127);
+        return 1;
+    }
+    for (i = 0; i < n; i++) nt[i] = p[i];
+    return chord_voice(nt, n, p[0] - 12, out);
 }
 
 static void ch_on(const ChSlot *c, int i)
@@ -1888,28 +1911,19 @@ static void ch_release(ChSlot *c)
     c->used = 0;
 }
 
-static void chord_key(int note, int on, int vel, int from_midi)
+static ChSlot *ch_free(void)
 {
-    ChSlot *c = 0;
-    uint32_t gap;
     int i;
-    for (i = 0; i < CH_SLOTS; i++)                           /* a key already holding a chord lets it go */
-        if (chs[i].used && chs[i].root == note && chs[i].midi == (uint8_t)from_midi) {
-            ch_release(&chs[i]);
-            if (!on) return;
-        }
-    if (!on) { eff_note(note, 0, 0, from_midi); return; }
-    if (from_midi || st.chord[0] == CHORD_OFF) { eff_note(note, 1, vel, from_midi); return; }
-    for (i = 0; i < CH_SLOTS && !c; i++)
-        if (!chs[i].used) c = &chs[i];
-    if (!c) { eff_note(note, 1, vel, from_midi); return; }  /* (24 chords held: the key plays alone) */
-    c->used = 1;
-    c->root = (uint8_t)note;
-    c->midi = (uint8_t)from_midi;
-    c->vel = (uint8_t)vel;
-    c->n = (uint8_t)chord_build(note, c->note);
+    for (i = 0; i < CH_SLOTS; i++)
+        if (!chs[i].used) return &chs[i];
+    return 0;
+}
+
+static void ch_start(ChSlot *c)                              /* its notes: the lowest now, the rest as STRUM says */
+{
+    uint32_t gap = (uint32_t)((f32)st.chord[3] * 0.0006f / ((f32)CTRL * ISR) + 0.5f);   /* 0..60 ms, in blocks */
+    int i;
     c->sent = 0;
-    gap = (uint32_t)((f32)st.chord[3] * 0.0006f / ((f32)CTRL * ISR) + 0.5f);   /* 0..60 ms, in blocks */
     for (i = 0; i < c->n; i++) {
         c->due[i] = blkno + gap * (uint32_t)i;
         if (i == 0 || !gap) {
@@ -1917,6 +1931,45 @@ static void chord_key(int note, int on, int vel, int from_midi)
             ch_on(c, i);
         }
     }
+}
+
+static void chord_key(int note, int on, int vel, int from_midi)
+{
+    ChSlot *c;
+    int i;
+    for (i = 0; i < CH_SLOTS; i++)                           /* a key already holding a chord lets it go */
+        if (chs[i].used && !chs[i].pad && chs[i].root == note && chs[i].midi == (uint8_t)from_midi) {
+            ch_release(&chs[i]);
+            if (!on) return;
+        }
+    if (!on) { eff_note(note, 0, 0, from_midi); return; }
+    if (from_midi || st.chord[0] == CHORD_OFF) { eff_note(note, 1, vel, from_midi); return; }
+    c = ch_free();
+    if (!c) { eff_note(note, 1, vel, from_midi); return; }   /* (24 chords held: the key plays alone) */
+    c->used = 1;
+    c->pad = 0;
+    c->root = (uint8_t)note;
+    c->midi = (uint8_t)from_midi;
+    c->vel = (uint8_t)vel;
+    c->n = (uint8_t)chord_build(note, c->note);
+    ch_start(c);
+}
+
+static void pad_key(int pad, int on, int vel)                /* a chord pad 0..7 down or up */
+{
+    ChSlot *c;
+    int i;
+    for (i = 0; i < CH_SLOTS; i++)
+        if (chs[i].used && chs[i].pad == pad + 1)
+            ch_release(&chs[i]);
+    if (!on || !(c = ch_free())) return;
+    c->used = 1;
+    c->pad = (uint8_t)(pad + 1);
+    c->root = 0;
+    c->midi = 0;
+    c->vel = (uint8_t)vel;
+    c->n = (uint8_t)pad_build(pad, c->note);
+    ch_start(c);
 }
 
 static void chord_tick(void)                                 /* the strum's notes as they come due */
@@ -1940,6 +1993,7 @@ static void chord_clear(void)                                /* (the voices are 
     for (i = 0; i < 128; i++) ch_cnt[i] = 0;
 }
 
+static uint8_t latched_pads;                     /* HOLD's pads: bit p, pad p */
 static void unlatch(void)
 {
     int n;
@@ -1947,6 +2001,10 @@ static void unlatch(void)
         if (latched[n >> 5] & (1u << (n & 31)))
             chord_key(n, 0, 0, (int)(latched_midi[n >> 5] >> (n & 31) & 1u));
     for (n = 0; n < 4; n++) latched[n] = latched_midi[n] = 0;
+    for (n = 0; n < 8; n++)
+        if (latched_pads & (1u << n))
+            pad_key(n, 0, 0);
+    latched_pads = 0;
 }
 
 static void snap_save(int idx)
@@ -2008,6 +2066,19 @@ static void handle(uint32_t e)
         if (from_midi) midi_down[a >> 5] &= ~(1u << (a & 31));
         if (phys_down > 0) phys_down--;
         if (!st.keys[3]) chord_key(a, 0, 0, from_midi);
+        break;
+    case EV_PAD_ON:                              /* (HOLD and the keys held count pads as notes) */
+        a &= 7;
+        if (st.keys[3]) {
+            if (phys_down == 0) unlatch();
+            latched_pads |= (uint8_t)(1u << a);
+        }
+        phys_down++;
+        pad_key(a, 1, vel);
+        break;
+    case EV_PAD_OFF:
+        if (phys_down > 0) phys_down--;
+        if (!st.keys[3]) pad_key(a & 7, 0, 0);
         break;
     case EV_PUNCH:                               /* (bit 23: the tape's) */
         if (a > 8) a = 0;
@@ -2871,6 +2942,7 @@ SMALL void eng_init(uint32_t sample_rate)
     loop_pos = 0.0f;
     loop_len = (f32)(tape_bars() * seq_bar_ticks());
     for (i = 0; i < 4; i++) latched[i] = latched_midi[i] = midi_down[i] = 0;
+    latched_pads = 0;
     chord_clear();
     phys_down = nheld = arp_ncur = 0;
     arp_acc = 1e9f;

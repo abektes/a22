@@ -45,7 +45,7 @@ static const char *const O_TRK[]     = {"T1", "T2", "T3", "T4"};
 static const char *const O_SPEED[]   = {"0.5X", "1.0X", "2.0X", "REV"};
 static const char *const O_TRICK[]   = {"OFF", "BRAKE", "ST 1/8", "ST 1/16", "ST 1/32"};
 static const char *const O_PLINK[]   = {"FREE", "TAPE"};
-static const char *const O_CHMODE[]  = {"OFF", "MEMORY", "SCALE", "SHAPE"};
+static const char *const O_CHMODE[]  = {"OFF", "MEMORY", "SCALE", "SHAPE", "PADS"};   /* (by the stored value) */
 static const char *const O_CHSCALE[] = {"TRIAD", "7TH", "SUS2", "SUS4", "ADD9", "6TH"};
 static const char *const O_CHSHAPE[] = {"MAJ", "MIN", "SUS4", "7", "MIN7", "MAJ7", "POWER", "OCT"};
 static const char *const O_CHMEM[]   = {"MEM"};
@@ -313,7 +313,10 @@ static f32 ring_t = 9.0f, ring_x, ring_v, ring_up = 9.0f;
 static SeqInfo seq;
 static int seq_write_was, riff_rec_was;
 static uint32_t enc_ms[H1_NENC];
+enum { KD_NOTE = 1, KD_PAD };                    /* how a key went down: key_note is its note, or its pad */
 static uint8_t key_note[H1_NKEYS], key_down[H1_NKEYS];
+static int pad_hand;                             /* the chord pad last pressed, 0..7 */
+static uint8_t drum_said;                        /* NOT ON DRUMS said since the engine, track or MODE last changed */
 static uint8_t chord_last = CHORD_MEMORY;     /* the mode EDIT + GLO turns chords back on to */
 static uint32_t btn_held, btn_ms[H1_NBTN];
 static uint8_t btn_fired[H1_NBTN];
@@ -563,6 +566,7 @@ static APART void sync_cols(int pg)
 static APART void set_instrument(int i)
 {
     i = (i % NINST + NINST) % NINST;
+    drum_said = 0;
     st.inst = (uint8_t)i;
     st.trk[st.track].inst = (uint8_t)i;
     st.trk[st.track].algo = st.ip[i].algo & 7;
@@ -580,6 +584,7 @@ static APART void set_instrument(int i)
 static void set_track(int t)
 {
     t = (t % NTRACK + NTRACK) % NTRACK;
+    drum_said = 0;
     st.track = (uint8_t)t;
     /* (the engine keeps the outgoing track's engine and algorithm, and brings the new one's, in that order:
      * changing st.inst here first had the outgoing track keep the incoming one's) */
@@ -628,6 +633,18 @@ static void set_seq_mode(int m)
     if (page == PG_SEQ) sync_cols(PG_SEQ);
     mark_dirty();
 }
+
+/* MODE PADS: the eight white keys from the lowest F (SAVE's and FX's) are chord pads, but on a drum engine, whose
+ * keys are drums. pad_key_of: the pad a key is by its place alone, or -1. */
+static int pad_key_of(int key)
+{
+    int i;
+    for (i = 0; i < 8; i++)
+        if (key == SNAP_KEYS[i]) return i;
+    return -1;
+}
+static int pads_drum(void) { return st.inst == INST_KIT || st.inst == INST_SKINS; }
+static int pad_of(int key) { return st.chord[0] == CHORD_PADS && !pads_drum() ? pad_key_of(key) : -1; }
 
 void h1_key(int key, int down)
 {
@@ -685,15 +702,27 @@ void h1_key(int key, int down)
         return;
     }
     if (down) {
-        int note = scale_snap(53 + key + 12 * st.octave);
+        int note, pad;
         if (key_down[key]) return;
-        note = iclamp(note, 0, 127);
-        key_down[key] = 1;
+        pad = pad_of(key);
+        if (pad >= 0) {                          /* (picked by the key: never snapped, the octave the chord's) */
+            key_down[key] = KD_PAD;
+            key_note[key] = (uint8_t)pad;
+            pad_hand = pad;
+            eng_post(EV_PAD_ON, pad);
+            return;
+        }
+        if (st.chord[0] == CHORD_PADS && pads_drum() && pad_key_of(key) >= 0 && !drum_said) {
+            drum_said = 1;                       /* (once: the kick and snare sit on pad keys) */
+            toast("NOT ON DRUMS", 0, 0, 0, -1);
+        }
+        note = iclamp(scale_snap(53 + key + 12 * st.octave), 0, 127);
+        key_down[key] = KD_NOTE;
         key_note[key] = (uint8_t)note;
         eng_post(EV_NOTE_ON, note);
-    } else if (key_down[key]) {
+    } else if (key_down[key]) {                  /* (by how it went down, whatever is set by now) */
+        eng_post(key_down[key] == KD_PAD ? EV_PAD_OFF : EV_NOTE_OFF, key_note[key]);
         key_down[key] = 0;
-        eng_post(EV_NOTE_OFF, key_note[key]);
     }
 }
 
@@ -925,8 +954,9 @@ SMALL void h1_button(int btn, int down)
         }
         if (btn == H1_BTN_GLO) {                 /* chord memory: the keys held become the chord; none, on/off */
             int notes[H1_NKEYS], n = 0, k, j;
+            drum_said = 0;
             for (k = 0; k < H1_NKEYS; k++)
-                if (key_down[k]) notes[n++] = key_note[k];
+                if (key_down[k] == KD_NOTE) notes[n++] = key_note[k];   /* (a pad is no note held) */
             for (k = 1; k < n; k++)
                 for (j = k; j > 0 && notes[j - 1] > notes[j]; j--) { int t = notes[j]; notes[j] = notes[j - 1]; notes[j - 1] = t; }
             if (n >= 2) {
@@ -1192,6 +1222,7 @@ static APART void set_param(int i, int v)
     *q = (uint8_t)v;
     if (page == PG_GLO && subpage[PG_GLO] == 1 && i == 3 && !v) eng_post(EV_UNLATCH, 0);
     if (page == PG_GLO && subpage[PG_GLO] == 2 && i == 0) {  /* a new mode: its type in its range */
+        drum_said = 0;
         int tmax = v == CHORD_SCALE ? CHORD_NSCALE - 1 : (v == CHORD_SHAPE ? CHORD_NSHAPE - 1 : 0);
         if (st.chord[1] > tmax) st.chord[1] = (uint8_t)tmax;
         if (v != CHORD_OFF) chord_last = (uint8_t)v;
@@ -2358,6 +2389,7 @@ SMALL void ui_init(void)
     glob_held = master_raw = -1;
     ring_t = 9.0f;
     dice_inst = -1;
+    drum_said = 0;
 }
 
 /* ---- dirty-tile presentation (60 MHz SPI DMA) ----------------------------------------- */
