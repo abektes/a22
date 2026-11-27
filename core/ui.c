@@ -96,7 +96,7 @@ int ui_page(void)    { return page; }
  * had just turned SHAKE on became GRAV and nothing on the page could turn it off: issue #1.) */
 static int arp_shake(void) { return st.ip[st.inst].arp[0] == ARP_SHAKE; }
 static int arp_sub(void)   { return arp_shake() && subpage[PG_ARP] == 1; }
-int ui_subpage(void) { return page == PG_ARP ? arp_sub() : subpage[page]; }
+SMALL int ui_subpage(void) { return page == PG_ARP ? arp_sub() : subpage[page]; }
 
 /* MIX's subpage names: drawn as its title, and spoken as SELECT turns to it */
 static const char *const MIX_SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER", "KEY"};
@@ -107,9 +107,9 @@ static const char *const MIX_SUBT[5] = {"MIX VOL", "MIX PAN", "FX SEND", "MASTER
  * the engine otherwise (so it follows a tape load, CLEAR ALL, a take) */
 static uint8_t lane_bar, lane_m[3], lane_pend;
 static char lane_head[16];
-const char *ui_lane_head(void) { return lane_head; }
+SMALL const char *ui_lane_head(void) { return lane_head; }
 static int lane_bars(void) { return 1 << (st.seq[1] < 6 ? st.seq[1] : 2); }
-static int lane_on(void) { return st.seq[0] == SEQ_TAPE && subpage[PG_SEQ] == 2; }
+static SMALL int lane_on(void) { return st.seq[0] == SEQ_TAPE && subpage[PG_SEQ] == 2; }
 static void lane_read(void)
 {
     int f;
@@ -381,14 +381,14 @@ static int clear_all_asked;              /* 1: asked, REC still held; 2: REC let
 static uint32_t clear_all_ms;            /* when REC was let go */
 static int clear_all_answer;             /* its answer, once: 1 kept, 2 cleared (for a screen reader) */
 int h1_clear_all_asked(void) { return clear_all_asked != 0; }
-int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
+SMALL int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
 
 /* DICE (EDIT + LFO / EDIT + ENV, below): the engine and algorithm rolled, -1 for none, and its other knobs */
 static uint32_t dice_rng = 0x2545F491u;
 static int dice_inst = -1, dice_algo, dice_back;
 static uint8_t dice_other[4];                   /* what EDIT + ENV swaps the knobs to */
 
-static void toast(const char *a, int num, int has_num, const char *b, int pips)
+static SMALL void toast(const char *a, int num, int has_num, const char *b, int pips)
 {
     char *d = toast_s;
     if (clear_all_asked) clear_all_answer = 1;   /* (the question is no longer on screen: the tape is kept) */
@@ -414,7 +414,7 @@ static int proj_changed = 1, proj_known;         /* the work changed since the l
 static uint32_t proj_gen;                        /* and the tape's generation then */
 static char proj_said[24];
 
-static void proj_toast(const char *a, int p, const char *b)   /* p -1: no number */
+static SMALL void proj_toast(const char *a, int p, const char *b)   /* p -1: no number */
 {
     int i;
     toast(a, p + 1, p >= 0, b, -1);
@@ -423,9 +423,9 @@ static void proj_toast(const char *a, int p, const char *b)   /* p -1: no number
     proj_said[i] = 0;
 }
 
-static int proj_work_changed(void) { return proj_changed || eng_loop_gen() != proj_gen; }
+static SMALL int proj_work_changed(void) { return proj_changed || eng_loop_gen() != proj_gen; }
 
-static void proj_key(int p, int save)
+static SMALL void proj_key(int p, int save)
 {
     if (!proj_known)
         return;                                  /* (a port that keeps no projects: the keys do nothing) */
@@ -482,7 +482,7 @@ void h1_proj_news(uint32_t have, int saving)
     proj_saving = saving;
 }
 
-void h1_proj_done(int kind, int p, int ok)
+SMALL void h1_proj_done(int kind, int p, int ok)
 {
     if (kind == 3) {                             /* (a computer wrote it: the work that plays is as it was) */
         proj_toast("P", p, " FROM USB");
@@ -498,7 +498,7 @@ void h1_proj_done(int kind, int p, int ok)
         proj_toast("P", p, ok ? " LOADED" : " NOT LOADED");
 }
 
-const char *h1_proj_said(void)
+SMALL const char *h1_proj_said(void)
 {
     static char said[24];
     int i;
@@ -556,7 +556,7 @@ static APART void value_text(int pg, int i, char *out)
 }
 
 /* ---- input helpers -------------------------------------------------------------------- */
-static int accel(int enc, int d)
+static SMALL int accel(int enc, int d)
 {
     uint32_t gap = now - enc_ms[enc];
     int m = 1, ad = d < 0 ? -d : d;
@@ -598,7 +598,7 @@ static APART void set_instrument(int i)
     mark_dirty();
 }
 
-static void set_track(int t)
+static SMALL void set_track(int t)
 {
     t = (t % NTRACK + NTRACK) % NTRACK;
     drum_said = 0;
@@ -639,7 +639,7 @@ static int fx_hand, punch_key = -1, punch_n;
 int h1_fx_held(void) { return fx_hand; }
 int h1_edit_held(void) { return (btn_held >> H1_BTN_EDIT) & 1u; }
 int h1_punch(void) { return punch_key >= 0 ? punch_n : 0; }
-const char *h1_punch_name(int p) { return p >= 1 && p <= 8 ? PUNCH_NAMES[p - 1] : ""; }
+SMALL const char *h1_punch_name(int p) { return p >= 1 && p <= 8 ? PUNCH_NAMES[p - 1] : ""; }
 
 static void set_seq_mode(int m)
 {
@@ -653,7 +653,7 @@ static void set_seq_mode(int m)
 
 /* MODE PADS: the eight white keys from the lowest F (SAVE's and FX's) are chord pads, but on a drum engine, whose
  * keys are drums. pad_key_of: the pad a key is by its place alone, or -1. */
-static int pad_key_of(int key)
+static SMALL int pad_key_of(int key)
 {
     int i;
     for (i = 0; i < 8; i++)
@@ -661,9 +661,9 @@ static int pad_key_of(int key)
     return -1;
 }
 static int pads_drum(void) { return st.inst == INST_KIT || st.inst == INST_SKINS; }
-static int pad_of(int key) { return st.chord[0] == CHORD_PADS && !pads_drum() ? pad_key_of(key) : -1; }
+static SMALL int pad_of(int key) { return st.chord[0] == CHORD_PADS && !pads_drum() ? pad_key_of(key) : -1; }
 
-void h1_key(int key, int down)
+SMALL void h1_key(int key, int down)
 {
     int i;
     if (key < 0 || key >= H1_NKEYS) return;
@@ -826,7 +826,7 @@ void h1_master(int level)
     ring_show(RING_GLOBAL);
 }
 
-static void octave(int d)
+static SMALL void octave(int d)
 {
     if (d == 0) st.octave = 0;
     else st.octave = (int8_t)iclamp(st.octave + d, -2, 2);
@@ -838,13 +838,13 @@ static void octave(int d)
 /* ---- DICE: EDIT + LFO rolls the knobs of the algorithm in hand (dice.c), EDIT + ENV swaps back ---- */
 static void set_knob(int i, int v);
 
-static void dice_apply(const uint8_t k[4])
+static SMALL void dice_apply(const uint8_t k[4])
 {
     int i;
     for (i = 0; i < 4; i++) set_knob(i, k[i]);  /* (as a hand would: automation while recording, CC 20-23) */
 }
 
-static void dice(void)
+static SMALL void dice(void)
 {
     int a = st.ip[st.inst].algo & 7, i, n;
     uint8_t r[4], *k = KNOBS_NOW(st.inst);
@@ -859,7 +859,7 @@ static void dice(void)
     toast("DICE ", 0, 0, insts[st.inst]->algo[a], -1);
 }
 
-static void dice_swap(void)
+static SMALL void dice_swap(void)
 {
     uint8_t was[4], *k = KNOBS_NOW(st.inst);
     int i;
@@ -1048,11 +1048,11 @@ SMALL void h1_button(int btn, int down)
 
 static void (*usb_fn)(int on);
 static int usb_host;
-void h1_usb_host_fn(void (*fn)(int on)) { usb_fn = fn; }
+SMALL void h1_usb_host_fn(void (*fn)(int on)) { usb_fn = fn; }
 int h1_usb_host(void) { return usb_host; }
 const char *h1_toast_now(void) { return toast_t < 1.25f ? toast_s : ""; }
 
-void h1_toast(const char *text)
+SMALL void h1_toast(const char *text)
 {
     int i = 0;
     for (; text && *text && i < 16; text++) {
@@ -1164,7 +1164,7 @@ static void holds(void)
 }
 
 /* ---- encoders ------------------------------------------------------------------------- */
-static void set_algo(int a)
+static SMALL void set_algo(int a)
 {
     InstParams *ip = &st.ip[st.inst];
     a = (a % NALGO + NALGO) % NALGO;
@@ -1178,7 +1178,7 @@ static void set_algo(int a)
     mark_dirty();
 }
 
-static void set_fx_type(int f)
+static SMALL void set_fx_type(int f)
 {
     f = (f % NFX + NFX) % NFX;
     if (f == st.fx_type) return;
@@ -1188,14 +1188,14 @@ static void set_fx_type(int f)
     mark_dirty();
 }
 
-static void set_tempo(int bpm)
+static SMALL void set_tempo(int bpm)
 {
     st.glo[0] = (uint8_t)iclamp(bpm, 40, 240);
     toast(0, st.glo[0], 1, " BPM", -1);
     mark_dirty();
 }
 
-static void set_knob(int i, int v)
+static SMALL void set_knob(int i, int v)
 {
     uint8_t *k = &KNOBS_NOW(st.inst)[i], was = *k;
     *k = (uint8_t)iclamp(v, 0, 100);
@@ -1208,7 +1208,7 @@ static void set_knob(int i, int v)
     }
 }
 
-static void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / ARP page, or EDIT + ALGORITHM */
+static SMALL void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / ARP page, or EDIT + ALGORITHM */
 {
     if (m == ARP_SHAKE && st.ip[st.inst].arp[0] != ARP_SHAKE) subpage[PG_ARP] = 0;   /* SHAKE opens on 1/2 */
     st.ip[st.inst].arp[0] = (uint8_t)m;
@@ -1256,7 +1256,7 @@ static APART void set_param(int i, int v)
     mark_dirty();
 }
 
-static int step_cursor_live(void) { return page == PG_HOME && seq.mode == SEQ_STEP && seq.write; }
+static SMALL int step_cursor_live(void) { return page == PG_HOME && seq.mode == SEQ_STEP && seq.write; }
 
 SMALL void h1_encoder(int enc, int d)
 {
@@ -2693,6 +2693,6 @@ uint32_t h1_button_leds(void)
 }
 
 int h1_state_dirty(void) { return dirty && now - dirty_ms > 1500u; }
-void ui_state_changed(void) { mark_dirty(); }
-void h1_state_saved(void) { dirty = 0; save_asked = 0; }
+SMALL void ui_state_changed(void) { mark_dirty(); }
+SMALL void h1_state_saved(void) { dirty = 0; save_asked = 0; }
 int h1_state_asked(void) { int a = save_asked; save_asked = 0; return a; }

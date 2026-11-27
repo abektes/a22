@@ -74,7 +74,7 @@ void knobs_default(int inst, int algo)
                 KNOBS(inst, a)[k] = ALGO_K0[inst][a][k];
 }
 
-void knobs_home(int inst, int algo, uint8_t out[4])
+SMALL void knobs_home(int inst, int algo, uint8_t out[4])
 {
     int k;
     if (inst < 0 || inst >= NINST) inst = 0;
@@ -83,13 +83,13 @@ void knobs_home(int inst, int algo, uint8_t out[4])
         out[k] = ALGO_K0[inst][algo][k];
 }
 
-static void inst_default(int i)
+static SMALL void inst_default(int i)
 {
     st.ip[i] = insts[i]->def;
     knobs_default(i, -1);
 }
 
-static void track_default(int t)
+static SMALL void track_default(int t)
 {
     /* Default 4-Track band setup:
      *   T1 (Blue):   FM-4 (KEYS)
@@ -119,7 +119,7 @@ static void track_default(int t)
     }
 }
 
-static void defaults(void)
+static SMALL void defaults(void)
 {
     int i, f, k;
     uint8_t *p = (uint8_t *)&st;
@@ -187,7 +187,7 @@ uint32_t h1_voices_shed(void) { return eng_shed_count(); }
 void h1_stage_clock(uint32_t (*clock)(void)) { eng_stage_clock(clock); }
 uint32_t h1_stages(uint32_t out[H1_NSTG]) { return eng_stages(out); }
 
-const void *h1_state(uint32_t *size)
+SMALL const void *h1_state(uint32_t *size)
 {
     if (size)
         *size = (uint32_t)sizeof st;
@@ -221,7 +221,7 @@ typedef char a22_v4_head[offsetof(H1StateV4, fx_p) == offsetof(H1State, fx_p) &&
 typedef char a22_v4_mid[V4_SPAN(master, ip) == V5_SPAN(master, ip) ? 1 : -1];
 typedef char a22_v4_tail[sizeof(H1StateV4) - offsetof(H1StateV4, trk) == sizeof(H1State) - offsetof(H1State, trk) ? 1 : -1];
 
-static void bytes(void *to, const uint8_t *from, uint32_t n)
+static SMALL void bytes(void *to, const uint8_t *from, uint32_t n)
 {
     uint8_t *d = (uint8_t *)to;
     while (n--)
@@ -401,24 +401,24 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
 }
 
 int h1_instrument(void) { return st.inst; }
-const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->name : ""; }
+SMALL const char *h1_instrument_name(int i) { return i >= 0 && i < NINST ? insts[i]->name : ""; }
 int h1_algorithm(void) { return st.ip[st.inst].algo; }
 int h1_page(void) { return ui_page(); }
 int h1_layers(void) { return 1; }
-int h1_instrument_volume(int inst) { (void)inst; return st.trk[st.track].vol; }
+SMALL int h1_instrument_volume(int inst) { (void)inst; return st.trk[st.track].vol; }
 void h1_two_cores(int (*run)(void (*fn)(uint32_t), uint32_t arg), int (*wait)(void)) { eng_two_cores(run, wait); }
-int h1_instrument_count(void) { return NINST; }
-const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
-const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }
-uint32_t h1_voices_active(void) { return eng_voices(); }
+SMALL int h1_instrument_count(void) { return NINST; }
+SMALL const char *h1_knob_name(int inst, int k) { return inst >= 0 && inst < NINST && k >= 0 && k < 4 ? insts[inst]->knob[k] : ""; }
+SMALL const char *h1_algo_name(int inst, int a) { return inst >= 0 && inst < NINST && a >= 0 && a < NALGO ? insts[inst]->algo[a] : ""; }
+SMALL uint32_t h1_voices_active(void) { return eng_voices(); }
 
-void h1_ink(int inst, uint8_t rgb[3])
+SMALL void h1_ink(int inst, uint8_t rgb[3])
 {
     int i;
     for (i = 0; i < 3; i++)
         rgb[i] = inst >= 0 && inst < NINST ? insts[inst]->ink[i] : 255;
 }
-void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b) { (void)inst; (void)r; (void)g; (void)b; }
+SMALL void h1_set_ink(int inst, uint8_t r, uint8_t g, uint8_t b) { (void)inst; (void)r; (void)g; (void)b; }
 
 /* ---- 4-track tape persistence (h1_loop) ----------------------------------------------- */
 static uint32_t loop_saved_gen, loop_given_gen;
@@ -433,7 +433,7 @@ const void *h1_loop(uint32_t *size)
     return p;
 }
 
-int h1_loop_load(const void *blob, uint32_t size)
+SMALL int h1_loop_load(const void *blob, uint32_t size)
 {
     int r = eng_loop_load((const uint8_t *)blob, size);
     loop_saved_gen = eng_loop_gen();
@@ -441,12 +441,12 @@ int h1_loop_load(const void *blob, uint32_t size)
 }
 
 uint32_t h1_loop_gen(void) { return eng_loop_gen(); }
-int h1_loop_room(void) { return (NLEV - eng_loop_used()) / 2; }
+SMALL int h1_loop_room(void) { return (NLEV - eng_loop_used()) / 2; }
 int h1_loop_quiet(void) { return eng_loop_quiet(); }
 int h1_loop_taking(void) { return eng_loop_taking(); }
-void h1_silence(void) { eng_post(EV_PANIC, 0); }
+SMALL void h1_silence(void) { eng_post(EV_PANIC, 0); }
 
-int h1_project_load(const void *state, uint32_t state_size, const void *loop, uint32_t loop_size)
+SMALL int h1_project_load(const void *state, uint32_t state_size, const void *loop, uint32_t loop_size)
 {
     uint8_t tune = st.glo[2], bright = st.glo[3];   /* (the unit's and the room's, not the song's) */
     if (h1_state_load(state, state_size) != 0)
@@ -460,6 +460,6 @@ int h1_project_load(const void *state, uint32_t state_size, const void *loop, ui
 }
 int h1_quiet(void) { return eng_quiet(); }
 int h1_loop_dirty(void) { return eng_loop_gen() != loop_saved_gen && !eng_loop_taking(); }
-void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
+SMALL void h1_loop_saved(void) { loop_saved_gen = loop_given_gen; }
 void h1_midi_out(void (*fn)(uint8_t status, uint8_t d1, uint8_t d2)) { eng_midi_fn = fn; }
-void h1_midi_resync(void) { eng_midi_resync(); }
+SMALL void h1_midi_resync(void) { eng_midi_resync(); }

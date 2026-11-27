@@ -61,7 +61,7 @@ int ch_pad_pc(int set, int pad, int root)
     return (((root + set_of(set)->pad[pad & 7].off) % 12) + 12) % 12;
 }
 
-int ch_pad_notes(int set, int pad, int root, int octave, int nt[5])
+SMALL int ch_pad_notes(int set, int pad, int root, int octave, int nt[5])
 {
     const ChType *t = &CH_TYPES[set_of(set)->pad[pad & 7].type];
     int i, base = 48 + ch_pad_pc(set, pad, root) + 12 * octave;   /* (the root in the octave from C3) */
@@ -89,7 +89,7 @@ int ch_pad_numeral(int set, int pad, char out[9])
     return kind;
 }
 
-int ch_centre(const int *nt, int n, int octave)
+SMALL int ch_centre(const int *nt, int n, int octave)
 {
     int i, sum = 0;
     for (i = 0; i < n; i++) sum += nt[i];
@@ -99,7 +99,7 @@ int ch_centre(const int *nt, int n, int octave)
 /* SMOOTH: of the chord's inversions, where it is and an octave down, the first whose centre is nearest the last
  * chord's. That keeps it within an octave of root position, so a long run of chords never drifts away; the centres
  * leave the octave out, so OCT still moves the next chord. */
-int ch_smooth(int *nt, int n, int last, int octave)
+SMALL int ch_smooth(int *nt, int n, int last, int octave)
 {
     int c[CHORD_MAX], i, j, k, shift, best = -1, best_k = 0, best_shift = 0;
     if (n > CHORD_MAX) n = CHORD_MAX;

@@ -68,7 +68,7 @@ static uint32_t blkno = 16;
 /* The block an engine's own clocks (ELECTRIC's tremolo and wow, STACK's and HAZE's drift, ANALOG's and MONO's PWM:
  * b->step in their block) last moved in. Per engine, not per track: an engine on two tracks ran them twice as fast. */
 static uint32_t inst_adv[NINST], inst_steps[NINST];
-uint32_t eng_clock_steps(int inst) { return inst >= 0 && inst < NINST ? inst_steps[inst] : 0u; }
+SMALL uint32_t eng_clock_steps(int inst) { return inst >= 0 && inst < NINST ? inst_steps[inst] : 0u; }
 static uint32_t lfo_rng = 0x1F0C1F0Cu;
 static f32 run_time, blk_time;
 static uint32_t stamp_ctr;
@@ -92,7 +92,7 @@ static volatile uint32_t ev_w, ev_r;
 /* The queue's last 8 slots are kept for note-offs: full, it dropped whatever came, a note-off too, and that note hung.
  * What it drops is counted (eng_events_dropped). */
 static uint32_t ev_dropped;
-uint32_t eng_events_dropped(void) { return ev_dropped; }
+SMALL uint32_t eng_events_dropped(void) { return ev_dropped; }
 static void post(uint32_t e)
 {
     uint32_t w = ev_w, nx = (w + 1u) & 63u, used = (w - ev_r) & 63u;
@@ -109,7 +109,7 @@ void eng_post_note(int on, int note, int vel, int from_midi)
     post(((uint32_t)(on ? EV_NOTE_ON : EV_NOTE_OFF) << 8) | ((uint32_t)note & 127u) |
          ((uint32_t)iclamp(vel, 1, 127) << 16) | (from_midi ? 1u << 23 : 0u));
 }
-void eng_post_auto(int knob, int val)
+SMALL void eng_post_auto(int knob, int val)
 {
     post(((uint32_t)EV_AUTOMATION << 8) | ((uint32_t)(knob & 3)) | ((uint32_t)iclamp(val, 0, 100) << 16));
 }
@@ -158,7 +158,7 @@ static void mout_live(int on, int note, int vel)
     live_chs[note] = 0;
 }
 
-void dsp_init(void)
+SMALL void dsp_init(void)
 {
     int i;
     for (i = 0; i <= SIN_N; i++)
@@ -167,7 +167,7 @@ void dsp_init(void)
 
 /* ---- scales --------------------------------------------------------------------------- */
 
-int scale_snap(int note)                         /* (to the lane's key while the tape plays: eng_key_live) */
+SMALL int scale_snap(int note)                         /* (to the lane's key while the tape plays: eng_key_live) */
 {
     uint8_t k = eng_key_live();
     uint32_t mask = SCALE_MASK[key_scale(k)];
@@ -941,7 +941,7 @@ static void tape_bounds(f32 *in_t, f32 *out_t)
  * holds it. */
 static uint8_t tape_sent[NTRACK][128];
 static uint8_t tape_pitch_n[NTRACK][128];
-static void tape_sent_clear(void)
+static SMALL void tape_sent_clear(void)
 {
     int t, p;
     for (t = 0; t < NTRACK; t++)
@@ -1076,7 +1076,7 @@ static void lane_set(int bar, int field, int v)
     lane_build();
     loop_gen++;
 }
-void eng_post_lane(int bar, int field, int value)
+SMALL void eng_post_lane(int bar, int field, int value)
 {
     post(((uint32_t)EV_LANE << 8) | ((uint32_t)bar & 31u) | ((uint32_t)field & 3u) << 16 | ((uint32_t)value & 31u) << 18);
 }
@@ -3179,7 +3179,7 @@ int eng_seq_leds(uint32_t *out, int page_open, int blink)
     return 1;
 }
 
-int eng_seq_has(int trk)
+SMALL int eng_seq_has(int trk)
 {
     int i, j, ne = nlev;
     if (st.seq[0] == SEQ_STEP) {
@@ -3205,7 +3205,7 @@ uint32_t eng_voices(void)
 #define LOOP_MAGIC 0x54323241u   /* "A22T" */
 #define LOOP_HEAD 12u
 static void put16(uint8_t *d, uint32_t v) { d[0] = (uint8_t)v; d[1] = (uint8_t)(v >> 8); }
-static uint32_t get16(const uint8_t *b)   { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
+static SMALL uint32_t get16(const uint8_t *b)   { return (uint32_t)b[0] | (uint32_t)b[1] << 8; }
 
 const uint8_t *eng_loop_blob(uint32_t *size)
 {
@@ -3222,7 +3222,7 @@ const uint8_t *eng_loop_blob(uint32_t *size)
     return h;
 }
 
-int eng_loop_load(const uint8_t *b, uint32_t n)
+SMALL int eng_loop_load(const uint8_t *b, uint32_t n)
 {
     uint32_t ne, len, i, k = 0;
     if (!b || n < LOOP_HEAD || get16(b) != (LOOP_MAGIC & 0xFFFFu) || get16(b + 2) != (LOOP_MAGIC >> 16) || b[4] != 1)
@@ -3287,12 +3287,12 @@ int eng_quiet(void)
     return eng_voices() == 0 && eng_loop_quiet() && !step_playing && nheld == 0 &&
            silent_blocks >= (uint32_t)(0.3f * 44100.0f / (f32)CTRL);
 }
-int eng_layer_count(void)
+SMALL int eng_layer_count(void)
 {
     int t, c = 0;
     for (t = 0; t < NTRACK; t++) if (eng_seq_has(t)) c++;
     return c;
 }
-int eng_layer_rec(void)       { return (loop_state == LOOP_REC || loop_state == LOOP_DUB) ? (cur_trk + 1) : 0; }
+SMALL int eng_layer_rec(void)       { return (loop_state == LOOP_REC || loop_state == LOOP_DUB) ? (cur_trk + 1) : 0; }
 int eng_loop_used(void)       { return nlev; }
 uint32_t eng_loop_full(void)  { return loop_full; }

@@ -45,7 +45,7 @@ static const DiceKnob DICE[][4] = {
 };
 typedef char dice_rows[sizeof DICE / sizeof DICE[0] == NINST ? 1 : -1];
 
-static uint32_t dice_next(uint32_t *rng)        /* xorshift32 */
+static SMALL uint32_t dice_next(uint32_t *rng)        /* xorshift32 */
 {
     uint32_t x = *rng ? *rng : 0x6D2B79F5u;
     x ^= x << 13;
@@ -54,7 +54,7 @@ static uint32_t dice_next(uint32_t *rng)        /* xorshift32 */
     return *rng = x;
 }
 
-void dice_roll(int inst, int algo, uint32_t *rng, uint8_t out[4])
+SMALL void dice_roll(int inst, int algo, uint32_t *rng, uint8_t out[4])
 {
     uint8_t home[4];
     int k;
