@@ -182,7 +182,8 @@ it (INV 1 puts the lowest note an octave up, and so on). **Hold keys beside the 
 them in the pad in hand: it is named when the notes make a known chord (`PAD 1 F# MAJ`), MEM when not. Up to six
 notes, low to high. An edited pad has a gold dot; it is saved with the settings and with projects, and moves with
 ROOT as the set's do. Turning TYPE on a MEM pad replaces its notes with that type's. SET over edited pads asks
-`NEW SET? TURN AGAIN`: turn it again within three seconds to drop the edits; anything else keeps them.
+`NEW SET? TURN AGAIN`: turn it again, after a pause and within three seconds, to drop the edits; anything else keeps
+them.
 
 **TYPE** (SCALE and SHAPE): in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7,
 POWER or OCT.
@@ -291,6 +292,9 @@ installer or its card on [The Firmware Hub](https://thefirmwarehub.com), or pres
 Hub's [Official firmware](https://thefirmwarehub.com/#official) box. A22 saves only its own settings, so leaving it
 doesn't bring back what an earlier firmware saved. Back up your projects first (see [Projects](#projects)): another
 firmware may write over them.
+
+Going back to an older A22: one from before your own chord pads cannot read the settings or projects this one saves.
+It starts with its defaults, and won't load those projects.
 
 ## If something goes wrong
 

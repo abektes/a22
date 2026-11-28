@@ -13,19 +13,20 @@ A22's own history starts here. It is derived from h1 as of its 0.3.0; h1's histo
   drums.
 - VOICING **SMOOTH**: each chord takes the inversion closest to the last one.
 - CHORD PLAY shows the last chord on a keyboard.
-- The saved state is still version 5: the set is a byte that was spare. Older firmware reads PADS as OFF and SMOOTH
-  as CLOSE.
+- The set is kept in a byte the saved state had spare; with sprint 2 the state became version 6 (below). Before it,
+  older firmware read PADS as OFF and SMOOTH as CLOSE.
+- Fixed: HOLD switched on while a key or a MIDI note was held left it sounding after HOLD was off again. HOLD now
+  keeps it, and MIDI's all notes off ends a MIDI one.
 - `tests/pads.c` and `tests/pads.txt`. Not yet timed on an FM-1.
 
 **Your own chord pads**
 - CHORDS' K3 **TYPE** and K4 **INV** edit the pad last played. Keys held beside the pads with **EDIT + GLO** store
   their chord in it, named when it is a known one (`PAD 1 F# MAJ`), MEM when not. An edited pad has a gold dot.
-- SET over edited pads asks `NEW SET? TURN AGAIN`.
-- The saved state is version 6: version 5 with the edited pads appended. Settings and projects saved by 0.1.0 to
-  0.8.0 load as before. **Firmware older than this cannot read settings or projects saved by it**: it starts with
+- SET over edited pads asks `NEW SET? TURN AGAIN`: a second turn, after a pause and within three seconds, takes the
+  new set.
+- The saved state is version 6: version 5 with the edited pads appended. Settings and projects saved by earlier
+  releases load as before. **Firmware older than this cannot read settings or projects saved by it**: it starts with
   its defaults, and its project load refuses them.
-- Fixed: HOLD switched on while a key or a MIDI note was held left it sounding after HOLD was off again. HOLD now
-  keeps it, and MIDI's all notes off ends a MIDI one.
 
 **USB audio stems**
 - The USB audio input has ten channels: the mix on 1 and 2 as before (the same to the bit), and T1 to T4 on 3-4, 5-6,

@@ -86,7 +86,7 @@ void ch_set_type(ChUser *u, int type)
     if (u->inv >= n) u->inv = (uint8_t)(n - 1);
 }
 
-void ch_pad_default(int set, int pad, ChUser *out)
+void ch_pad_default(int set, int pad, ChUser *out)   /* (the cards draw it) */
 {
     ChPad p = set_of(set)->pad[pad & 7];
     out->off = p.off;
@@ -96,7 +96,7 @@ void ch_pad_default(int set, int pad, ChUser *out)
 
 int ch_base(int off, int root, int octave) { return 48 + (((root + off) % 12) + 12) % 12 + 12 * octave; }
 
-static void ascending(int *nt, int n)
+static SMALL void ascending(int *nt, int n)
 {
     int i, j;
     for (i = 1; i < n; i++)
@@ -123,7 +123,7 @@ SMALL int ch_pad_notes(int set, int pad, int root, int octave, int nt[5])
     return i;
 }
 
-int ch_numeral(int minor, const ChUser *u, char out[9])
+int ch_numeral(int minor, const ChUser *u, char out[9])   /* (the cards draw it) */
 {
     static const char *const NUM[7] = {"I", "II", "III", "IV", "V", "VI", "VII"};
     static const uint8_t DEG[2][7] = {{0, 2, 4, 5, 7, 9, 11}, {0, 2, 3, 5, 7, 8, 10}};   /* major, natural minor */

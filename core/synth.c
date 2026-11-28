@@ -1909,7 +1909,7 @@ static int chord_build(int root, uint8_t *out)
     return chord_voice(nt, n, root - 12, out);
 }
 
-SMALL void eng_pad_get(int pad, ChUser *out)
+void eng_pad_get(int pad, ChUser *out)             /* (the cards draw it: not SMALL) */
 {
     pad &= 7;
     if (!(st.pad_mask & (1u << pad))) {

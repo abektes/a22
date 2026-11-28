@@ -571,24 +571,37 @@ static int asked(void) { return !strcmp(h1_toast_now(), "NEW SET? TURN AGAIN"); 
 static void new_set(void)                       /* SET over edited pads asks first */
 {
     static const uint8_t none[sizeof(ChUser)];
+    int i;
     fresh(); pads_on(0); hold(H1_BTN_ARP);
     turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 1 && !asked(), "no pad edited: SET turns at once");
     turn(H1_ENC_K3, 1); CHECK(st.pad_mask == 1, "a pad edited");
     turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 1 && st.pad_mask == 1 && asked(), "edited: SET asks first");
-    turn(H1_ENC_K2, 1);
+    go(500); turn(H1_ENC_K2, 1);
     CHECK(st.rsv[1] == 2 && st.pad_mask == 0 && !memcmp(&st.pad[0], none, sizeof none), "turned again: the new set");
+
+    turn(H1_ENC_K3, 1);                             /* one turn of several clicks, a frame apart, as the FM-1 sends it */
+    for (i = 0; i < 6; i++) { h1_encoder(H1_ENC_K2, 1); go(16); }
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "a fast turn only asks: it does not answer itself");
+    go(2000); CHECK(asked(), "the question stays up while it can be answered");
+    turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 3 && st.pad_mask == 0, "and answered in time, it takes");
+
     turn(H1_ENC_K3, 1);
-    turn(H1_ENC_K2, 1); key(1, 60); turn(H1_ENC_K2, 1);
-    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "a key keeps the pads: it asks again");
-    tap(H1_BTN_EDIT); turn(H1_ENC_K2, 1);              /* (EDIT's tap puts up no toast) */
-    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "so does a button");
-    turn(H1_ENC_K4, 1); turn(H1_ENC_K2, 1);
-    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "and another knob");
-    go(3100); turn(H1_ENC_K2, 1);
-    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "and three seconds");
+    turn(H1_ENC_K2, 1); key(1, 60); go(500); turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 3 && st.pad_mask == 1 && asked(), "a key keeps the pads: it asks again");
+    go(500); tap(H1_BTN_EDIT); go(500); turn(H1_ENC_K2, 1);       /* (EDIT's tap puts up no toast) */
+    CHECK(st.rsv[1] == 3 && st.pad_mask == 1 && asked(), "so does a button");
+    go(500); turn(H1_ENC_K4, 1); go(500); turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 3 && st.pad_mask == 1 && asked(), "and another knob");
+    go(3400); CHECK(!asked(), "unanswered, the question fades when its time is up");
+    turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 3 && st.pad_mask == 1 && asked(), "and the next turn asks again");
+
     go(3100);
-    h1_control_set(H1_ENC_K2, 4); go(60); CHECK(st.rsv[1] == 2 && asked(), "a slider asks too");
-    h1_control_set(H1_ENC_K2, 4); go(60); CHECK(st.rsv[1] == 4 && st.pad_mask == 0, "and again takes it");
+    h1_control_set(H1_ENC_K2, 5); go(500); CHECK(st.rsv[1] == 3 && asked(), "a slider asks too");
+    h1_control_set(H1_ENC_K3, 2); go(500); h1_control_set(H1_ENC_K2, 5); go(60);
+    CHECK(st.rsv[1] == 3 && st.pad_mask == 1 && asked(), "another slider keeps the pads");
+    for (i = 6; i < 10; i++) { h1_control_set(H1_ENC_K2, i); go(16); }
+    CHECK(st.rsv[1] == 3 && st.pad_mask == 1, "a slider dragged only asks");
+    go(500); h1_control_set(H1_ENC_K2, 5); go(60); CHECK(st.rsv[1] == 5 && st.pad_mask == 0, "and set again in time, it takes");
 }
 
 int main(void)

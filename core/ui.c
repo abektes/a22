@@ -416,9 +416,11 @@ static int clear_all_answer;             /* its answer, once: 1 kept, 2 cleared 
 int h1_clear_all_asked(void) { return clear_all_asked != 0; }
 SMALL int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
 
-/* NEW SET? TURN AGAIN: SET turned over edited pads only asks; SET turned again within 3 s takes the new set and
- * drops the edits. Anything else keeps them: a key, a button, another knob, another toast, or the time passing. */
+/* NEW SET? TURN AGAIN: SET turned over edited pads only asks, and the question stays up for 3 s. SET turned again
+ * in that time takes the new set and drops the edits, but only after a pause: a click within 0.4 s of the last (one
+ * turn, or a slider dragged) asks again. Anything else keeps them: a key, a button, another knob, another toast. */
 #define NEW_SET_WAIT 3000u
+#define NEW_SET_GAP 400u
 static int set_asked;
 static uint32_t set_ask_ms;
 
@@ -1317,9 +1319,10 @@ static APART void set_param(int i, int v)
     }
     if (page == PG_CHORD && subpage[PG_CHORD] == 0 && i == 1 && st.chord[0] == CHORD_PADS && st.pad_mask) {
         int k;
-        if (!set_asked || now - set_ask_ms >= NEW_SET_WAIT) {
+        if (!set_asked || now - set_ask_ms < NEW_SET_GAP || now - set_ask_ms >= NEW_SET_WAIT) {
+            int again = set_asked;
             toast("NEW SET? TURN AGAIN", 0, 0, 0, -1);
-            toast_said();
+            if (!again) toast_said();                /* (said once, not at every click) */
             set_asked = 1;
             set_ask_ms = now;
             return;
@@ -1463,6 +1466,7 @@ SMALL void h1_control_set(int enc, int v)
 {
     if (enc < 0 || enc >= H1_NENC) return;
     clear_all_keep();
+    if (page != PG_CHORD || enc != H1_ENC_K2) set_asked = 0;
     switch (enc) {
     case H1_ENC_PRESET: set_instrument(iclamp(v, 0, NINST - 1)); break;
     case H1_ENC_ALGO:
@@ -2532,6 +2536,12 @@ void ui_frame(uint32_t now_ms)
     if (lane_pend) lane_pend--;
     name_t += dt; page_t += dt; toast_t += dt; vol_t += dt; ring_t += dt; ring_up += dt;
     if (clear_all_asked) toast_t = 0.0f;         /* CLEAR ALL? stays up until it is answered */
+    if (set_asked) {                             /* NEW SET? stays up while it can be answered */
+        if (now - set_ask_ms >= NEW_SET_WAIT) {
+            set_asked = 0;
+            toast_t = 0.95f;                     /* (unanswered: it fades now, with the time to answer) */
+        } else toast_t = 0.0f;
+    }
     {   /* the engine wrote what the state saves (a step, a riff, a snapshot): saved as a setting is */
         static uint32_t saved_seen;
         uint32_t sn = eng_saved_n();
