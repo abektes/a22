@@ -1909,18 +1909,34 @@ static int chord_build(int root, uint8_t *out)
     return chord_voice(nt, n, root - 12, out);
 }
 
-static int pad_build(int pad, uint8_t *out)                  /* a pad's chord, from the set, in the key in force */
+SMALL void eng_pad_get(int pad, ChUser *out)
 {
-    int nt[CHORD_MAX + 1], p[5], i, m = 1, root = key_root(eng_key_live());
-    int n = ch_pad_notes(st.rsv[1], pad, root, st.octave, p);
-    if (insts[cur_i]->mono) {
-        out[0] = (uint8_t)iclamp(p[0], 0, 127);
-        ch_keep(out, 1);
-    } else {
-        for (i = 0; i < n; i++) nt[i] = p[i];
-        m = chord_voice(nt, n, p[0] - 12, out);
+    pad &= 7;
+    if (!(st.pad_mask & (1u << pad))) {
+        ch_pad_default(st.rsv[1], pad, out);
+        return;
     }
-    ch_last_pad = ch_pad_pc(st.rsv[1], pad, root) + 16 * CH_SETS[st.rsv[1] < NCHSET ? st.rsv[1] : 0].pad[pad & 7].type;
+    *out = st.pad[pad];                                      /* (the panel may be writing it: held in range) */
+    if (out->off > 11) out->off = 0;
+    if (out->type > CH_MEM) out->type = CH_MEM;
+    if (out->n < 1) out->n = 1;
+    if (out->n > CHORD_MAX) out->n = CHORD_MAX;
+    if (out->inv >= out->n) out->inv = (uint8_t)(out->n - 1);
+}
+
+static int pad_build(int pad, uint8_t *out)       /* a pad's chord, the one in force, in the key in force */
+{
+    int nt[CHORD_MAX + 1], n, m = 1, root = key_root(eng_key_live()), base;
+    ChUser u;
+    eng_pad_get(pad, &u);
+    n = ch_user_notes(&u, root, st.octave, nt);
+    base = ch_base(u.off, root, st.octave);                  /* (its root, whatever the inversion) */
+    if (insts[cur_i]->mono) {
+        out[0] = (uint8_t)iclamp(base, 0, 127);
+        ch_keep(out, 1);
+    } else
+        m = chord_voice(nt, n, base - 12, out);
+    ch_last_pad = ch_base(u.off, root, 0) % 12 + 16 * u.type;
     return m;
 }
 

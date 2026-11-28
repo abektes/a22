@@ -374,6 +374,7 @@ void eng_snapshot(Vis *vis);
 uint32_t eng_sounding_lo(void);
 int eng_chord_last(uint8_t out[CHORD_MAX]);  /* the last chord's notes, low to high; 0: none yet */
 int eng_chord_pad(int *pc, int *type);   /* 1: the last chord was a pad's, with its root's pitch class and type */
+void eng_pad_get(int pad, ChUser *out);  /* the pad in force: the one a player edited, else the set's (held in range) */
 int eng_seq_leds(uint32_t *out, int page_open, int blink);
 uint32_t eng_voices(void);
 int eng_quiet(void);

@@ -2217,7 +2217,7 @@ static void draw_chord_play(void)
         return;
     }
     if (eng_chord_pad(&pc, &type))                           /* (as it sounded, whatever is set now) */
-        put_s(put_s(put_s(name, O_ROOT[pc]), " "), CH_TYPES[type].name);
+        put_s(put_s(put_s(name, O_ROOT[pc]), " "), ch_type_name(type));
     else
         put_s(name, O_ROOT[note[0] % 12]);
     list[0] = 0;

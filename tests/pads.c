@@ -12,7 +12,8 @@
  *   controls    the CHORDS page: hold ARP, its two subpages' columns, EDIT + GLO, GLO without CHORD
  *   screen      the eight cards drawn, the held pad alone lit, the last chord's notes, the buttons' lights
  *   hold_mid    HOLD switched on under a held pad or key: it is latched, and ends as a latched one does
- *   last_name   the last chord's name stays the one that sounded */
+ *   last_name   the last chord's name stays the one that sounded
+ *   edited      a pad a player edited plays its own notes, through ROOT, MONO, VOICING and an edit under it */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -391,7 +392,7 @@ static void last_name(void)                       /* CHORD PLAY names the chord 
     chord(CHORD_SHAPE, 0, 0, 0); key(7, 60);
     CHECK(!eng_chord_pad(&pc, &type), "a one-key chord after it is no pad's");
     fresh(); pads_on(10); h1_control_set(H1_ENC_PRESET, 7); go(60); key(0, 60);
-    CHECK(eng_chord_pad(&pc, &type) && pc == 0 && !strcmp(CH_TYPES[type].name, "MIN9"), "MONO: the pad's name");
+    CHECK(eng_chord_pad(&pc, &type) && pc == 0 && !strcmp(ch_type_name(type), "MIN9"), "MONO: the pad's name");
 }
 
 static void sort(int *v, int n)
@@ -441,6 +442,33 @@ static void records(void)                       /* a pad as a record: its notes,
     CHECK(u.type == CH_MEM && u.n == 1 && u.off == 1 && ch_user_notes(&u, 0, 0, nt) == 1 && nt[0] == 61, "one note: MEM");
 }
 
+static void edited(void)                        /* a pad a player edited plays its own record */
+{
+    static const ChUser R = {1, CH_MEM, 0, 3, {0, 6, 13, 0, 0, 0}};
+    static const int E[3] = {49, 55, 62}, E2[3] = {51, 57, 64}, ROOT[1] = {49}, C[3] = {48, 52, 55};
+    int pc = -1, type = -1;
+    fresh(); pads_on(0); st.pad[0] = R; st.pad_mask = 1;
+    down(0); CHECK(only(E, 3) && gated() == 3, "an edited pad plays its own notes");
+    up(0); CHECK(offs_are(E, 3) && matched(), "and ends them");
+    CHECK(eng_chord_pad(&pc, &type) && pc == 1 && type == CH_MEM, "named as it sounded: C# MEM");
+    fresh(); pads_on(0); st.pad[0] = R; st.pad_mask = 1; st.keys[0] = 2; key(0, 60);
+    CHECK(only(E2, 3), "ROOT moves it");
+    fresh(); pads_on(0); st.pad[0] = R; st.pad_mask = 1; h1_control_set(H1_ENC_PRESET, 7); go(60); key(0, 60);
+    CHECK(only(ROOT, 1), "MONO: its root");
+    fresh(); chord(CHORD_PADS, 0, 1, 0); st.pad[0] = R; st.pad_mask = 1; key(0, 60);
+    CHECK(ons == 3 && on_n[49] == 1 && on_n[62] == 1 && on_n[67] == 1, "OPEN voices it too");
+    fresh(); chord(CHORD_PADS, 0, 3, 0); st.pad[0] = R; st.pad[0].inv = 1; st.pad_mask = 1; key(0, 60);
+    CHECK(ons == 4 && on_n[37] == 1 && on_n[55] == 1 && on_n[61] == 1 && on_n[62] == 1,
+          "+BASS: the root under an inversion");
+    fresh(); pads_on(0); st.pad[0] = R; st.pad_mask = 1; down(0);
+    st.pad[0].iv[1] = 4; st.pad_mask = 0; up(0);
+    CHECK(offs_are(E, 3) && matched(), "edited while held: the release ends what the press started");
+    clear(); key(0, 60); CHECK(only(C, 3), "bit cleared: the set's chord again");
+    fresh(); pads_on(0); st.pad[0] = R; st.pad_mask = 1; key(0, 60);
+    hold(H1_BTN_ARP); turn(H1_ENC_SELECT, 1); go(600);
+    CHECK(inked(10, 22, 220, 24) > 100, "CHORD PLAY names a captured pad");
+}
+
 int main(void)
 {
     sets();
@@ -454,6 +482,7 @@ int main(void)
     screen();
     hold_mid();
     last_name();
+    edited();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
