@@ -120,6 +120,18 @@ enum { CHORD_OFF = 0, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE, CHORD_PADS };   /*
 #define CHORD_NSCALE 6           /* SCALE's types: TRIAD, 7TH, SUS2, SUS4, ADD9, 6TH */
 #define CHORD_NSHAPE 8           /* SHAPE's: MAJ, MIN, SUS4, 7, MIN7, MAJ7, POWER, OCT */
 
+/* A chord pad as a record: the set's (chordsets.c) or the one a player made. */
+#define NCHTYPE 20               /* the chord types, and the sets of eight pads */
+#define NCHSET 24
+#define CH_MEM NCHTYPE           /* a captured chord no type names */
+typedef struct ChUser {
+    uint8_t off;                 /* the root, semitones above the key's root, 0..11 */
+    uint8_t type;                /* what it is called: a type, or CH_MEM */
+    uint8_t inv;                 /* the lowest inv notes sound an octave up */
+    uint8_t n;                   /* its notes, 1..CHORD_MAX */
+    int8_t iv[CHORD_MAX];        /* and each as semitones above the pad's base (ch_base), low to high; the rest 0 */
+} ChUser;
+
 typedef struct H1State {
     uint32_t magic;
     uint8_t version;
@@ -385,8 +397,6 @@ int eng_follows(int trk, int part);             /* KEY on for the track, and not
 
 /* chordsets.c: the chord pads' types and sets, a pad's notes and numeral. No engine state: a pure module.
  * set and pad take any int: out of range is set 0, and pad & 7. */
-#define NCHTYPE 20
-#define NCHSET 24
 typedef struct ChType { char name[8]; int8_t iv[5]; } ChType;        /* semitones above the root, -1 ends */
 typedef struct ChPad { uint8_t off, type; } ChPad;                   /* off: semitones above the key's root, 0..11 */
 typedef struct ChSet { uint8_t minor; ChPad pad[8]; } ChSet;
@@ -397,6 +407,16 @@ extern const char *const CH_SET_NAMES[NCHSET];
 int ch_pad_pc(int set, int pad, int root);                           /* the root's pitch class, 0..11 */
 int ch_pad_notes(int set, int pad, int root, int octave, int nt[5]); /* root position from C3, ascending: the count */
 int ch_pad_numeral(int set, int pad, char out[9]);                   /* CH_NUM_*; out: "I".."VII" or "BORROWED" */
+extern const char *const CH_TYPE_NAMES[NCHTYPE + 1];                 /* the types' names, then "MEM" */
+const char *ch_type_name(int type);                                  /* "MEM" for CH_MEM and anything past it */
+void ch_pad_default(int set, int pad, ChUser *out);                  /* the set's own pad, as a record */
+void ch_set_type(ChUser *u, int type);                 /* a type's notes (type < CH_MEM), the root and inv kept in range */
+int ch_base(int off, int root, int octave);            /* the note a record's iv count from: its root from C3 */
+int ch_user_notes(const ChUser *u, int root, int octave, int nt[CHORD_MAX]);   /* ascending, inverted: the count */
+int ch_numeral(int minor, const ChUser *u, char out[9]);             /* as ch_pad_numeral, of a record */
+/* note: n notes (1..CHORD_MAX), ascending, no repeats, as a record that plays them in this key and octave: named by
+ * the first note that is a type's root, lowest first; else CH_MEM on the lowest */
+void ch_capture(const uint8_t *note, int n, int root, int octave, ChUser *out);
 int ch_centre(const int *nt, int n, int octave);       /* where a chord sits: its mean note in 16ths, the octave off */
 int ch_smooth(int *nt, int n, int last, int octave);   /* nt (root position, ascending) voiced nearest `last` (a
                                                         * centre; < 0: as it is): returns the new centre */

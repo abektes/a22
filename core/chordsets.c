@@ -1,5 +1,6 @@
-/* The chord pads' types and sets, and what is worked out from them: a pad's notes, its numeral, and SMOOTH's
- * voicing. No engine state: a pure module. The sets are A22's own, three a mood. */
+/* The chord pads' types and sets, and what is worked out from them: a pad as a record, its notes, name and numeral,
+ * a record captured from notes held, and SMOOTH's voicing. No engine state: a pure module. The sets are A22's own,
+ * three a mood. */
 #include "internal.h"
 
 /* the order is the sets' (a pad names its type by number) */
@@ -17,6 +18,14 @@ const ChType CH_TYPES[NCHTYPE] = {
     {"MINADD9", {0, 3, 7, 14, -1}},   {"MAJ9",    {0, 4, 7, 11, 14}},
     {"MIN9",    {0, 3, 7, 10, 14}},   {"9",       {0, 4, 7, 10, 14}},
     {"7SUS4",   {0, 5, 7, 10, -1}},   {"MIN11",   {0, 3, 7, 10, 17}},
+};
+
+const char *const CH_TYPE_NAMES[NCHTYPE + 1] = {
+    CH_TYPES[0].name,  CH_TYPES[1].name,  CH_TYPES[2].name,  CH_TYPES[3].name,  CH_TYPES[4].name,
+    CH_TYPES[5].name,  CH_TYPES[6].name,  CH_TYPES[7].name,  CH_TYPES[8].name,  CH_TYPES[9].name,
+    CH_TYPES[10].name, CH_TYPES[11].name, CH_TYPES[12].name, CH_TYPES[13].name, CH_TYPES[14].name,
+    CH_TYPES[15].name, CH_TYPES[16].name, CH_TYPES[17].name, CH_TYPES[18].name, CH_TYPES[19].name,
+    "MEM",
 };
 
 const char *const CH_SET_NAMES[NCHSET] = {
@@ -61,32 +70,112 @@ int ch_pad_pc(int set, int pad, int root)
     return (((root + set_of(set)->pad[pad & 7].off) % 12) + 12) % 12;
 }
 
+const char *ch_type_name(int type) { return CH_TYPE_NAMES[type >= 0 && type < NCHTYPE ? type : NCHTYPE]; }
+
+void ch_set_type(ChUser *u, int type)
+{
+    const ChType *t = &CH_TYPES[type >= 0 && type < NCHTYPE ? type : 0];
+    int i, n = 0;
+    for (i = 0; i < CHORD_MAX; i++) {
+        int has = i < 5 && t->iv[i] >= 0;
+        u->iv[i] = (int8_t)(has ? t->iv[i] : 0);
+        n += has;
+    }
+    u->type = (uint8_t)(t - CH_TYPES);
+    u->n = (uint8_t)n;
+    if (u->inv >= n) u->inv = (uint8_t)(n - 1);
+}
+
+void ch_pad_default(int set, int pad, ChUser *out)
+{
+    ChPad p = set_of(set)->pad[pad & 7];
+    out->off = p.off;
+    out->inv = 0;
+    ch_set_type(out, p.type);
+}
+
+int ch_base(int off, int root, int octave) { return 48 + (((root + off) % 12) + 12) % 12 + 12 * octave; }
+
+static void ascending(int *nt, int n)
+{
+    int i, j;
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+}
+
+SMALL int ch_user_notes(const ChUser *u, int root, int octave, int nt[CHORD_MAX])
+{
+    int i, n = u->n <= CHORD_MAX ? u->n : CHORD_MAX, base = ch_base(u->off, root, octave);
+    for (i = 0; i < n; i++) nt[i] = base + u->iv[i];
+    ascending(nt, n);
+    for (i = 0; i < n && i < u->inv; i++) nt[i] += 12;
+    ascending(nt, n);
+    return n;
+}
+
 SMALL int ch_pad_notes(int set, int pad, int root, int octave, int nt[5])
 {
-    const ChType *t = &CH_TYPES[set_of(set)->pad[pad & 7].type];
-    int i, base = 48 + ch_pad_pc(set, pad, root) + 12 * octave;   /* (the root in the octave from C3) */
-    for (i = 0; i < 5 && t->iv[i] >= 0; i++)
-        nt[i] = base + t->iv[i];
+    ChUser u;
+    int all[CHORD_MAX], i, n;
+    ch_pad_default(set, pad, &u);                            /* (a type has five notes at most) */
+    n = ch_user_notes(&u, root, octave, all);
+    for (i = 0; i < n && i < 5; i++) nt[i] = all[i];
     return i;
 }
 
-int ch_pad_numeral(int set, int pad, char out[9])
+int ch_numeral(int minor, const ChUser *u, char out[9])
 {
     static const char *const NUM[7] = {"I", "II", "III", "IV", "V", "VI", "VII"};
     static const uint8_t DEG[2][7] = {{0, 2, 4, 5, 7, 9, 11}, {0, 2, 3, 5, 7, 8, 10}};   /* major, natural minor */
-    const ChSet *s = set_of(set);
-    ChPad p = s->pad[pad & 7];
     const char *src = "BORROWED";
-    int d, i, kind = CH_NUM_BORROWED;
+    int d, i, third = 0, kind = CH_NUM_BORROWED;
+    for (i = 0; i < u->n && i < CHORD_MAX; i++) {            /* (bit 0: a minor third above the root, bit 1: a major) */
+        int pc = ((u->iv[i] % 12) + 12) % 12;
+        third |= pc == 3 ? 1 : pc == 4 ? 2 : 0;
+    }
     for (d = 0; d < 7; d++)
-        if (DEG[s->minor & 1][d] == p.off) {
+        if (DEG[minor & 1][d] == u->off) {
             src = NUM[d];
-            kind = CH_TYPES[p.type].iv[1] == 3 ? CH_NUM_MINOR : CH_NUM_MAJOR;
+            kind = third == 1 ? CH_NUM_MINOR : CH_NUM_MAJOR;
         }
     for (i = 0; i < 8 && src[i]; i++)
         out[i] = src[i];
     out[i] = 0;
     return kind;
+}
+
+int ch_pad_numeral(int set, int pad, char out[9])
+{
+    ChUser u;
+    ch_pad_default(set, pad, &u);
+    return ch_numeral(set_of(set)->minor, &u, out);
+}
+
+SMALL void ch_capture(const uint8_t *note, int n, int root, int octave, ChUser *out)
+{
+    int i, k, t, have = 0, base, r, type = CH_MEM;
+    if (n > CHORD_MAX) n = CHORD_MAX;
+    r = note[0] % 12;
+    for (i = 0; i < n; i++) have |= 1 << (note[i] % 12);
+    for (k = 0; k < n && type == CH_MEM; k++)
+        for (t = 0; t < NCHTYPE && type == CH_MEM; t++) {
+            int want = 0;
+            for (i = 0; i < 5 && CH_TYPES[t].iv[i] >= 0; i++)
+                want |= 1 << ((note[k] + CH_TYPES[t].iv[i]) % 12);
+            if (want == have) {
+                type = t;
+                r = note[k] % 12;
+            }
+        }
+    out->off = (uint8_t)((((r - root) % 12) + 12) % 12);
+    out->type = (uint8_t)type;
+    out->inv = 0;
+    out->n = (uint8_t)n;
+    base = ch_base(out->off, root, octave);
+    for (i = 0; i < CHORD_MAX; i++) {
+        int iv = i < n ? note[i] - base : 0;
+        out->iv[i] = (int8_t)(iv < -48 ? -48 : iv > 48 ? 48 : iv);
+    }
 }
 
 SMALL int ch_centre(const int *nt, int n, int octave)
@@ -101,7 +190,7 @@ SMALL int ch_centre(const int *nt, int n, int octave)
  * leave the octave out, so OCT still moves the next chord. */
 SMALL int ch_smooth(int *nt, int n, int last, int octave)
 {
-    int c[CHORD_MAX], i, j, k, shift, best = -1, best_k = 0, best_shift = 0;
+    int c[CHORD_MAX], i, k, shift, best = -1, best_k = 0, best_shift = 0;
     if (n > CHORD_MAX) n = CHORD_MAX;
     if (last < 0 || n < 1) return ch_centre(nt, n, octave);
     for (shift = 0; shift >= -12; shift -= 12)
@@ -117,7 +206,6 @@ SMALL int ch_smooth(int *nt, int n, int last, int octave)
             }
         }
     for (i = 0; i < n; i++) nt[i] += best_shift + (i < best_k ? 12 : 0);
-    for (i = 1; i < n; i++)
-        for (j = i; j > 0 && nt[j - 1] > nt[j]; j--) { int t = nt[j]; nt[j] = nt[j - 1]; nt[j - 1] = t; }
+    ascending(nt, n);
     return ch_centre(nt, n, octave);
 }

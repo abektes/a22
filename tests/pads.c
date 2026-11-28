@@ -2,6 +2,7 @@
  * worked as a hand would, what is played counted on MIDI out and in the voices.
  *
  *   sets        every pad of every set in all twelve roots: in range, ascending, named, numbered
+ *   records     a pad as a record: its notes and inversions; capture of every type in every inversion, and MEM
  *   play        MODE PADS: the eight white keys from the lowest F play the set's chords; every note-off matches,
  *               whatever changes while a key is held; MIDI in, SAVE, FX, MONO and drums
  *   latch       HOLD latches pads; HUSH and a state load leave nothing sounding
@@ -393,9 +394,57 @@ static void last_name(void)                       /* CHORD PLAY names the chord 
     CHECK(eng_chord_pad(&pc, &type) && pc == 0 && !strcmp(CH_TYPES[type].name, "MIN9"), "MONO: the pad's name");
 }
 
+static void sort(int *v, int n)
+{
+    int i, j;
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && v[j - 1] > v[j]; j--) { int t = v[j]; v[j] = v[j - 1]; v[j - 1] = t; }
+}
+static int pcs(const int *nt, int n) { int i, m = 0; for (i = 0; i < n; i++) m |= 1 << (nt[i] % 12); return m; }
+static void records(void)                       /* a pad as a record: its notes, names, numerals, capture */
+{
+    ChUser u;
+    int nt[CHORD_MAX], want[CHORD_MAX], n, t, r, k, i, m;
+    uint8_t note[CHORD_MAX];
+    char num[9];
+    ch_pad_default(10, 0, &u);                          /* LOFI 2, pad 1: C MIN9 */
+    CHECK(u.off == 0 && u.n == 5 && u.inv == 0 && !strcmp(ch_type_name(u.type), "MIN9"), "the set's pad as a record");
+    CHECK(ch_user_notes(&u, 0, 0, nt) == 5 && nt[0] == 48 && nt[4] == 62, "its notes");
+    u.inv = 1; ch_user_notes(&u, 0, 0, nt);
+    CHECK(nt[0] == 51 && nt[3] == 60 && nt[4] == 62, "INV 1: the lowest note an octave up");
+    CHECK(!strcmp(ch_type_name(CH_MEM), "MEM") && !strcmp(ch_type_name(200), "MEM"), "no type: MEM");
+    for (t = 0; t < NCHTYPE; t++)
+        for (r = 0; r < 12; r++) {
+            for (m = 0; m < 5 && CH_TYPES[t].iv[m] >= 0; m++) {}
+            for (k = 0; k < m; k++) {                    /* every inversion, as hands would hold it */
+                for (i = 0; i < m; i++) want[i] = 60 + r + CH_TYPES[t].iv[i] + (i < k ? 12 : 0);
+                sort(want, m);
+                for (i = 0; i < m; i++) note[i] = (uint8_t)want[i];
+                ch_capture(note, m, 0, 0, &u);
+                n = ch_user_notes(&u, 0, 0, nt);
+                CHECK(u.type < CH_MEM && u.inv == 0, "a known type");
+                CHECK(n == m && !memcmp(nt, want, (size_t)m * sizeof nt[0]), "plays as captured");
+                CHECK(pcs(nt, n) == pcs(want, m), "the same pitch classes");
+                if (!k) CHECK(u.type == t && u.off == r, "root position: named exactly");
+            }
+        }
+    note[0] = 57; note[1] = 60; note[2] = 64; note[3] = 67; ch_capture(note, 4, 0, 0, &u);
+    CHECK(u.off == 9 && !strcmp(ch_type_name(u.type), "MIN7"), "A lowest: A MIN7, not C 6");
+    note[0] = 60; note[1] = 61; note[2] = 62; ch_capture(note, 3, 0, 0, &u);
+    CHECK(u.type == CH_MEM && u.off == 0 && ch_user_notes(&u, 0, 0, nt) == 3 && nt[2] == 62, "unknown: MEM");
+    CHECK(ch_user_notes(&u, 2, 1, nt) == 3 && nt[0] == 74, "ROOT and OCT move it");
+    ch_capture(note, 3, 2, 0, &u);
+    CHECK(u.off == 10 && ch_user_notes(&u, 2, 0, nt) == 3 && nt[0] == 60, "captured in D: the same notes in D");
+    note[0] = 72; note[1] = 75; note[2] = 79; ch_capture(note, 3, 0, 0, &u);
+    CHECK(ch_numeral(0, &u, num) == CH_NUM_MINOR && !strcmp(num, "I"), "a minor chord captured an octave up: I");
+    note[0] = 61; ch_capture(note, 1, 0, 0, &u);
+    CHECK(u.type == CH_MEM && u.n == 1 && u.off == 1 && ch_user_notes(&u, 0, 0, nt) == 1 && nt[0] == 61, "one note: MEM");
+}
+
 int main(void)
 {
     sets();
+    records();
     play();
     latch();
     sequencers();
