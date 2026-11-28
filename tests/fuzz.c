@@ -347,11 +347,26 @@ static void part_state(int rounds)
                 odd[1 + offsetof(H1State, chord)] = (uint8_t)below(CHORD_PADS + 1);
                 odd[1 + offsetof(H1State, rsv) + 1] = (uint8_t)below(NCHSET);
             }
+            if (below(2)) {                                  /* edited pads: records that load, and any bytes */
+                ChUser u;
+                for (k = 0; k < 8; k++)
+                    if (below(2)) {
+                        ch_pad_default(below(NCHSET), k, &u);
+                        u.inv = (uint8_t)below(u.n);
+                        if (!below(3)) u.type = CH_MEM;
+                        memcpy(odd + 1 + offsetof(H1State, pad) + (size_t)k * sizeof u, &u, sizeof u);
+                    }
+                odd[1 + offsetof(H1State, pad_mask)] = (uint8_t)rnd();
+            }
             for (k = 0; k < NTRACK; k++)
                 odd[1 + offsetof(H1State, trk) + (size_t)k * sizeof(Track) + offsetof(Track, rsv)] =
                     below(2) ? (uint8_t)below(2) : (uint8_t)rnd();
         }
-        if (n % 7 == 3 && n % 5 != 4) {                      /* a version 4 state (0.1.0 to 0.4.0: 2648 bytes), any
+        if (n % 11 == 6 && n % 5 != 4) {                     /* a version 5 state (0.5.0 to 0.8.0): its 2888 bytes */
+            odd[1 + 4] = 5;
+            if (h1_state_load(odd + 1, H1_V5_SIZE) != 0)
+                die("a version 5 state was refused", n, 0, 0, 0);
+        } else if (n % 7 == 3 && n % 5 != 4) {                      /* a version 4 state (0.1.0 to 0.4.0: 2648 bytes), any
                                                               * bytes: taken, a table at a time (core/h1.c) */
             odd[1 + 4] = 4;
             if (h1_state_load(odd + 1, 2648u) != 0)

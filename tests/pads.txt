@@ -1,7 +1,8 @@
 # Chord pads in fm1-base's host simulator: the device app, the platform simulated.
 #   ./build.sh --host, then app/build/host/a22_host tests/pads.txt app/build/host
 # ARP held opens CHORDS (said with its columns), K1 turns MODE to PADS, K2 the set; the first white key sends its
-# chord's three notes on USB (POP 1 pad 1 in C: 48 52 55, A22's panel keys at 127) and its off. Never presses SAVE.
+# chord's three notes on USB (POP 1 pad 1 in C: 48 52 55, A22's panel keys at 127) and its off. Then keys held beside
+# the pads with EDIT + GLO go into pad 1 (said), and SET over it asks first. Never presses SAVE.
 wait 600
 listen
 press ARP
@@ -31,3 +32,29 @@ spin SELECT 1
 wait 600
 said PLAY
 shot chordplay.png
+spin SELECT 1
+wait 600
+key 1 down
+key 5 down
+key 8 down
+wait 200
+press EDIT
+wait 100
+press GLO
+wait 100
+release GLO
+release EDIT
+wait 300
+said PAD 1 F# MAJ
+key 1 up
+key 5 up
+key 8 up
+wait 300
+shot padedit.png
+spin K2 1
+wait 400
+said NEW SET? TURN AGAIN
+shot newset.png
+spin K2 1
+wait 600
+said SET POP 2

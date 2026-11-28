@@ -144,7 +144,8 @@ int h1_project_load(const void *state, uint32_t state_size, const void *loop, ui
  * save. h1_proj_take gives the ask once (0 none, 1 save, 2 load) and its project; the port says each frame which
  * projects hold a record (bit p) and which is being saved (-1 none), and how an ask ended (kind 3: a computer wrote
  * project p over USB). h1_proj_said gives the
- * words of a project toast once ("" none), for a screen reader. */
+ * words of a project toast, or a chord pad's (a capture, NEW SET?, NOT ON DRUMS), once ("" none), for a screen
+ * reader. */
 int h1_proj_take(int *p);
 void h1_proj_news(uint32_t have, int saving);
 void h1_proj_done(int kind, int p, int ok);

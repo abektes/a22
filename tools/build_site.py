@@ -148,7 +148,7 @@ PAGES = [("FX", "FX", "the effect's four knobs"),
          ("ENV", "ENV", "ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH"),
          ("LFO", "LFO", "SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan)"),
          ("GLOBAL", "GLO", "TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD"),
-         ("CHORDS", "hold ARP", "PADS: MODE, SET (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM"),
+         ("CHORDS", "hold ARP", "PADS: MODE, SET, and the pad in hand's TYPE and INV (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM"),
          ("SEQ", "ARP", "MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. "
                          "In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE"),
          ("TAPE", "SEQ", "TRACK, BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK; edit: IN BAR, OUT BAR, SNAP, PITCH; "
@@ -164,7 +164,7 @@ HOTKEYS = [("PRESETS", "The engine. With EDIT held: the track in hand, T1 to T4.
            ("EDIT", "Pins the knob strip. Writing steps or a riff: a rest."),
            ("EDIT + FX", "Effect on or bypassed."), ("EDIT + SEL", "Mute the track in hand."),
            ("EDIT + ARP", "Hold (latch) on and off."),
-           ("EDIT + GLO", "With keys held (pad keys aside): store them as the chord. With none: chords off, or on again."),
+           ("EDIT + GLO", "With keys held (pad keys aside): store them as the chord, or in MODE PADS in the pad in hand. With one or none: chords off, or on again."),
            ("EDIT + LFO", "DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits."),
            ("EDIT + ENV", "Back to the knobs before the last roll, and again to the roll."),
            ("EDIT + REC / PLAY", "Cut the track's notes to a clipboard / paste them at the current bar."),
@@ -698,7 +698,9 @@ def manual():
           <h3>Chords</h3>
           <p>Hold ARP for CHORDS. In MODE PADS the eight white keys from the lowest F play eight chords in the KEYS page's
             root, from 24 sets (POP, BALLAD, SOUL, LOFI, JAZZ, CINEMA, HOUSE, DARK), each named on the screen; the other keys
-            play notes. VOICING SMOOTH keeps each chord close to the last. MEMORY: hold a chord and press EDIT + GLO, and
+            play notes. K3 TYPE and K4 INV edit the pad last played, and keys held beside the pads with EDIT + GLO
+            become its chord; edited pads are saved, with projects too. VOICING SMOOTH keeps each chord close to the
+            last. MEMORY: hold a chord and press EDIT + GLO, and
             each key then plays that shape from itself. SCALE builds chords from the KEYS page's scale, SHAPE plays a fixed
             one.</p></div>
       </div>

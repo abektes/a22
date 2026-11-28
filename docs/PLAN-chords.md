@@ -66,16 +66,21 @@ leave enough room to play over them.
 
 ## Sprint 2: your own chords
 
-- [ ] **TYPE and INV** on PADS edit the pad in hand, heard on the next press.
-- [ ] **Capture:** hold keys beside the pads and press EDIT + GLO to store them in the pad in hand, named when the
+Built 2026-11-28 on branch `chords-edit`, from `chords-pads` (plan:
+[superpowers/plans/2026-11-28-chords-edit.md](superpowers/plans/2026-11-28-chords-edit.md)); its host tests and the
+fuzz pass. Still to do: CI's flash and SRAM line (the flash gate), and the owner's run on the FM-1. Built before
+sprint 1's ear check, at the owner's choice.
+
+- [x] **TYPE and INV** on PADS edit the pad in hand, heard on the next press.
+- [x] **Capture:** hold keys beside the pads and press EDIT + GLO to store them in the pad in hand, named when the
       notes match a known type, MEM when not.
-- [ ] **State version 6:** the eight pads, with bytes reserved for the loop's tracks, MIDI only, STYLE, HUMAN and
+- [x] **State version 6:** the eight pads, with bytes reserved for the loop's tracks, MIDI only, STYLE, HUMAN and
       SUGGEST so sprints 3 and 4 need no further version. Version 5 and 4 states load; project records still fit their slot (the
       build check).
-- [ ] **NEW SET? TURN AGAIN** when SET would replace edited pads.
-- [ ] **Tests:** a 0.7.x state and a project saved before this sprint load; edits survive a restart and a project
+- [x] **NEW SET? TURN AGAIN** when SET would replace edited pads.
+- [x] **Tests:** a 0.7.x state and a project saved before this sprint load; edits survive a restart and a project
       save and load; capture of every known type in every inversion.
-- [ ] **Docs:** that firmware older than this cannot read the new settings (it starts with its defaults).
+- [x] **Docs:** that firmware older than this cannot read the new settings (it starts with its defaults).
 
 ## Flash gate (after every sprint; expected before sprint 3)
 

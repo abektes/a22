@@ -88,7 +88,7 @@ A page's four columns are the four knobs. SELECT steps through its subpages.
 | ENV | ENV | ATTACK, DECAY, SUSTAIN, RELEASE; the mod envelope's DEPTH, DECAY, VEL, PUNCH |
 | LFO | LFO | SHAPE, RATE, DEPTH, TO (pitch, a knob, level or pan) |
 | GLOBAL | GLO | TEMPO, SWING, TUNE, BRIGHT; KEYS: ROOT, SCALE, GLIDE, HOLD |
-| CHORDS | hold ARP | PADS: MODE, SET (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM |
+| CHORDS | hold ARP | PADS: MODE, SET, and the pad in hand's TYPE and INV (in SCALE and SHAPE: TYPE); PLAY: VOICING, STRUM |
 | SEQ | ARP | MODE (OFF, RIFF, SHAKE, UP, DOWN, UP/DOWN, RANDOM, CHORD), RATE, RANGE, GATE. In SHAKE: MODE, GRAV, SPIN, BOUNCE; MODE, CAGE |
 | TAPE | SEQ | TRACK (T1 to T4), BARS (1 to 32), SPEED (0.5X, 1X, 2X, REV), TRICK (BRAKE, stutters); edit: IN BAR, OUT BAR, SNAP, PITCH; LANE: BAR, ROOT, SCALE, DEG |
 
@@ -177,11 +177,19 @@ numeral (a minor one underlined; BORROWED for a chord whose root is outside the 
 are built from the KEYS page's ROOT, or the lane's while the tape plays; SCALE doesn't change them, and still snaps
 the other keys. OCT moves chords and notes together. On KIT and SKINS the keys stay drums. MONO plays a pad's root.
 
+**Your own pads.** The pad last played is the pad in hand, outlined on the screen. K3 **TYPE** and K4 **INV** edit
+it (INV 1 puts the lowest note an octave up, and so on). **Hold keys beside the pads and press EDIT + GLO** to store
+them in the pad in hand: it is named when the notes make a known chord (`PAD 1 F# MAJ`), MEM when not. Up to six
+notes, low to high. An edited pad has a gold dot; it is saved with the settings and with projects, and moves with
+ROOT as the set's do. Turning TYPE on a MEM pad replaces its notes with that type's. SET over edited pads asks
+`NEW SET? TURN AGAIN`: turn it again within three seconds to drop the edits; anything else keeps them.
+
 **TYPE** (SCALE and SHAPE): in SCALE, TRIAD, 7TH, SUS2, SUS4, ADD9 or 6TH. In SHAPE, MAJ, MIN, SUS4, 7, MIN7, MAJ7,
 POWER or OCT.
 
 **Hold the keys and press EDIT + GLO** to store them as MEMORY's chord (up to six notes); each key then plays that
-shape from itself. Pad keys don't count. EDIT + GLO with no keys held turns chords off and on.
+shape from itself. In MODE PADS they go into the pad in hand instead (above). EDIT + GLO with one key or none held
+turns chords off and on.
 
 The tape, the step sequencer, the arpeggiator and MIDI out get the chord's notes, so recordings play back as heard.
 MIDI in is never made into chords. MONO plays the root alone. A chord takes a voice per note, out of eight.
@@ -201,7 +209,7 @@ MIDI in is never made into chords. MONO plays the root alone. A chord takes a vo
 | EDIT + FX | Effect on or bypassed |
 | EDIT + SEL | Mute the track in hand |
 | EDIT + ARP | Hold (latch) on and off |
-| EDIT + GLO | With keys held (pad keys aside): store them as the chord. With none: chords off, or on again |
+| EDIT + GLO | With keys held (pad keys aside): store them as the chord, or in MODE PADS in the pad in hand. With one or none: chords off, or on again |
 | EDIT + LFO | DICE: roll the four knobs of the algorithm in hand, near where that algorithm sits |
 | EDIT + ENV | Back to the knobs before the last roll, and again to the roll |
 | SAVE | Save the settings now |

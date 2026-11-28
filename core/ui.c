@@ -454,13 +454,17 @@ static int proj_changed = 1, proj_known;         /* the work changed since the l
 static uint32_t proj_gen;                        /* and the tape's generation then */
 static char proj_said[24];
 
-static SMALL void proj_toast(const char *a, int p, const char *b)   /* p -1: no number */
+static SMALL void toast_said(void)                /* the toast showing, said once (h1_proj_said) */
 {
     int i;
-    toast(a, p + 1, p >= 0, b, -1);
     for (i = 0; i < (int)sizeof proj_said - 1 && toast_s[i]; i++)
         proj_said[i] = toast_s[i];
     proj_said[i] = 0;
+}
+static SMALL void proj_toast(const char *a, int p, const char *b)   /* p -1: no number */
+{
+    toast(a, p + 1, p >= 0, b, -1);
+    toast_said();
 }
 
 static SMALL int proj_work_changed(void) { return proj_changed || eng_loop_gen() != proj_gen; }
@@ -773,6 +777,7 @@ SMALL void h1_key(int key, int down)
         if (st.chord[0] == CHORD_PADS && pads_drum() && pad_key_of(key) >= 0 && !drum_said) {
             drum_said = 1;                       /* (once: the kick and snare sit on pad keys) */
             toast("NOT ON DRUMS", 0, 0, 0, -1);
+            toast_said();
         }
         note = iclamp(scale_snap(53 + key + 12 * st.octave), 0, 127);
         key_down[key] = KD_NOTE;
@@ -1020,7 +1025,7 @@ SMALL void h1_button(int btn, int down)
             for (k = 1; k < n; k++)
                 for (j = k; j > 0 && notes[j - 1] > notes[j]; j--) { int t = notes[j]; notes[j] = notes[j - 1]; notes[j - 1] = t; }
             if (n >= 2 && st.chord[0] == CHORD_PADS) {   /* PADS: into the pad in hand, MEMORY left alone */
-                if (pads_drum()) toast("NOT ON DRUMS", 0, 0, 0, -1);
+                if (pads_drum()) { toast("NOT ON DRUMS", 0, 0, 0, -1); toast_said(); }
                 else {
                     uint8_t nt[CHORD_MAX];
                     char tail[20];
@@ -1032,6 +1037,7 @@ SMALL void h1_button(int btn, int down)
                     pad_store(pad_hand, &u);
                     put_s(put_s(put_s(put_s(tail, " "), O_ROOT[ch_base(u.off, root, 0) % 12]), " "), ch_type_name(u.type));
                     toast("PAD ", pad_hand + 1, 1, tail, -1);
+                    toast_said();
                 }
                 if (page == PG_CHORD) sync_cols(PG_CHORD);
                 return;
@@ -1313,6 +1319,7 @@ static APART void set_param(int i, int v)
         int k;
         if (!set_asked || now - set_ask_ms >= NEW_SET_WAIT) {
             toast("NEW SET? TURN AGAIN", 0, 0, 0, -1);
+            toast_said();
             set_asked = 1;
             set_ask_ms = now;
             return;

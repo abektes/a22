@@ -222,6 +222,9 @@ Any other version or size is refused and the settings start as new; the tape is 
 `tests/state.c` loads a state written by 0.4.0's own core (`tests/state_v4.bin`) and compares every table.
 
 Two bytes that were spare are used since: `rsv[0]` is the step pattern's key, and `rsv[1]` the chord pads' set.
+Version 6 appends to version 5: `pad[8]` (`ChUser`, ten bytes each: root offset, type, inversion, notes), `pad_mask`
+(bit p: pad p is edited) and 15 spare bytes kept for the chord loop and feel. A version 5 state loads with no pad
+edited; an edited pad out of range is dropped on load.
 MODE PADS and VOICING SMOOTH are new values of `chord[0]` and `chord[2]`; older firmware reads them as OFF and
 CLOSE.
 
