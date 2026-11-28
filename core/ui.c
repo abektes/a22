@@ -367,6 +367,26 @@ static int save_asked;                           /* SAVE tapped: the state is wr
 static int proj_changed;
 static void mark_dirty(void) { dirty = 1; dirty_ms = now; proj_changed = 1; }
 
+/* a pad edited: back to exactly the set's own, it is not edited (SET asks about none); else the record, then its bit */
+static SMALL void pad_store(int pad, const ChUser *u)
+{
+    ChUser d;
+    const uint8_t *a = (const uint8_t *)u, *b = (const uint8_t *)&d;
+    uint8_t *q = (uint8_t *)&st.pad[pad & 7];
+    int k, same = 1;
+    pad &= 7;
+    ch_pad_default(st.rsv[1], pad, &d);
+    for (k = 0; k < (int)sizeof d; k++) same &= a[k] == b[k];
+    if (same) {
+        st.pad_mask &= (uint8_t)~(1u << pad);
+        for (k = 0; k < (int)sizeof d; k++) q[k] = 0;
+    } else {
+        for (k = 0; k < (int)sizeof d; k++) q[k] = a[k];
+        st.pad_mask |= (uint8_t)(1u << pad);
+    }
+    mark_dirty();
+}
+
 /* ---- string helpers ------------------------------------------------------------------- */
 static char *put_s(char *d, const char *s)
 {
@@ -990,6 +1010,23 @@ SMALL void h1_button(int btn, int down)
                 if (key_down[k] == KD_NOTE) notes[n++] = key_note[k];   /* (a pad is no note held) */
             for (k = 1; k < n; k++)
                 for (j = k; j > 0 && notes[j - 1] > notes[j]; j--) { int t = notes[j]; notes[j] = notes[j - 1]; notes[j - 1] = t; }
+            if (n >= 2 && st.chord[0] == CHORD_PADS) {   /* PADS: into the pad in hand, MEMORY left alone */
+                if (pads_drum()) toast("NOT ON DRUMS", 0, 0, 0, -1);
+                else {
+                    uint8_t nt[CHORD_MAX];
+                    char tail[20];
+                    int m = 0, root = key_root(eng_key_live());
+                    ChUser u;
+                    for (k = 0; k < n && m < CHORD_MAX; k++)          /* (low to high, each once, six at most) */
+                        if (!m || notes[k] != nt[m - 1]) nt[m++] = (uint8_t)notes[k];
+                    ch_capture(nt, m, root, st.octave, &u);
+                    pad_store(pad_hand, &u);
+                    put_s(put_s(put_s(put_s(tail, " "), O_ROOT[ch_base(u.off, root, 0) % 12]), " "), ch_type_name(u.type));
+                    toast("PAD ", pad_hand + 1, 1, tail, -1);
+                }
+                if (page == PG_CHORD) sync_cols(PG_CHORD);
+                return;
+            }
             if (n >= 2) {
                 int m = 0;
                 for (k = 0; k < n && m < CHORD_MAX; k++)
@@ -1227,26 +1264,6 @@ static SMALL void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / 
     st.ip[st.inst].arp[0] = (uint8_t)m;
     if (page == PG_ARP) sync_cols(PG_ARP);
     toast("SEQ: ", 0, 0, O_ARPMODE[m], -1);
-    mark_dirty();
-}
-
-/* a pad edited: back to exactly the set's own, it is not edited (SET asks about none); else the record, then its bit */
-static SMALL void pad_store(int pad, const ChUser *u)
-{
-    ChUser d;
-    const uint8_t *a = (const uint8_t *)u, *b = (const uint8_t *)&d;
-    uint8_t *q = (uint8_t *)&st.pad[pad & 7];
-    int k, same = 1;
-    pad &= 7;
-    ch_pad_default(st.rsv[1], pad, &d);
-    for (k = 0; k < (int)sizeof d; k++) same &= a[k] == b[k];
-    if (same) {
-        st.pad_mask &= (uint8_t)~(1u << pad);
-        for (k = 0; k < (int)sizeof d; k++) q[k] = 0;
-    } else {
-        for (k = 0; k < (int)sizeof d; k++) q[k] = a[k];
-        st.pad_mask |= (uint8_t)(1u << pad);
-    }
     mark_dirty();
 }
 

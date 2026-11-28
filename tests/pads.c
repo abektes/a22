@@ -14,7 +14,8 @@
  *   hold_mid    HOLD switched on under a held pad or key: it is latched, and ends as a latched one does
  *   last_name   the last chord's name stays the one that sounded
  *   edited      a pad a player edited plays its own notes, through ROOT, MONO, VOICING and an edit under it
- *   edit_cols   CHORDS' TYPE and INV edit the pad in hand; back to the set's own is not edited; the card marked */
+ *   edit_cols   CHORDS' TYPE and INV edit the pad in hand; back to the set's own is not edited; the card marked
+ *   capture     MODE PADS: EDIT + GLO stores the keys held in the pad in hand, named; MEMORY left alone; drums */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -511,6 +512,60 @@ static void edit_cols(void)                     /* CHORDS' TYPE and INV edit the
     CHECK(drawn(6, 45, 54, 59) != before, "an edited pad's card is marked");
 }
 
+static void grab(const int *keys, int n)            /* hold the keys, EDIT + GLO, let them go */
+{
+    int i;
+    for (i = 0; i < n; i++) h1_key(keys[i], 1);
+    go(60); edit_glo();
+    for (i = 0; i < n; i++) h1_key(keys[i], 0);
+    go(200);
+}
+static void capture(void)                       /* MODE PADS: EDIT + GLO stores the keys held in the pad in hand */
+{
+    static const int FS[3] = {54, 58, 61}, TRI[3] = {1, 5, 8}, WITH_PAD[4] = {0, 1, 5, 8}, ODD[3] = {1, 3, 5},
+                     SEVEN[7] = {1, 3, 5, 8, 10, 13, 15}, OCTAVE[2] = {1, 13}, ONE_KEY[1] = {1};
+    uint8_t mem[CHORD_MAX], mem_n;
+    ChUser u;
+    int i;
+    fresh(); pads_on(0); st.chord_mem[1] = 3; st.chord_n = 3;        /* (MEMORY's chord: a minor one) */
+    memcpy(mem, st.chord_mem, sizeof mem); mem_n = st.chord_n;
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 1);
+    go(60); edit_glo();
+    CHECK(!strcmp(h1_toast_now(), "PAD 1 F# MAJ"), "PAD 1 F# MAJ");
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 0);
+    go(200);
+    CHECK(st.chord[0] == CHORD_PADS && st.pad_mask == 1, "into pad 1, MODE still PADS");
+    CHECK(!memcmp(mem, st.chord_mem, sizeof mem) && st.chord_n == mem_n, "MEMORY's chord left alone");
+    clear(); key(0, 60); CHECK(only(FS, 3) && matched(), "pad 1 plays it");
+
+    fresh(); pads_on(0); key(2, 60); grab(TRI, 3);
+    CHECK(st.pad_mask == 2, "the pad in hand: pad 2");
+    fresh(); pads_on(0); grab(WITH_PAD, 4);
+    eng_pad_get(0, &u); CHECK(u.n == 3 && u.type == 0 && u.off == 6 && matched(), "a pad key held with them is not taken");
+    fresh(); pads_on(0); grab(ODD, 3);
+    eng_pad_get(0, &u); CHECK(u.type == CH_MEM && u.n == 3, "no type matches: MEM");
+    fresh(); pads_on(0); grab(SEVEN, 7);
+    eng_pad_get(0, &u); CHECK(u.n == CHORD_MAX, "seven keys: the lowest six");
+    fresh(); pads_on(0); grab(OCTAVE, 2);
+    eng_pad_get(0, &u); CHECK(u.n == 2 && u.type == CH_MEM, "an octave: two notes, MEM");
+    fresh(); pads_on(0); grab(ONE_KEY, 1);
+    CHECK(st.chord[0] == CHORD_OFF && st.pad_mask == 0, "one key: chords off, as before");
+    fresh(); pads_on(0); h1_control_set(H1_ENC_PRESET, INST_KIT); go(60); grab(TRI, 3);
+    CHECK(st.chord[0] == CHORD_PADS && st.pad_mask == 0 && st.chord_n == mem_n, "KIT: nothing taken");
+    fresh(); pads_on(0); h1_control_set(H1_ENC_PRESET, INST_KIT); go(60);
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 1);
+    go(60); edit_glo(); CHECK(!strcmp(h1_toast_now(), "NOT ON DRUMS"), "and says so");
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 0);
+    go(200);
+
+    fresh(); pads_on(0); tap(H1_BTN_REC);           /* the keys record as played; the capture sends nothing */
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 1);
+    go(100); clear(); edit_glo();
+    CHECK(ons == 0 && offs == 0 && gated() == 3, "capture while recording: the keys sound on, nothing else is sent");
+    for (i = 0; i < 3; i++) h1_key(TRI[i], 0);
+    go(200); CHECK(offs == 3, "and end when let go");
+}
+
 int main(void)
 {
     sets();
@@ -526,6 +581,7 @@ int main(void)
     last_name();
     edited();
     edit_cols();
+    capture();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
