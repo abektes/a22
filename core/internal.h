@@ -102,8 +102,10 @@ typedef struct Snap {
 } Snap;
 
 #define H1_MAGIC 0x32324132u     /* "2A22" - isolated from h1 saves */
-#define H1_VERSION 5u     /* 3: chord memory; 4: twelve engines (WAVE, CHIP); 5: room for 16 engines and 12
-                           * effects (NSLOT, NFXSLOT), and how many effects it was saved with (nfx) */
+#define H1_VERSION 6u     /* 3: chord memory; 4: twelve engines (WAVE, CHIP); 5: room for 16 engines and 12
+                           * effects (NSLOT, NFXSLOT), and how many effects it was saved with (nfx);
+                           * 6: the chord pads a player edited, appended to version 5 */
+#define H1_V5_SIZE 2888u         /* what version 5 saved: version 6's head */
 
 /* Sequencer / Tape mode enums */
 enum { SEQ_TAPE = 0, SEQ_STEP = 1 };
@@ -167,6 +169,9 @@ typedef struct H1State {
     uint8_t steps[NSTEP][NSNOTE];
     uint8_t step_trk[NSTEP][NSNOTE];
     uint8_t step_vel[NSTEP][NSNOTE];
+    ChUser pad[8];               /* the chord pads a player edited: pad[p] in force when pad_mask's bit p is set */
+    uint8_t pad_mask;
+    uint8_t spare[15];           /* 0: kept for the chord loop's tracks, MIDI only, STYLE, HUMAN and SUGGEST */
 } H1State;
 
 #define KNOBS(inst, algo) (st.knob[(uint32_t)(inst) < NSLOT ? (uint32_t)(inst) : 0u][(uint32_t)(algo) < NALGO ? (uint32_t)(algo) : 0u])

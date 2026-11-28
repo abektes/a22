@@ -219,7 +219,8 @@ typedef char a22_v4_size[sizeof(H1StateV4) == 2648u ? 1 : -1];   /* (what 0.1.0 
 typedef char a22_v4_head[offsetof(H1StateV4, fx_p) == offsetof(H1State, fx_p) &&
                          offsetof(H1StateV4, version) == offsetof(H1State, version) ? 1 : -1];
 typedef char a22_v4_mid[V4_SPAN(master, ip) == V5_SPAN(master, ip) ? 1 : -1];
-typedef char a22_v4_tail[sizeof(H1StateV4) - offsetof(H1StateV4, trk) == sizeof(H1State) - offsetof(H1State, trk) ? 1 : -1];
+typedef char a22_v4_tail[sizeof(H1StateV4) - offsetof(H1StateV4, trk) == H1_V5_SIZE - offsetof(H1State, trk) ? 1 : -1];
+typedef char a22_v5_head[offsetof(H1State, pad) == H1_V5_SIZE ? 1 : -1];   /* (version 6 appends to it) */
 
 static SMALL void bytes(void *to, const uint8_t *from, uint32_t n)
 {
@@ -242,6 +243,11 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
         return -1;
     if (b[offsetof(H1State, version)] == H1_VERSION && size == sizeof st) {
         bytes(&st, b, (uint32_t)sizeof st);
+    } else if (b[offsetof(H1State, version)] == 5u && size == H1_V5_SIZE) {
+        uint8_t *p = (uint8_t *)&st;
+        for (n = H1_V5_SIZE; n < (uint32_t)sizeof st; n++)     /* (no pad edited) */
+            p[n] = 0;
+        bytes(&st, b, H1_V5_SIZE);
     } else if (b[offsetof(H1State, version)] == 4u && size == sizeof(H1StateV4)) {
         uint8_t *p = (uint8_t *)&st;
         for (n = 0; n < (uint32_t)sizeof st; n++)
@@ -395,6 +401,19 @@ SMALL int h1_state_load(const void *blob, uint32_t size)
     /* rsv[0] is the step pattern's key: a valid key (the valid bit, a root of 0..11) or none */
     if (!(st.rsv[0] & 0x80u) || (st.rsv[0] & 15u) > 11u) st.rsv[0] = 0;
     if (st.rsv[1] >= NCHSET) st.rsv[1] = 0;      /* rsv[1] is the chord pads' set */
+    for (i = 0; i < 8; i++)                      /* an edited pad out of range is dropped: the set's plays */
+        if (st.pad_mask & (1u << i)) {
+            ChUser *u = &st.pad[i];
+            int ok = u->off < 12 && u->type <= CH_MEM && u->n >= 1 && u->n <= CHORD_MAX && u->inv < u->n;
+            for (j = 0; j < CHORD_MAX; j++)
+                ok &= u->iv[j] >= -48 && u->iv[j] <= 48;
+            if (!ok) {
+                uint8_t *p = (uint8_t *)u;
+                st.pad_mask &= (uint8_t)~(1u << i);
+                for (n = 0; n < (uint32_t)sizeof *u; n++)
+                    p[n] = 0;
+            }
+        }
     eng_init(0);
     ui_init();
     return 0;

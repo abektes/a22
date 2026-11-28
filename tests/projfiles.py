@@ -83,7 +83,7 @@ def main():
     p1 = c.read(0)
     magic, ver, proj, seq, sl, ll = struct.unpack_from("<IIIIII", p1)
     check(magic == 0x50323241 and ver == 1 and proj == 0, "P1's header: A22P, version 1, project 0")
-    check(len(p1) == 256 + ((sl + 255) & ~255) + ll and sl == 2888, f"P1: state {sl} B, loop {ll} B, as the file's size")
+    check(len(p1) == 256 + ((sl + 255) & ~255) + ll and sl == 2984, f"P1: state {sl} B, loop {ll} B, as the file's size")
 
     # write: P1's file as project2
     c.write(1, p1)

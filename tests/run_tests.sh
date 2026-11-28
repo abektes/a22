@@ -16,9 +16,10 @@
 #   chords     chord memory: its modes and voicings, release, strum, EDIT + GLO capture, the CHORDS page
 #   pads       chord pads: the 24 sets in every root; every note-off matched whatever changes under a held pad,
 #              HOLD, HUSH, the tape, STEP and RIFF, SMOOTH, the saved state, the CHORDS page and key lights
-#   state      saved state version 5: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
-#              version 5 to the byte, wrong ones refused, engines and effects past what a state had come up new
-#              (and a project's state: taken whole but TUNE and BRIGHT)
+#   state      saved state version 6: 0.4.0's version 4 (tests/state_v4.bin) loads with every table kept,
+#              version 5 (tests/state_v5.bin) to the byte, version 6 with edited pads, wrong ones and bad pads
+#              refused, engines and effects past what a state had come up new (and a project's state: taken
+#              whole but TUNE and BRIGHT)
 #   dice       EDIT + LFO rolls the knobs near the algorithm's home, EDIT + ENV swaps back; every algorithm
 #              rolled stays within 6 dB of how loud it is at home
 #   skins      SKINS' two kits: every drum on every algorithm sounds and ends, the hat chokes, ROOM spreads,
