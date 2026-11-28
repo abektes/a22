@@ -15,7 +15,8 @@
  *   last_name   the last chord's name stays the one that sounded
  *   edited      a pad a player edited plays its own notes, through ROOT, MONO, VOICING and an edit under it
  *   edit_cols   CHORDS' TYPE and INV edit the pad in hand; back to the set's own is not edited; the card marked
- *   capture     MODE PADS: EDIT + GLO stores the keys held in the pad in hand, named; MEMORY left alone; drums */
+ *   capture     MODE PADS: EDIT + GLO stores the keys held in the pad in hand, named; MEMORY left alone; drums
+ *   new_set     SET over edited pads asks NEW SET? TURN AGAIN; a key, button, knob or three seconds keep them */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -566,6 +567,30 @@ static void capture(void)                       /* MODE PADS: EDIT + GLO stores 
     go(200); CHECK(offs == 3, "and end when let go");
 }
 
+static int asked(void) { return !strcmp(h1_toast_now(), "NEW SET? TURN AGAIN"); }
+static void new_set(void)                       /* SET over edited pads asks first */
+{
+    static const uint8_t none[sizeof(ChUser)];
+    fresh(); pads_on(0); hold(H1_BTN_ARP);
+    turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 1 && !asked(), "no pad edited: SET turns at once");
+    turn(H1_ENC_K3, 1); CHECK(st.pad_mask == 1, "a pad edited");
+    turn(H1_ENC_K2, 1); CHECK(st.rsv[1] == 1 && st.pad_mask == 1 && asked(), "edited: SET asks first");
+    turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 0 && !memcmp(&st.pad[0], none, sizeof none), "turned again: the new set");
+    turn(H1_ENC_K3, 1);
+    turn(H1_ENC_K2, 1); key(1, 60); turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "a key keeps the pads: it asks again");
+    tap(H1_BTN_EDIT); turn(H1_ENC_K2, 1);              /* (EDIT's tap puts up no toast) */
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "so does a button");
+    turn(H1_ENC_K4, 1); turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "and another knob");
+    go(3100); turn(H1_ENC_K2, 1);
+    CHECK(st.rsv[1] == 2 && st.pad_mask == 1 && asked(), "and three seconds");
+    go(3100);
+    h1_control_set(H1_ENC_K2, 4); go(60); CHECK(st.rsv[1] == 2 && asked(), "a slider asks too");
+    h1_control_set(H1_ENC_K2, 4); go(60); CHECK(st.rsv[1] == 4 && st.pad_mask == 0, "and again takes it");
+}
+
 int main(void)
 {
     sets();
@@ -582,6 +607,7 @@ int main(void)
     edited();
     edit_cols();
     capture();
+    new_set();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

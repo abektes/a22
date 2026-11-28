@@ -416,6 +416,12 @@ static int clear_all_answer;             /* its answer, once: 1 kept, 2 cleared 
 int h1_clear_all_asked(void) { return clear_all_asked != 0; }
 SMALL int h1_clear_all_answer(void) { int a = clear_all_answer; clear_all_answer = 0; return a; }
 
+/* NEW SET? TURN AGAIN: SET turned over edited pads only asks; SET turned again within 3 s takes the new set and
+ * drops the edits. Anything else keeps them: a key, a button, another knob, another toast, or the time passing. */
+#define NEW_SET_WAIT 3000u
+static int set_asked;
+static uint32_t set_ask_ms;
+
 /* DICE (EDIT + LFO / EDIT + ENV, below): the engine and algorithm rolled, -1 for none, and its other knobs */
 static uint32_t dice_rng = 0x2545F491u;
 static int dice_inst = -1, dice_algo, dice_back;
@@ -426,6 +432,7 @@ static SMALL void toast(const char *a, int num, int has_num, const char *b, int 
     char *d = toast_s;
     if (clear_all_asked) clear_all_answer = 1;   /* (the question is no longer on screen: the tape is kept) */
     clear_all_asked = 0;
+    set_asked = 0;
     if (a) d = put_s(d, a);
     if (has_num) d = put_i(d, num);
     if (b) put_s(d, b);
@@ -754,6 +761,7 @@ SMALL void h1_key(int key, int down)
     if (down) {
         int note, pad;
         if (key_down[key]) return;
+        set_asked = 0;
         pad = pad_of(key);
         if (pad >= 0) {                          /* (picked by the key: never snapped, the octave the chord's) */
             key_down[key] = KD_PAD;
@@ -958,6 +966,7 @@ SMALL void h1_button(int btn, int down)
         return;
     }
     if (btn == H1_BTN_EDIT) edit_at = master_raw;
+    set_asked = 0;
     if (btn != H1_BTN_SAVE && btn != H1_BTN_EDIT)
         proj_ask = -1;                           /* (LOAD P? AGAIN: any other button keeps the work) */
     btn_held |= 1u << btn;
@@ -1300,6 +1309,18 @@ static APART void set_param(int i, int v)
         mark_dirty();
         return;
     }
+    if (page == PG_CHORD && subpage[PG_CHORD] == 0 && i == 1 && st.chord[0] == CHORD_PADS && st.pad_mask) {
+        int k;
+        if (!set_asked || now - set_ask_ms >= NEW_SET_WAIT) {
+            toast("NEW SET? TURN AGAIN", 0, 0, 0, -1);
+            set_asked = 1;
+            set_ask_ms = now;
+            return;
+        }
+        set_asked = 0;                           /* (asked and turned again: the edits go) */
+        st.pad_mask = 0;
+        for (k = 0; k < (int)sizeof st.pad; k++) ((uint8_t *)st.pad)[k] = 0;
+    }
     if (page == PG_CHORD && subpage[PG_CHORD] == 0 && i >= 2 && st.chord[0] == CHORD_PADS) {   /* TYPE, INV */
         ChUser u;
         eng_pad_get(pad_hand, &u);
@@ -1320,6 +1341,7 @@ SMALL void h1_encoder(int enc, int d)
 {
     if (!d || enc < 0 || enc >= H1_NENC) return;
     clear_all_keep();
+    if (page != PG_CHORD || enc != H1_ENC_K2) set_asked = 0;
     switch (enc) {
     case H1_ENC_PRESET:
         if (btn_held & (1u << H1_BTN_EDIT)) {
@@ -2605,6 +2627,7 @@ SMALL void ui_init(void)
     dice_inst = -1;
     drum_said = 0;
     pad_hand = 0;
+    set_asked = 0;
 }
 
 /* ---- dirty-tile presentation (60 MHz SPI DMA) ----------------------------------------- */
