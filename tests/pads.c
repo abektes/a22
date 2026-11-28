@@ -13,7 +13,8 @@
  *   screen      the eight cards drawn, the held pad alone lit, the last chord's notes, the buttons' lights
  *   hold_mid    HOLD switched on under a held pad or key: it is latched, and ends as a latched one does
  *   last_name   the last chord's name stays the one that sounded
- *   edited      a pad a player edited plays its own notes, through ROOT, MONO, VOICING and an edit under it */
+ *   edited      a pad a player edited plays its own notes, through ROOT, MONO, VOICING and an edit under it
+ *   edit_cols   CHORDS' TYPE and INV edit the pad in hand; back to the set's own is not edited; the card marked */
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -469,6 +470,47 @@ static void edited(void)                        /* a pad a player edited plays i
     CHECK(inked(10, 22, 220, 24) > 100, "CHORD PLAY names a captured pad");
 }
 
+static void edit_cols(void)                     /* CHORDS' TYPE and INV edit the pad in hand */
+{
+    static const ChUser MEMPAD = {1, CH_MEM, 0, 3, {0, 6, 13, 0, 0, 0}};
+    static const int MIN_[3] = {48, 51, 55}, INV1[3] = {52, 55, 60};
+    static uint8_t buf[sizeof(H1State)];
+    ChUser u;
+    uint32_t size, before;
+    fresh(); pads_on(0); hold(H1_BTN_ARP);
+    CHECK(col(H1_ENC_K3, "TYPE", "MAJ") && col(H1_ENC_K4, "INV", "0"), "TYPE and INV of the pad in hand");
+    key(4, 60); CHECK(col(H1_ENC_K3, "TYPE", "MIN"), "they follow the pad pressed");
+    key(0, 60);
+    turn(H1_ENC_K3, 1); CHECK(col(H1_ENC_K3, "TYPE", "MIN") && st.pad_mask == 1, "K3: the pad's type");
+    clear(); key(0, 60); CHECK(only(MIN_, 3), "and it plays");
+    turn(H1_ENC_K3, -1); CHECK(st.pad_mask == 0, "back to the set's own: not edited");
+    turn(H1_ENC_K4, 1); clear(); key(0, 60); CHECK(only(INV1, 3) && st.pad_mask == 1, "K4: the inversion");
+    turn(H1_ENC_K4, 5); CHECK(col(H1_ENC_K4, "INV", "2"), "no further than its notes");
+    turn(H1_ENC_K4, -5); CHECK(st.pad_mask == 0, "and back");
+    clear(); down(0); turn(H1_ENC_K3, 3); turn(H1_ENC_K4, 1); up(0);
+    CHECK(matched(), "edited while held: its release ends it");
+
+    fresh(); pads_on(0); st.pad[0] = MEMPAD; st.pad_mask = 1; hold(H1_BTN_ARP);
+    CHECK(col(H1_ENC_K3, "TYPE", "MEM"), "a captured pad reads MEM");
+    turn(H1_ENC_K3, -1); eng_pad_get(0, &u);
+    CHECK(col(H1_ENC_K3, "TYPE", "MIN11") && u.n == 5 && u.off == 1, "turned away: a type's notes, the root kept");
+    turn(H1_ENC_K3, 1); CHECK(col(H1_ENC_K3, "TYPE", "MIN11"), "and MEM is not a type to turn to");
+
+    fresh(); chord(CHORD_OFF, 0, 0, 0); hold(H1_BTN_ARP);
+    CHECK(col(H1_ENC_K3, "", 0) && col(H1_ENC_K4, "", 0), "MODE OFF: no TYPE or INV");
+    chord(CHORD_SCALE, 0, 0, 0); go(60);
+    CHECK(col(H1_ENC_K3, "", 0) && col(H1_ENC_K4, "", 0), "nor in SCALE");
+    fresh(); pads_on(0); key(4, 60);
+    { const void *src = h1_state(&size); memcpy(buf, src, size); }
+    CHECK(h1_state_load(buf, size) == 0, "the state loads");
+    hold(H1_BTN_ARP); CHECK(col(H1_ENC_K3, "TYPE", "MAJ"), "after a load the pad in hand is pad 1");
+
+    fresh(); pads_on(0); hold(H1_BTN_ARP); go(600);
+    before = drawn(6, 45, 54, 59);
+    ch_pad_default(0, 0, &u); st.pad[0] = u; st.pad[0].inv = 1; st.pad_mask = 1; go(600);
+    CHECK(drawn(6, 45, 54, 59) != before, "an edited pad's card is marked");
+}
+
 int main(void)
 {
     sets();
@@ -483,6 +525,7 @@ int main(void)
     hold_mid();
     last_name();
     edited();
+    edit_cols();
     printf("pads: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

@@ -54,6 +54,8 @@ static const char *const O_VOICING[] = {"CLOSE", "OPEN", "DROP2", "+BASS", "SMOO
  * firmware reads it as OFF) */
 static const char *const O_CHKNOB[]  = {"OFF", "PADS", "MEMORY", "SCALE", "SHAPE"};
 static const uint8_t CH_KNOB[5] = {CHORD_OFF, CHORD_PADS, CHORD_MEMORY, CHORD_SCALE, CHORD_SHAPE};
+static const char *const O_INV[CHORD_MAX] = {"0", "1", "2", "3", "4", "5"};
+static int pad_hand;                             /* the chord pad last pressed, 0..7: TYPE and INV edit it */
 
 /* color per knob K1..K4 (and tracks T1..T4!) */
 static const int KCOL[4] = {GC_BLUE, GC_GREEN, GC_WHITE, GC_ORANGE};
@@ -199,6 +201,12 @@ const ParamDef *page_param(int pg, int i)
             else if (mode == CHORD_SCALE) { dyn_p.max = CHORD_NSCALE - 1; dyn_p.opts = O_CHSCALE; }
             else if (mode == CHORD_SHAPE) { dyn_p.max = CHORD_NSHAPE - 1; dyn_p.opts = O_CHSHAPE; }
             else { dyn_p.opts = O_CHMEM; }
+        } else if (sub == 0 && i >= 2 && mode == CHORD_PADS) {     /* the pad in hand's */
+            ChUser u;
+            eng_pad_get(pad_hand, &u);
+            dyn_p.kind = PK_ENUM;
+            if (i == 2) { dyn_p.name = "TYPE"; dyn_p.max = u.type == CH_MEM ? CH_MEM : CH_MEM - 1; dyn_p.opts = CH_TYPE_NAMES; }
+            else { dyn_p.name = "INV"; dyn_p.max = u.n - 1; dyn_p.opts = O_INV; }
         } else if (sub == 1 && i == 0) {
             dyn_p.name = "VOICING"; dyn_p.kind = PK_ENUM; dyn_p.max = VOICE_SMOOTH; dyn_p.opts = O_VOICING;
         } else if (sub == 1 && i == 1) {
@@ -271,6 +279,12 @@ uint8_t *page_value(int pg, int i)
             return &knob;
         }
         if (sub == 0 && i == 1 && st.chord[0] == CHORD_PADS) return &st.rsv[1];
+        if (sub == 0 && i >= 2 && st.chord[0] == CHORD_PADS) {   /* (copies: set_param stores the pad) */
+            ChUser u;
+            eng_pad_get(pad_hand, &u);
+            knob = i == 2 ? u.type : u.inv;
+            return &knob;
+        }
         if (sub == 0 && i == 1 && (st.chord[0] == CHORD_SCALE || st.chord[0] == CHORD_SHAPE)) return &st.chord[1];
         if (sub == 1 && i < 2) return &st.chord[2 + i];
         empty = 0;
@@ -332,7 +346,6 @@ static int seq_write_was, riff_rec_was;
 static uint32_t enc_ms[H1_NENC];
 enum { KD_NOTE = 1, KD_PAD };                    /* how a key went down: key_note is its note, or its pad */
 static uint8_t key_note[H1_NKEYS], key_down[H1_NKEYS];
-static int pad_hand;                             /* the chord pad last pressed, 0..7 */
 static uint8_t drum_said;                        /* NOT ON DRUMS said since the engine, track or MODE last changed */
 static uint8_t chord_last = CHORD_MEMORY;     /* the mode EDIT + GLO turns chords back on to */
 static uint32_t btn_held, btn_ms[H1_NBTN];
@@ -1217,6 +1230,26 @@ static SMALL void set_arp_mode(int m)                 /* ALGORITHM on the SEQ / 
     mark_dirty();
 }
 
+/* a pad edited: back to exactly the set's own, it is not edited (SET asks about none); else the record, then its bit */
+static SMALL void pad_store(int pad, const ChUser *u)
+{
+    ChUser d;
+    const uint8_t *a = (const uint8_t *)u, *b = (const uint8_t *)&d;
+    uint8_t *q = (uint8_t *)&st.pad[pad & 7];
+    int k, same = 1;
+    pad &= 7;
+    ch_pad_default(st.rsv[1], pad, &d);
+    for (k = 0; k < (int)sizeof d; k++) same &= a[k] == b[k];
+    if (same) {
+        st.pad_mask &= (uint8_t)~(1u << pad);
+        for (k = 0; k < (int)sizeof d; k++) q[k] = 0;
+    } else {
+        for (k = 0; k < (int)sizeof d; k++) q[k] = a[k];
+        st.pad_mask |= (uint8_t)(1u << pad);
+    }
+    mark_dirty();
+}
+
 static APART void set_param(int i, int v)
 {
     const ParamDef *p = page_param(page, i);
@@ -1248,6 +1281,14 @@ static APART void set_param(int i, int v)
         drum_said = 0;
         sync_cols(PG_CHORD);
         mark_dirty();
+        return;
+    }
+    if (page == PG_CHORD && subpage[PG_CHORD] == 0 && i >= 2 && st.chord[0] == CHORD_PADS) {   /* TYPE, INV */
+        ChUser u;
+        eng_pad_get(pad_hand, &u);
+        if (i == 3) u.inv = (uint8_t)v;
+        else if (v < CH_MEM) ch_set_type(&u, v);
+        pad_store(pad_hand, &u);
         return;
     }
     *q = (uint8_t)v;
@@ -2133,8 +2174,12 @@ static void chord_card(int pad, int root, int dim)
     static const char *const KEYN[8] = {"F", "G", "A", "B", "C", "D", "E", "F"};
     int set = st.rsv[1] < NCHSET ? st.rsv[1] : 0, held = key_down[SNAP_KEYS[pad]] == KD_PAD, hand = pad == pad_hand;
     char num[9];
-    int kind = ch_pad_numeral(set, pad, num), band = kind == CH_NUM_BORROWED ? GC_ORANGE : GC_BLUE;
+    ChUser u;
+    int kind, band;
     f32 x = 6.0f + (f32)(pad % 4) * 58.0f, y = 45.0f + (f32)(pad / 4) * 63.0f;
+    eng_pad_get(pad, &u);                                    /* (the one in force: edited, or the set's) */
+    kind = ch_numeral(CH_SETS[set].minor, &u, num);
+    band = kind == CH_NUM_BORROWED ? GC_ORANGE : GC_BLUE;
     g_dim(dim ? 0.35f : 1.0f);
     if (held)      { g_color(band);     g_rect(x, y, 54.0f, 59.0f, 0.30f); }
     else if (hand) { g_color(GC_WHITE); g_rect(x, y, 54.0f, 59.0f, 0.14f); }
@@ -2146,8 +2191,10 @@ static void chord_card(int pad, int root, int dim)
     g_color(GC_SLATE);
     g_text(x + 4.0f, y + 6.0f, KEYN[pad], 7.0f, 1.0f, 0.8f, 0);
     g_color(GC_WHITE);
-    fit_text(x + 27.0f, y + 11.0f, O_ROOT[ch_pad_pc(set, pad, root)], 17.0f, 38.0f, 1.0f);
-    fit_text(x + 27.0f, y + 33.0f, CH_TYPES[CH_SETS[set].pad[pad].type].name, 9.0f, 48.0f, 0.95f);
+    fit_text(x + 27.0f, y + 11.0f, O_ROOT[ch_base(u.off, root, 0) % 12], 17.0f, 38.0f, 1.0f);
+    fit_text(x + 27.0f, y + 33.0f, ch_type_name(u.type), 9.0f, 48.0f, 0.95f);
+    if (st.pad_mask & (1u << pad)) { g_color(GC_GOLD); g_disc(x + 47.0f, y + 9.0f, 2.2f, 1.0f); }   /* edited */
+    g_color(GC_WHITE);
     g_color(GC_SLATE);
     fit_text(x + 27.0f, y + 47.0f, num, 7.5f, 48.0f, 0.95f);
     if (kind == CH_NUM_MINOR) {
@@ -2540,6 +2587,7 @@ SMALL void ui_init(void)
     ring_t = 9.0f;
     dice_inst = -1;
     drum_said = 0;
+    pad_hand = 0;
 }
 
 /* ---- dirty-tile presentation (60 MHz SPI DMA) ----------------------------------------- */
